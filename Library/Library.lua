@@ -1,16 +1,11 @@
--- // Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-
--- // Environment
 local env = getgenv and getgenv() or _G
 local isTouch = UserInputService.TouchEnabled
-
--- // Viewport
 local function getViewport()
     local camera = workspace.CurrentCamera
     if camera then
@@ -18,21 +13,14 @@ local function getViewport()
     end
     return Vector2.new(1280, 720)
 end
-
--- // Connections
 local connections = {}
-
 local function connect(signal, callback)
     local connection = signal:Connect(callback)
     connections[#connections + 1] = connection
     return connection
 end
-
--- // Animation
 local TWEEN_INFO = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local FLASH_INFO = TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-
--- // Colors
 local COLOR_ACTIVE = Color3.fromRGB(240, 240, 240)
 local COLOR_INACTIVE = Color3.fromRGB(165, 165, 165)
 local COLOR_DIM = Color3.fromRGB(115, 115, 115)
@@ -40,15 +28,14 @@ local COLOR_ACCENT = Color3.fromRGB(42, 42, 42)
 local COLOR_FIELD = Color3.fromRGB(34, 34, 34)
 local COLOR_BORDER = Color3.fromRGB(55, 55, 55)
 local COLOR_PALETTE = Color3.fromRGB(28, 28, 28)
-
--- // Repository
-local REPO = "pvpgalinhamonzonrebasexk/gazrenkinras"
+local REPO = "pvpgalinhamonzonrebasexk/monzonrebasexk"
 local BRANCH = "main"
 local ELEMENTS_PATH = "Library/Elements"
 local ELEMENTS_API = "https://api.github.com/repos/" .. REPO .. "/contents/" .. ELEMENTS_PATH .. "?ref=" .. BRANCH
 local ELEMENTS_RAW = "https://raw.githubusercontent.com/" .. REPO .. "/refs/heads/" .. BRANCH .. "/" .. ELEMENTS_PATH .. "/"
-
--- // Cleanup
+local FEATURES_SOURCE = "https://github.com/" .. REPO .. "/tree/main/Features"
+local FEATURES_TREE_API = "https://api.github.com/repos/" .. REPO .. "/git/trees/" .. BRANCH .. "?recursive=1"
+local FEATURES_RAW_BASE = "https://raw.githubusercontent.com/" .. REPO .. "/" .. BRANCH .. "/"
 if type(env.EcoHubDestroy) == "function" then
     pcall(env.EcoHubDestroy)
 end
@@ -58,17 +45,11 @@ for _, name in ipairs({"EcoHub", "EcoHubToggle"}) do
         old:Destroy()
     end
 end
-
--- // Forward
 local closePalette
 local refreshPalette
 local State = {Created = false, MinimizeKey = Enum.KeyCode.RightShift}
-
--- // Icons
 local iconAssets = env.EcoHubIcons
 local pendingIcons = {}
-
--- // ApplyIcon
 local function applyIcon(icon, name)
     name = tostring(name or "circle")
     local id = iconAssets["lucide-" .. name] or iconAssets[name] or iconAssets["lucide-circle"] or iconAssets["circle"]
@@ -76,8 +57,6 @@ local function applyIcon(icon, name)
         icon.Image = id
     end
 end
-
--- // CreateIcon
 local function createIcon(parent, name, size, color)
     local icon = Instance.new("ImageLabel")
     icon.Name = "Icon"
@@ -92,12 +71,10 @@ local function createIcon(parent, name, size, color)
     end
     return icon
 end
-
--- // LoadIcons
 if not iconAssets then
     task.spawn(function()
         local ok, result = pcall(function()
-            return loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Assets/Icons.lua"))()
+            return loadstring(game:HttpGet("https://raw.githubusercontent.com/" .. REPO .. "/refs/heads/" .. BRANCH .. "/Assets/Icons.lua"))()
         end)
         if ok and type(result) == "table" and type(result.assets) == "table" then
             iconAssets = result.assets
@@ -111,15 +88,12 @@ if not iconAssets then
         pendingIcons = {}
     end)
 end
-
--- // MainFrame
 local EcoHub = Instance.new("ScreenGui")
 EcoHub.Name = "EcoHub"
 EcoHub.Parent = PlayerGui
 EcoHub.ResetOnSpawn = false
 EcoHub.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 EcoHub.Enabled = false
-
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 580, 0, 350)
@@ -128,23 +102,18 @@ MainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Parent = EcoHub
-
 local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 8)
 MainCorner.Parent = MainFrame
-
 local MainStroke = Instance.new("UIStroke")
 MainStroke.Color = COLOR_BORDER
 MainStroke.Thickness = 1
 MainStroke.Parent = MainFrame
-
 local ContentContainer = Instance.new("Frame")
 ContentContainer.Name = "ContentContainer"
 ContentContainer.Size = UDim2.new(1, 0, 1, 0)
 ContentContainer.BackgroundTransparency = 1
 ContentContainer.Parent = MainFrame
-
--- // Size
 local function applySize(size)
     local viewport = getViewport()
     local width = math.clamp(size.X.Offset + size.X.Scale * viewport.X, 320, math.max(320, viewport.X - 16))
@@ -152,17 +121,13 @@ local function applySize(size)
     MainFrame.Size = UDim2.fromOffset(width, height)
     MainFrame.Position = UDim2.new(0.5, -width / 2, 0.5, -height / 2)
 end
-
 applySize(UDim2.fromOffset(580, 350))
-
--- // Sidebar
 local TabSidebar = Instance.new("Frame")
 TabSidebar.Name = "TabSidebar"
 TabSidebar.Size = UDim2.new(0, 140, 1, 0)
 TabSidebar.BackgroundTransparency = 1
 TabSidebar.BorderSizePixel = 0
 TabSidebar.Parent = ContentContainer
-
 local TabLine = Instance.new("Frame")
 TabLine.Name = "TabLine"
 TabLine.Size = UDim2.new(0, 1, 1, 0)
@@ -170,15 +135,12 @@ TabLine.Position = UDim2.new(1, 0, 0, 0)
 TabLine.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 TabLine.BorderSizePixel = 0
 TabLine.Parent = TabSidebar
-
--- // Dashboard
 local Dashboard = Instance.new("Frame")
 Dashboard.Name = "Dashboard"
 Dashboard.Size = UDim2.new(1, 0, 0, 56)
 Dashboard.BackgroundTransparency = 1
 Dashboard.BorderSizePixel = 0
 Dashboard.Parent = TabSidebar
-
 local TitleText = Instance.new("TextLabel")
 TitleText.Name = "TitleText"
 TitleText.Size = UDim2.new(1, -20, 0, 18)
@@ -191,7 +153,6 @@ TitleText.Font = Enum.Font.SourceSansBold
 TitleText.TextXAlignment = Enum.TextXAlignment.Left
 TitleText.TextTruncate = Enum.TextTruncate.AtEnd
 TitleText.Parent = Dashboard
-
 local SubTitleText = Instance.new("TextLabel")
 SubTitleText.Name = "SubTitleText"
 SubTitleText.Size = UDim2.new(1, -20, 0, 14)
@@ -204,8 +165,6 @@ SubTitleText.Font = Enum.Font.SourceSans
 SubTitleText.TextXAlignment = Enum.TextXAlignment.Left
 SubTitleText.TextTruncate = Enum.TextTruncate.AtEnd
 SubTitleText.Parent = Dashboard
-
--- // TabList
 local TabList = Instance.new("ScrollingFrame")
 TabList.Name = "TabList"
 TabList.Size = UDim2.new(1, 0, 1, -56)
@@ -216,41 +175,33 @@ TabList.ScrollBarThickness = 0
 TabList.CanvasSize = UDim2.new(0, 0, 0, 0)
 TabList.AutomaticCanvasSize = Enum.AutomaticSize.Y
 TabList.Parent = TabSidebar
-
 local TabListPadding = Instance.new("UIPadding")
 TabListPadding.PaddingTop = UDim.new(0, 2)
 TabListPadding.PaddingBottom = UDim.new(0, 8)
 TabListPadding.PaddingLeft = UDim.new(0, 8)
 TabListPadding.PaddingRight = UDim.new(0, 8)
 TabListPadding.Parent = TabList
-
 local TabListLayout = Instance.new("UIListLayout")
 TabListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 TabListLayout.Padding = UDim.new(0, 8)
 TabListLayout.Parent = TabList
-
--- // ContentArea
 local ContentArea = Instance.new("Frame")
 ContentArea.Name = "ContentArea"
 ContentArea.Size = UDim2.new(1, -141, 1, 0)
 ContentArea.Position = UDim2.new(0, 141, 0, 0)
 ContentArea.BackgroundTransparency = 1
 ContentArea.Parent = ContentContainer
-
 local Header = Instance.new("Frame")
 Header.Name = "Header"
 Header.Size = UDim2.new(1, 0, 0, 40)
 Header.BackgroundTransparency = 1
 Header.Parent = ContentArea
-
 local PageHolder = Instance.new("Frame")
 PageHolder.Name = "PageHolder"
 PageHolder.Size = UDim2.new(1, 0, 1, -40)
 PageHolder.Position = UDim2.new(0, 0, 0, 40)
 PageHolder.BackgroundTransparency = 1
 PageHolder.Parent = ContentArea
-
--- // Breadcrumb
 local Breadcrumb = Instance.new("Frame")
 Breadcrumb.Name = "Breadcrumb"
 Breadcrumb.Size = UDim2.new(1, -176, 1, 0)
@@ -258,15 +209,12 @@ Breadcrumb.Position = UDim2.new(0, 14, 0, 0)
 Breadcrumb.BackgroundTransparency = 1
 Breadcrumb.ClipsDescendants = true
 Breadcrumb.Parent = Header
-
 local BreadcrumbLayout = Instance.new("UIListLayout")
 BreadcrumbLayout.FillDirection = Enum.FillDirection.Horizontal
 BreadcrumbLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 BreadcrumbLayout.SortOrder = Enum.SortOrder.LayoutOrder
 BreadcrumbLayout.Padding = UDim.new(0, 4)
 BreadcrumbLayout.Parent = Breadcrumb
-
--- // Search
 local SearchFrame = Instance.new("Frame")
 SearchFrame.Name = "SearchFrame"
 SearchFrame.AnchorPoint = Vector2.new(1, 0.5)
@@ -275,20 +223,16 @@ SearchFrame.Size = UDim2.new(0, 140, 0, isTouch and 30 or 26)
 SearchFrame.BackgroundColor3 = COLOR_FIELD
 SearchFrame.BorderSizePixel = 0
 SearchFrame.Parent = Header
-
 local SearchCorner = Instance.new("UICorner")
 SearchCorner.CornerRadius = UDim.new(0, 6)
 SearchCorner.Parent = SearchFrame
-
 local SearchStroke = Instance.new("UIStroke")
 SearchStroke.Color = COLOR_BORDER
 SearchStroke.Thickness = 1
 SearchStroke.Parent = SearchFrame
-
 local SearchIcon = createIcon(SearchFrame, "search", 14, COLOR_DIM)
 SearchIcon.AnchorPoint = Vector2.new(0, 0.5)
 SearchIcon.Position = UDim2.new(0, 8, 0.5, 0)
-
 local SearchButton = Instance.new("TextButton")
 SearchButton.Name = "SearchButton"
 SearchButton.Size = UDim2.new(1, -34, 1, 0)
@@ -301,8 +245,6 @@ SearchButton.TextSize = 13
 SearchButton.Font = Enum.Font.SourceSans
 SearchButton.TextXAlignment = Enum.TextXAlignment.Left
 SearchButton.Parent = SearchFrame
-
--- // ResizeButton
 local ResizeButton = Instance.new("TextButton")
 ResizeButton.Name = "ResizeButton"
 ResizeButton.Size = UDim2.new(0, isTouch and 24 or 16, 0, isTouch and 24 or 16)
@@ -311,15 +253,12 @@ ResizeButton.BackgroundTransparency = 1
 ResizeButton.Text = ""
 ResizeButton.ZIndex = 10
 ResizeButton.Parent = MainFrame
-
--- // ToggleButton
 local ToggleGui = Instance.new("ScreenGui")
 ToggleGui.Name = "EcoHubToggle"
 ToggleGui.Parent = PlayerGui
 ToggleGui.ResetOnSpawn = false
 ToggleGui.Enabled = false
 ToggleGui.DisplayOrder = 99999
-
 local ToggleButton = Instance.new("TextButton")
 ToggleButton.Name = "ToggleButton"
 ToggleButton.Size = UDim2.new(0, 48, 0, 48)
@@ -330,17 +269,14 @@ ToggleButton.Text = ""
 ToggleButton.AutoButtonColor = false
 ToggleButton.ClipsDescendants = true
 ToggleButton.Parent = ToggleGui
-
 local ToggleCorner = Instance.new("UICorner")
 ToggleCorner.CornerRadius = UDim.new(0, 10)
 ToggleCorner.Parent = ToggleButton
-
 local ToggleStroke = Instance.new("UIStroke")
 ToggleStroke.Color = COLOR_BORDER
 ToggleStroke.Thickness = 1.5
 ToggleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 ToggleStroke.Parent = ToggleButton
-
 local ToggleTexture = Instance.new("ImageLabel")
 ToggleTexture.Name = "Texture"
 ToggleTexture.Size = UDim2.new(1, 0, 1, 0)
@@ -352,12 +288,9 @@ ToggleTexture.ImageTransparency = 0.3
 ToggleTexture.ScaleType = Enum.ScaleType.Crop
 ToggleTexture.ZIndex = 1
 ToggleTexture.Parent = ToggleButton
-
 local ToggleTextureCorner = Instance.new("UICorner")
 ToggleTextureCorner.CornerRadius = UDim.new(0, 10)
 ToggleTextureCorner.Parent = ToggleTexture
-
--- // SetVisibility
 local function setVisibility(state)
     if not State.Created then
         return
@@ -367,31 +300,22 @@ local function setVisibility(state)
     end
     EcoHub.Enabled = state
 end
-
--- // Panel
 local Panel = {}
 Panel.Header = Header
 Panel.PageHolder = PageHolder
 Panel.TabList = TabList
 Panel.CreateIcon = createIcon
-
 local sections = {}
 local sectionsByName = {}
 local allTabs = {}
 local activeTab = nil
 local sectionOrder = 0
-
--- // Panel.SetVisible
 function Panel.SetVisible(state)
     setVisibility(state)
 end
-
--- // Panel.Toggle
 function Panel.Toggle()
     setVisibility(not EcoHub.Enabled)
 end
-
--- // Panel.SetBreadcrumb
 function Panel.SetBreadcrumb(items)
     for _, child in ipairs(Breadcrumb:GetChildren()) do
         if child:IsA("GuiObject") then
@@ -418,8 +342,6 @@ function Panel.SetBreadcrumb(items)
         end
     end
 end
-
--- // StyleTab
 local function styleTab(tab)
     local isActive = activeTab == tab
     local color = isActive and COLOR_ACTIVE or COLOR_INACTIVE
@@ -428,8 +350,6 @@ local function styleTab(tab)
     tab.Label.Font = isActive and Enum.Font.SourceSansSemibold or Enum.Font.SourceSans
     tab.Icon.ImageColor3 = color
 end
-
--- // SelectTab
 local function selectTab(tab)
     if activeTab == tab then
         return
@@ -446,8 +366,6 @@ local function selectTab(tab)
     styleTab(tab)
     Panel.SetBreadcrumb({tab.Section.Name, tab.Name})
 end
-
--- // AnimateMenu
 local function animateMenu(section)
     local menu = section.Menu
     local count = 0
@@ -481,14 +399,8 @@ local function animateMenu(section)
         tween:Play()
     end
 end
-
--- // Elements
 local Elements = {Registry = {}, Pending = {}, Files = {}, Active = 0}
-
--- // ElementAliases
 local ELEMENT_ALIASES = {toggle = "checkbox", colorpick = "colorpicker"}
-
--- // ElementIcons
 local ELEMENT_ICONS = {
     button = "mouse-pointer-click",
     checkbox = "toggle-right",
@@ -497,17 +409,11 @@ local ELEMENT_ICONS = {
     colorpicker = "palette",
     paragraph = "align-left"
 }
-
--- // ElementDefaults
 local ELEMENT_DEFAULTS = {"Button", "Toggle", "Slider", "Paragraph", "Dropdown", "ColorPicker"}
-
--- // ResolveKey
 local function resolveKey(name)
     local key = string.lower(tostring(name))
     return ELEMENT_ALIASES[key] or key
 end
-
--- // ApplyFrame
 local function applyFrame(element, frameless)
     local pad = frameless and 0 or 4
     local side = frameless and 0 or 10
@@ -518,8 +424,6 @@ local function applyFrame(element, frameless)
     element.Inset.PaddingLeft = UDim.new(0, side)
     element.Inset.PaddingRight = UDim.new(0, side)
 end
-
--- // BuildElement
 local function buildElement(element, entry, options)
     if element.Destroyed then
         return
@@ -551,8 +455,6 @@ local function buildElement(element, entry, options)
         end
     end
 end
-
--- // ElementHandle
 local function createHandle(element)
     return setmetatable({Element = element}, {
         __index = function(_, key)
@@ -588,8 +490,6 @@ local function createHandle(element)
         end
     })
 end
-
--- // Elements.Register
 function Elements.Register(name, builder, meta)
     if type(name) ~= "string" or type(builder) ~= "function" then
         return
@@ -612,13 +512,9 @@ function Elements.Register(name, builder, meta)
         refreshPalette()
     end
 end
-
--- // Elements.Get
 function Elements.Get(name)
     return Elements.Registry[resolveKey(name)]
 end
-
--- // Elements.List
 function Elements.List()
     local names = {}
     for _, entry in pairs(Elements.Registry) do
@@ -627,8 +523,6 @@ function Elements.List()
     table.sort(names)
     return names
 end
-
--- // RunElementChunk
 local function runElementChunk(chunk)
     local scoped = false
     if type(setfenv) == "function" and type(getfenv) == "function" then
@@ -642,8 +536,6 @@ local function runElementChunk(chunk)
     end
     return chunk(Elements, Panel)
 end
-
--- // LoadElementFile
 local function loadElementFile(file)
     local names = {file}
     if not string.match(file, "%.luau?$") then
@@ -667,8 +559,6 @@ local function loadElementFile(file)
     warn("[EcoHub] could not load element '" .. file .. "': " .. tostring(lastError))
     return false
 end
-
--- // Elements.Load
 function Elements.Load(names)
     names = names or env.EcoHubElementList
     Elements.Active = Elements.Active + 1
@@ -725,13 +615,129 @@ function Elements.Load(names)
         end
     end)
 end
-
 Panel.Elements = Elements
 
--- // Panel.AddSection
+local Features = {Loaded = {}}
+local function getHttpRequest()
+    return request or http_request or (syn and syn.request)
+end
+local function cleanFeatureName(name)
+    name = name:gsub("\\", "/")
+    name = name:gsub("^%s+", ""):gsub("%s+$", "")
+    name = name:gsub("^/+", ""):gsub("/+$", "")
+    name = name:gsub("%.luau$", ""):gsub("%.lua$", "")
+    return name
+end
+local function resolveFeatureUrl(nameOrUrl)
+    if nameOrUrl:match("^https?://") then
+        return nameOrUrl:gsub("^https?://github%.com/([^/]+)/([^/]+)/blob/", "https://raw.githubusercontent.com/%1/%2/")
+    end
+    local clean = cleanFeatureName(nameOrUrl)
+    return FEATURES_RAW_BASE .. clean .. ".luau"
+end
+local function runFeatureSource(source, name)
+    local fn, err = loadstring(source, "=" .. name)
+    if not fn then
+        warn("[EcoHub] feature compilation error '" .. name .. "': " .. tostring(err))
+        return false
+    end
+    local ok, runErr = pcall(fn)
+    if not ok then
+        warn("[EcoHub] feature execution error '" .. name .. "': " .. tostring(runErr))
+        return false
+    end
+    Features.Loaded[name] = true
+    return true
+end
+function Features.Load(nameOrList)
+    if type(nameOrList) == "table" then
+        local results = {}
+        for _, item in ipairs(nameOrList) do
+            results[item] = Features.Load(item)
+        end
+        return results
+    end
+    if tostring(nameOrList):lower() == "all" then
+        local ok, treeBody = pcall(function()
+            local req = getHttpRequest()
+            if req then
+                local res = req({Url = FEATURES_TREE_API, Method = "GET"})
+                return res and res.Body
+            end
+            return game:HttpGet(FEATURES_TREE_API)
+        end)
+        if ok and treeBody then
+            local decoded = pcall(function() return HttpService:JSONDecode(treeBody) end)
+            if type(decoded) == "table" and type(decoded.tree) == "table" then
+                local loadedAny = false
+                for _, node in ipairs(decoded.tree) do
+                    if node.type == "blob" and type(node.path) == "string" and (node.path:sub(-5) == ".luau" or node.path:sub(-4) == ".lua") then
+                        if node.path:sub(1, 9) == "Features/" or not node.path:find("/") then
+                            local url = FEATURES_RAW_BASE .. node.path
+                            local sOk, body = pcall(function()
+                                local req = getHttpRequest()
+                                if req then
+                                    local res = req({Url = url, Method = "GET"})
+                                    return res and res.Body
+                                end
+                                return game:HttpGet(url)
+                            end)
+                            if sOk and body then
+                                runFeatureSource(body, node.path)
+                                loadedAny = true
+                            end
+                        end
+                    end
+                end
+                return loadedAny
+            end
+        end
+        return false
+    end
+    local name = tostring(nameOrList)
+    local url = resolveFeatureUrl(name)
+    local ok, body = pcall(function()
+        local req = getHttpRequest()
+        if req then
+            local res = req({Url = url, Method = "GET"})
+            return res and res.Body
+        end
+        return game:HttpGet(url)
+    end)
+    if not ok or not body then
+        local altUrl = FEATURES_RAW_BASE .. cleanFeatureName(name) .. ".lua"
+        local sOk, sBody = pcall(function()
+            local req = getHttpRequest()
+            if req then
+                local res = req({Url = altUrl, Method = "GET"})
+                return res and res.Body
+            end
+            return game:HttpGet(altUrl)
+        end)
+        if sOk and sBody then
+            body = sBody
+        else
+            warn("[EcoHub] could not fetch feature '" .. name .. "'")
+            return false
+        end
+    end
+    return runFeatureSource(body, name)
+end
+function Features.IsLoaded(name)
+    return Features.Loaded[cleanFeatureName(tostring(name))] == true
+end
+function Features.ListLoaded()
+    local list = {}
+    for k, _ in pairs(Features.Loaded) do
+        list[#list + 1] = k
+    end
+    table.sort(list)
+    return list
+end
+Panel.Features = Features
+
 function Panel.AddSection(name)
     sectionOrder = sectionOrder + 1
-
     local frame = Instance.new("Frame")
     frame.Name = name
     frame.Size = UDim2.new(1, 0, 0, 0)
@@ -739,12 +745,10 @@ function Panel.AddSection(name)
     frame.BackgroundTransparency = 1
     frame.LayoutOrder = sectionOrder
     frame.Parent = TabList
-
     local frameLayout = Instance.new("UIListLayout")
     frameLayout.SortOrder = Enum.SortOrder.LayoutOrder
     frameLayout.Padding = UDim.new(0, 2)
     frameLayout.Parent = frame
-
     local labelButton = Instance.new("TextButton")
     labelButton.Name = "Label"
     labelButton.Size = UDim2.new(1, 0, 0, 24)
@@ -757,15 +761,12 @@ function Panel.AddSection(name)
     labelButton.TextXAlignment = Enum.TextXAlignment.Left
     labelButton.LayoutOrder = 0
     labelButton.Parent = frame
-
     local labelPadding = Instance.new("UIPadding")
     labelPadding.PaddingLeft = UDim.new(0, 8)
     labelPadding.Parent = labelButton
-
     local chevron = createIcon(labelButton, "chevron-down", 14, COLOR_DIM)
     chevron.AnchorPoint = Vector2.new(1, 0.5)
     chevron.Position = UDim2.new(1, -6, 0.5, 0)
-
     local menu = Instance.new("Frame")
     menu.Name = "Menu"
     menu.Size = UDim2.new(1, 0, 0, 0)
@@ -774,20 +775,16 @@ function Panel.AddSection(name)
     menu.LayoutOrder = 1
     menu.ClipsDescendants = true
     menu.Parent = frame
-
     local menuLayout = Instance.new("UIListLayout")
     menuLayout.SortOrder = Enum.SortOrder.LayoutOrder
     menuLayout.Padding = UDim.new(0, 2)
     menuLayout.Parent = menu
-
     local section = {Name = name, Frame = frame, Menu = menu, Tabs = {}, Open = true, Token = 0}
-
     labelButton.Activated:Connect(function()
         section.Open = not section.Open
         TweenService:Create(chevron, TWEEN_INFO, {Rotation = section.Open and 0 or -90}):Play()
         animateMenu(section)
     end)
-
     function section:AddTab(tabName, iconName)
         local button = Instance.new("TextButton")
         button.Name = tabName
@@ -799,15 +796,12 @@ function Panel.AddSection(name)
         button.Text = ""
         button.LayoutOrder = #self.Tabs + 1
         button.Parent = self.Menu
-
         local buttonCorner = Instance.new("UICorner")
         buttonCorner.CornerRadius = UDim.new(0, 6)
         buttonCorner.Parent = button
-
         local icon = createIcon(button, iconName or "circle", 16, COLOR_INACTIVE)
         icon.AnchorPoint = Vector2.new(0, 0.5)
         icon.Position = UDim2.new(0, 8, 0.5, 0)
-
         local label = Instance.new("TextLabel")
         label.Name = "Text"
         label.Size = UDim2.new(1, -36, 1, 0)
@@ -820,14 +814,12 @@ function Panel.AddSection(name)
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.TextTruncate = Enum.TextTruncate.AtEnd
         label.Parent = button
-
         local page = Instance.new("Frame")
         page.Name = tabName
         page.Size = UDim2.new(1, 0, 1, 0)
         page.BackgroundTransparency = 1
         page.Visible = false
         page.Parent = PageHolder
-
         local scroll = Instance.new("ScrollingFrame")
         scroll.Name = "Scroll"
         scroll.Size = UDim2.new(1, 0, 1, 0)
@@ -839,19 +831,16 @@ function Panel.AddSection(name)
         scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
         scroll.ScrollingDirection = Enum.ScrollingDirection.Y
         scroll.Parent = page
-
         local scrollPadding = Instance.new("UIPadding")
         scrollPadding.PaddingTop = UDim.new(0, 4)
         scrollPadding.PaddingBottom = UDim.new(0, 12)
         scrollPadding.PaddingLeft = UDim.new(0, 12)
         scrollPadding.PaddingRight = UDim.new(0, 12)
         scrollPadding.Parent = scroll
-
         local scrollLayout = Instance.new("UIListLayout")
         scrollLayout.SortOrder = Enum.SortOrder.LayoutOrder
         scrollLayout.Padding = UDim.new(0, 14)
         scrollLayout.Parent = scroll
-
         local tab = {
             Name = tabName,
             IconName = iconName or "circle",
@@ -866,11 +855,9 @@ function Panel.AddSection(name)
         }
         self.Tabs[#self.Tabs + 1] = tab
         allTabs[#allTabs + 1] = tab
-
         function tab:CreateSection(contentName)
             contentName = tostring(contentName or "Section")
             local contentSection = {Name = contentName, Tab = tab, Count = 0}
-
             local contentFrame = Instance.new("Frame")
             contentFrame.Name = contentName
             contentFrame.Size = UDim2.new(1, 0, 0, 0)
@@ -878,12 +865,10 @@ function Panel.AddSection(name)
             contentFrame.BackgroundTransparency = 1
             contentFrame.LayoutOrder = #tab.Sections + 1
             contentFrame.Parent = scroll
-
             local contentLayout = Instance.new("UIListLayout")
             contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
             contentLayout.Padding = UDim.new(0, 6)
             contentLayout.Parent = contentFrame
-
             local title = Instance.new("TextLabel")
             title.Name = "Title"
             title.Size = UDim2.new(1, 0, 0, 16)
@@ -895,11 +880,9 @@ function Panel.AddSection(name)
             title.TextXAlignment = Enum.TextXAlignment.Left
             title.LayoutOrder = 0
             title.Parent = contentFrame
-
             local titlePadding = Instance.new("UIPadding")
             titlePadding.PaddingLeft = UDim.new(0, 2)
             titlePadding.Parent = title
-
             local holder = Instance.new("Frame")
             holder.Name = "Holder"
             holder.Size = UDim2.new(1, 0, 0, 0)
@@ -907,21 +890,17 @@ function Panel.AddSection(name)
             holder.BackgroundTransparency = 1
             holder.LayoutOrder = 1
             holder.Parent = contentFrame
-
             local holderLayout = Instance.new("UIListLayout")
             holderLayout.SortOrder = Enum.SortOrder.LayoutOrder
             holderLayout.Padding = UDim.new(0, 6)
             holderLayout.Parent = holder
-
             contentSection.Frame = contentFrame
             contentSection.Holder = holder
-
             function contentSection:AddElement(elementType, options)
                 options = type(options) == "table" and options or {}
                 elementType = tostring(elementType)
                 contentSection.Count = contentSection.Count + 1
                 local key = resolveKey(elementType)
-
                 local container = Instance.new("Frame")
                 container.Name = elementType
                 container.Size = UDim2.new(1, 0, 0, 0)
@@ -931,35 +910,28 @@ function Panel.AddSection(name)
                 container.LayoutOrder = contentSection.Count
                 container.Visible = false
                 container.Parent = holder
-
                 local containerCorner = Instance.new("UICorner")
                 containerCorner.CornerRadius = UDim.new(0, 6)
                 containerCorner.Parent = container
-
                 local containerLimit = Instance.new("UISizeConstraint")
                 containerLimit.MinSize = Vector2.new(0, 32)
                 containerLimit.Parent = container
-
                 local border = Instance.new("UIStroke")
                 border.Name = "Border"
                 border.Color = COLOR_BORDER
                 border.Thickness = 1
                 border.Parent = container
-
                 local flash = Instance.new("UIStroke")
                 flash.Name = "Flash"
                 flash.Color = COLOR_ACTIVE
                 flash.Thickness = 1.5
                 flash.Transparency = 1
                 flash.Parent = container
-
                 local inset = Instance.new("UIPadding")
                 inset.Name = "Inset"
                 inset.Parent = container
-
                 local elementName = tostring(options.title or options.Title or options.name or options.Name or options.Text or options.Label or elementType)
                 local description = tostring(options.description or options.Description or "")
-
                 local element = {
                     Type = elementType,
                     Name = elementName,
@@ -975,7 +947,6 @@ function Panel.AddSection(name)
                 }
                 container.Name = element.Name
                 tab.Elements[#tab.Elements + 1] = element
-
                 local entry = Elements.Registry[key]
                 if entry then
                     buildElement(element, entry, options)
@@ -988,19 +959,15 @@ function Panel.AddSection(name)
                     end
                     queue[#queue + 1] = {Element = element, Options = options}
                 end
-
                 if refreshPalette then
                     refreshPalette()
                 end
                 return createHandle(element)
             end
-
             contentSection.CreateElement = contentSection.AddElement
-
             function contentSection:SetTitle(text)
                 title.Text = tostring(text)
             end
-
             setmetatable(contentSection, {
                 __index = function(_, key)
                     if type(key) ~= "string" then
@@ -1015,21 +982,16 @@ function Panel.AddSection(name)
                     end
                 end
             })
-
             tab.Sections[#tab.Sections + 1] = contentSection
             return contentSection
         end
-
         tab.AddSection = tab.CreateSection
-
         function tab:Select()
             selectTab(tab)
         end
-
         button.Activated:Connect(function()
             selectTab(tab)
         end)
-
         button.MouseEnter:Connect(function()
             if activeTab ~= tab then
                 button.BackgroundTransparency = 0.5
@@ -1037,30 +999,23 @@ function Panel.AddSection(name)
                 icon.ImageColor3 = COLOR_ACTIVE
             end
         end)
-
         button.MouseLeave:Connect(function()
             styleTab(tab)
         end)
-
         if not activeTab then
             selectTab(tab)
         end
-
         if refreshPalette then
             refreshPalette()
         end
-
         return page, tab
     end
-
     sections[#sections + 1] = section
     sectionsByName[name] = section
     return section
 end
 
--- // Palette
 local Palette = {Open = false, Token = 0, Items = {}, Selected = 0}
-
 local PaletteOverlay = Instance.new("TextButton")
 PaletteOverlay.Name = "PaletteOverlay"
 PaletteOverlay.Size = UDim2.new(1, 0, 1, 0)
@@ -1072,11 +1027,9 @@ PaletteOverlay.Text = ""
 PaletteOverlay.Visible = false
 PaletteOverlay.ZIndex = 20
 PaletteOverlay.Parent = MainFrame
-
 local PaletteOverlayCorner = Instance.new("UICorner")
 PaletteOverlayCorner.CornerRadius = UDim.new(0, 8)
 PaletteOverlayCorner.Parent = PaletteOverlay
-
 local PaletteFrame = Instance.new("Frame")
 PaletteFrame.Name = "PaletteFrame"
 PaletteFrame.AnchorPoint = Vector2.new(0.5, 0)
@@ -1088,34 +1041,27 @@ PaletteFrame.Active = true
 PaletteFrame.Visible = false
 PaletteFrame.ZIndex = 21
 PaletteFrame.Parent = MainFrame
-
 local PaletteCorner = Instance.new("UICorner")
 PaletteCorner.CornerRadius = UDim.new(0, 10)
 PaletteCorner.Parent = PaletteFrame
-
 local PaletteStroke = Instance.new("UIStroke")
 PaletteStroke.Color = COLOR_BORDER
 PaletteStroke.Thickness = 1
 PaletteStroke.Parent = PaletteFrame
-
 local PaletteLimit = Instance.new("UISizeConstraint")
 PaletteLimit.MaxSize = Vector2.new(340, math.huge)
 PaletteLimit.Parent = PaletteFrame
-
 local PaletteScale = Instance.new("UIScale")
 PaletteScale.Scale = 0.96
 PaletteScale.Parent = PaletteFrame
-
 local PaletteInputRow = Instance.new("Frame")
 PaletteInputRow.Name = "InputRow"
 PaletteInputRow.Size = UDim2.new(1, 0, 0, 40)
 PaletteInputRow.BackgroundTransparency = 1
 PaletteInputRow.Parent = PaletteFrame
-
 local PaletteSearchIcon = createIcon(PaletteInputRow, "search", 16, COLOR_DIM)
 PaletteSearchIcon.AnchorPoint = Vector2.new(0, 0.5)
 PaletteSearchIcon.Position = UDim2.new(0, 12, 0.5, 0)
-
 local PaletteInput = Instance.new("TextBox")
 PaletteInput.Name = "Input"
 PaletteInput.Size = UDim2.new(1, -76, 1, 0)
@@ -1130,7 +1076,6 @@ PaletteInput.Font = Enum.Font.SourceSans
 PaletteInput.TextXAlignment = Enum.TextXAlignment.Left
 PaletteInput.ClearTextOnFocus = false
 PaletteInput.Parent = PaletteInputRow
-
 local PaletteClose = Instance.new("TextButton")
 PaletteClose.Name = "Close"
 PaletteClose.AnchorPoint = Vector2.new(1, 0.5)
@@ -1141,15 +1086,12 @@ PaletteClose.BorderSizePixel = 0
 PaletteClose.AutoButtonColor = false
 PaletteClose.Text = ""
 PaletteClose.Parent = PaletteInputRow
-
 local PaletteCloseCorner = Instance.new("UICorner")
 PaletteCloseCorner.CornerRadius = UDim.new(0, 6)
 PaletteCloseCorner.Parent = PaletteClose
-
 local PaletteCloseIcon = createIcon(PaletteClose, "x", 14, COLOR_DIM)
 PaletteCloseIcon.AnchorPoint = Vector2.new(0.5, 0.5)
 PaletteCloseIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
-
 local PaletteDivider = Instance.new("Frame")
 PaletteDivider.Name = "Divider"
 PaletteDivider.Size = UDim2.new(1, 0, 0, 1)
@@ -1157,7 +1099,6 @@ PaletteDivider.Position = UDim2.new(0, 0, 0, 40)
 PaletteDivider.BackgroundColor3 = COLOR_BORDER
 PaletteDivider.BorderSizePixel = 0
 PaletteDivider.Parent = PaletteFrame
-
 local PaletteList = Instance.new("ScrollingFrame")
 PaletteList.Name = "List"
 PaletteList.Size = UDim2.new(1, 0, 0, 48)
@@ -1170,30 +1111,23 @@ PaletteList.CanvasSize = UDim2.new(0, 0, 0, 0)
 PaletteList.AutomaticCanvasSize = Enum.AutomaticSize.Y
 PaletteList.ScrollingDirection = Enum.ScrollingDirection.Y
 PaletteList.Parent = PaletteFrame
-
 local PaletteListPadding = Instance.new("UIPadding")
 PaletteListPadding.PaddingTop = UDim.new(0, 4)
 PaletteListPadding.PaddingBottom = UDim.new(0, 4)
 PaletteListPadding.PaddingLeft = UDim.new(0, 4)
 PaletteListPadding.PaddingRight = UDim.new(0, 4)
 PaletteListPadding.Parent = PaletteList
-
 local PaletteLayout = Instance.new("UIListLayout")
 PaletteLayout.SortOrder = Enum.SortOrder.LayoutOrder
 PaletteLayout.Padding = UDim.new(0, 2)
 PaletteLayout.Parent = PaletteList
-
--- // PaletteResize
 local function resizePalette()
     local limit = math.clamp(MainFrame.AbsoluteSize.Y - 96, 96, 230)
     local height = math.clamp(PaletteLayout.AbsoluteContentSize.Y + 8, 48, limit)
     PaletteList.Size = UDim2.new(1, 0, 0, height)
     PaletteFrame.Size = UDim2.new(1, -20, 0, 41 + height)
 end
-
 PaletteLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(resizePalette)
-
--- // PaletteClear
 local function clearResults()
     for _, child in ipairs(PaletteList:GetChildren()) do
         if child:IsA("GuiObject") then
@@ -1203,8 +1137,6 @@ local function clearResults()
     Palette.Items = {}
     Palette.Selected = 0
 end
-
--- // PaletteSelect
 local function setSelected(index, scroll)
     local previous = Palette.Items[Palette.Selected]
     if previous then
@@ -1228,8 +1160,6 @@ local function setSelected(index, scroll)
         end
     end
 end
-
--- // FocusElement
 local function focusElement(element)
     local container = element.Container
     local scroll = element.Tab.Scroll
@@ -1242,8 +1172,6 @@ local function focusElement(element)
     element.Flash.Transparency = 0
     TweenService:Create(element.Flash, FLASH_INFO, {Transparency = 1}):Play()
 end
-
--- // PaletteActivate
 local function activateItem(item)
     closePalette()
     if item.Kind == "tab" then
@@ -1255,8 +1183,6 @@ local function activateItem(item)
         end)
     end
 end
-
--- // PaletteRows
 local function createHeading(order, text)
     local label = Instance.new("TextLabel")
     label.Name = "Heading"
@@ -1269,12 +1195,10 @@ local function createHeading(order, text)
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.LayoutOrder = order
     label.Parent = PaletteList
-
     local padding = Instance.new("UIPadding")
     padding.PaddingLeft = UDim.new(0, 8)
     padding.Parent = label
 end
-
 local function createSeparator(order)
     local line = Instance.new("Frame")
     line.Name = "Separator"
@@ -1284,7 +1208,6 @@ local function createSeparator(order)
     line.LayoutOrder = order
     line.Parent = PaletteList
 end
-
 local function createRow(order, data)
     local button = Instance.new("TextButton")
     button.Name = "Item"
@@ -1296,15 +1219,12 @@ local function createRow(order, data)
     button.Text = ""
     button.LayoutOrder = order
     button.Parent = PaletteList
-
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 6)
     corner.Parent = button
-
     local icon = createIcon(button, data.Icon, 16, COLOR_INACTIVE)
     icon.AnchorPoint = Vector2.new(0, 0.5)
     icon.Position = UDim2.new(0, 8, 0.5, 0)
-
     local hint = Instance.new("TextLabel")
     hint.Name = "Hint"
     hint.AnchorPoint = Vector2.new(1, 0.5)
@@ -1318,7 +1238,6 @@ local function createRow(order, data)
     hint.TextXAlignment = Enum.TextXAlignment.Right
     hint.TextTruncate = Enum.TextTruncate.AtEnd
     hint.Parent = button
-
     local label = Instance.new("TextLabel")
     label.Name = "Text"
     label.Size = UDim2.new(0.6, -36, 1, 0)
@@ -1331,21 +1250,16 @@ local function createRow(order, data)
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.TextTruncate = Enum.TextTruncate.AtEnd
     label.Parent = button
-
     data.Button = button
     Palette.Items[#Palette.Items + 1] = data
     local index = #Palette.Items
-
     button.MouseEnter:Connect(function()
         setSelected(index, false)
     end)
-
     button.Activated:Connect(function()
         activateItem(data)
     end)
 end
-
--- // PaletteRender
 local function contains(text, query)
     local lowered = string.lower(text)
     for word in string.gmatch(query, "%S+") do
@@ -1355,7 +1269,6 @@ local function contains(text, query)
     end
     return true
 end
-
 local function renderResults(query)
     clearResults()
     local order = 0
@@ -1403,27 +1316,22 @@ local function renderResults(query)
     PaletteList.CanvasPosition = Vector2.new(0, 0)
     resizePalette()
 end
-
 local function currentQuery()
     local text = string.lower(PaletteInput.Text)
     text = string.gsub(text, "^%s+", "")
     text = string.gsub(text, "%s+$", "")
     return text
 end
-
 PaletteInput:GetPropertyChangedSignal("Text"):Connect(function()
     if Palette.Open then
         renderResults(currentQuery())
     end
 end)
-
 refreshPalette = function()
     if Palette.Open then
         renderResults(currentQuery())
     end
 end
-
--- // PaletteOpen
 local function openPalette()
     if Palette.Open or not EcoHub.Enabled then
         return
@@ -1444,8 +1352,6 @@ local function openPalette()
         end
     end)
 end
-
--- // PaletteClose
 closePalette = function()
     if not Palette.Open then
         return
@@ -1464,14 +1370,11 @@ closePalette = function()
     end)
     tween:Play()
 end
-
 Panel.OpenSearch = openPalette
 Panel.CloseSearch = closePalette
-
 SearchButton.Activated:Connect(openPalette)
 PaletteOverlay.Activated:Connect(closePalette)
 PaletteClose.Activated:Connect(closePalette)
-
 PaletteInput.FocusLost:Connect(function(enterPressed)
     if not enterPressed or not Palette.Open then
         return
@@ -1481,8 +1384,6 @@ PaletteInput.FocusLost:Connect(function(enterPressed)
         activateItem(item)
     end
 end)
-
--- // PaletteKeys
 connect(UserInputService.InputBegan, function(input, processed)
     if input.UserInputType ~= Enum.UserInputType.Keyboard then
         return
@@ -1511,8 +1412,6 @@ connect(UserInputService.InputBegan, function(input, processed)
         setSelected(nextIndex, true)
     end
 end)
-
--- // Drag
 local function makeDraggable(handle, target)
     local dragging = false
     local dragStart = Vector3.zero
@@ -1542,14 +1441,10 @@ local function makeDraggable(handle, target)
         end
     end)
 end
-
 makeDraggable(Dashboard, MainFrame)
 makeDraggable(Header, MainFrame)
-
--- // Resize
 local resizing = false
 local startSize, startMousePos
-
 ResizeButton.InputBegan:Connect(function(input)
     if EcoHub.Enabled and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
         resizing = true
@@ -1557,13 +1452,11 @@ ResizeButton.InputBegan:Connect(function(input)
         startMousePos = input.Position
     end
 end)
-
 connect(UserInputService.InputEnded, function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         resizing = false
     end
 end)
-
 connect(UserInputService.InputChanged, function(input)
     if resizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
         local delta = input.Position - startMousePos
@@ -1575,15 +1468,11 @@ connect(UserInputService.InputChanged, function(input)
         MainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
     end
 end)
-
--- // ToggleDrag
 local isActualDrag = false
 local dragStart = Vector3.zero
 local startPosition = ToggleButton.Position
 local moveConnection = nil
 local endConnection = nil
-
--- // StopTracking
 local function stopTracking()
     if moveConnection then
         moveConnection:Disconnect()
@@ -1594,7 +1483,6 @@ local function stopTracking()
         endConnection = nil
     end
 end
-
 ToggleButton.InputBegan:Connect(function(input)
     if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
         return
@@ -1626,10 +1514,7 @@ ToggleButton.InputBegan:Connect(function(input)
         isActualDrag = false
     end)
 end)
-
--- // Window
-local Window = {Panel = Panel, Elements = Elements, Gui = EcoHub}
-
+local Window = {Panel = Panel, Elements = Elements, Features = Features, Gui = EcoHub}
 function Window:CreateTab(config)
     config = type(config) == "table" and config or {tab = config}
     local tabName = tostring(config.tab or config.Tab or config.Name or config.Title or "Tab")
@@ -1639,7 +1524,6 @@ function Window:CreateTab(config)
     local _, tab = section:AddTab(tabName, iconName)
     return tab
 end
-
 function Window:GetTab(key)
     if type(key) == "number" then
         return allTabs[key]
@@ -1651,7 +1535,6 @@ function Window:GetTab(key)
     end
     return nil
 end
-
 function Window:SelectTab(tab)
     if type(tab) ~= "table" then
         tab = Window:GetTab(tab)
@@ -1660,50 +1543,38 @@ function Window:SelectTab(tab)
         selectTab(tab)
     end
 end
-
 function Window:SetMinimized(state)
     setVisibility(not state)
 end
-
 function Window:IsMinimized()
     return not EcoHub.Enabled
 end
-
 function Window:ClearSearch()
     PaletteInput.Text = ""
 end
-
 function Window:SetTitle(text)
     TitleText.Text = tostring(text)
 end
-
 function Window:SetSubTitle(text)
     SubTitleText.Text = tostring(text)
 end
-
 function Window:SetMinimizeKey(keyCode)
     if typeof(keyCode) == "EnumItem" then
         State.MinimizeKey = keyCode
     end
 end
-
 function Window:SetVisible(state)
     setVisibility(state and true or false)
 end
-
 function Window:Toggle()
     setVisibility(not EcoHub.Enabled)
 end
-
 function Window:OpenSearch()
     openPalette()
 end
-
 function Window:CloseSearch()
     closePalette()
 end
-
--- // Destroy
 local function destroyLibrary()
     for _, connection in ipairs(connections) do
         connection:Disconnect()
@@ -1714,17 +1585,14 @@ local function destroyLibrary()
     ToggleGui:Destroy()
     env.EcoHubPanel = nil
     env.EcoHubElements = nil
+    env.EcoHubFeatures = nil
     env.EcoHubLibrary = nil
     env.EcoHubDestroy = nil
 end
-
 function Window:Destroy()
     destroyLibrary()
 end
-
--- // Library
 local Librarys = {}
-
 function Librarys:CreateWindow(config)
     config = type(config) == "table" and config or {}
     TitleText.Text = tostring(config.Title or "EcoHub")
@@ -1740,14 +1608,10 @@ function Librarys:CreateWindow(config)
     ToggleGui.Enabled = true
     return Window
 end
-
--- // Export
 env.EcoHubPanel = Panel
 env.EcoHubElements = Elements
+env.EcoHubFeatures = Features
 env.EcoHubLibrary = Librarys
 env.EcoHubDestroy = destroyLibrary
-
--- // LoadElements
 Elements.Load()
-
 return Librarys
