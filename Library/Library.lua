@@ -24,7 +24,7 @@ local Theme = {
 
 -- // Configurações
 local Config = {
-    Repo = "pvpgalinhamonzonrebasexk/monzonrebasexk",
+    Repo = "pvpgalinhamonzonrebasexk/gazrenkinras",
     Branch = "main",
     ElementsPath = "Library/Elements",
     TweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
