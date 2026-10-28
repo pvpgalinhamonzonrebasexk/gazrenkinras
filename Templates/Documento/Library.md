@@ -30,7 +30,7 @@ Documentação da library de UI do Ecohub: janela, tabs, sections e todos os ele
 
 ```lua
 -- // Library
-local Librarys = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Library/Library.lua"))()
+local Librarys = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Library/Library.luau"))()
 ```
 
 > Só existe **uma janela** por vez. Executar o script de novo destrói a janela anterior, descarrega as features dela e remove qualquer GUI que tenha sobrado.
