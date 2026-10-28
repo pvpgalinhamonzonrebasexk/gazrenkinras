@@ -36,6 +36,7 @@ local Config = {
     TabHoverTransparency = 0.88,
     TabGradientRotation = 25
 }
+
 Config.ElementsApi = "https://api.github.com/repos/" .. Config.Repo .. "/contents/" .. Config.ElementsPath .. "?ref=" .. Config.Branch
 Config.ElementsRaw = "https://raw.githubusercontent.com/" .. Config.Repo .. "/refs/heads/" .. Config.Branch .. "/" .. Config.ElementsPath .. "/"
 Config.IconsUrl = "https://raw.githubusercontent.com/" .. Config.Repo .. "/refs/heads/" .. Config.Branch .. "/Assets/Icons.lua"
