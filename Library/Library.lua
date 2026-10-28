@@ -377,6 +377,7 @@ Panel.CreateIcon = createIcon
 
 local sections = {}
 local sectionsByName = {}
+local allTabs = {}
 local activeTab = nil
 local sectionOrder = 0
 
@@ -864,6 +865,7 @@ function Panel.AddSection(name)
             Elements = {}
         }
         self.Tabs[#self.Tabs + 1] = tab
+        allTabs[#allTabs + 1] = tab
 
         function tab:CreateSection(contentName)
             contentName = tostring(contentName or "Section")
@@ -995,11 +997,34 @@ function Panel.AddSection(name)
 
             contentSection.CreateElement = contentSection.AddElement
 
+            function contentSection:SetTitle(text)
+                title.Text = tostring(text)
+            end
+
+            setmetatable(contentSection, {
+                __index = function(_, key)
+                    if type(key) ~= "string" then
+                        return nil
+                    end
+                    local elementName = string.match(key, "^Create(%u%w*)$") or string.match(key, "^Add(%u%w*)$")
+                    if not elementName then
+                        return nil
+                    end
+                    return function(self, options)
+                        return self:AddElement(elementName, options)
+                    end
+                end
+            })
+
             tab.Sections[#tab.Sections + 1] = contentSection
             return contentSection
         end
 
         tab.AddSection = tab.CreateSection
+
+        function tab:Select()
+            selectTab(tab)
+        end
 
         button.Activated:Connect(function()
             selectTab(tab)
@@ -1615,10 +1640,37 @@ function Window:CreateTab(config)
     return tab
 end
 
+function Window:GetTab(key)
+    if type(key) == "number" then
+        return allTabs[key]
+    end
+    for _, tab in ipairs(allTabs) do
+        if tab.Name == key then
+            return tab
+        end
+    end
+    return nil
+end
+
 function Window:SelectTab(tab)
-    if type(tab) == "table" and tab.Page then
+    if type(tab) ~= "table" then
+        tab = Window:GetTab(tab)
+    end
+    if tab and tab.Page then
         selectTab(tab)
     end
+end
+
+function Window:SetMinimized(state)
+    setVisibility(not state)
+end
+
+function Window:IsMinimized()
+    return not EcoHub.Enabled
+end
+
+function Window:ClearSearch()
+    PaletteInput.Text = ""
 end
 
 function Window:SetTitle(text)
