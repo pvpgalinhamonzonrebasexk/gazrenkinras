@@ -29,9 +29,12 @@ local Config = {
     ElementsPath = "Library/Elements",
     TweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     FlashInfo = TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-    DefaultSize = UDim2.fromOffset(580, 350),
+    DefaultSize = UDim2.fromOffset(620, 350),
     ToggleImage = "rbxassetid://77526194033506",
-    LoadTimeout = 30,
+    LoadTimeout = 45,
+    MaxParallel = 4,
+    SidebarWidth = 180,
+    TabHeight = 34,
     TabActiveTransparency = 0.72,
     TabHoverTransparency = 0.88,
     TabGradientRotation = 25
@@ -39,7 +42,10 @@ local Config = {
 
 Config.ElementsApi = "https://api.github.com/repos/" .. Config.Repo .. "/contents/" .. Config.ElementsPath .. "?ref=" .. Config.Branch
 Config.ElementsRaw = "https://raw.githubusercontent.com/" .. Config.Repo .. "/refs/heads/" .. Config.Branch .. "/" .. Config.ElementsPath .. "/"
+Config.ElementsCdn = "https://cdn.jsdelivr.net/gh/" .. Config.Repo .. "@" .. Config.Branch .. "/" .. Config.ElementsPath .. "/"
+Config.ElementsList = "https://data.jsdelivr.com/v1/packages/gh/" .. Config.Repo .. "@" .. Config.Branch .. "?structure=flat"
 Config.IconsUrl = "https://raw.githubusercontent.com/" .. Config.Repo .. "/refs/heads/" .. Config.Branch .. "/Assets/Icons.lua"
+Config.IconsCdn = "https://cdn.jsdelivr.net/gh/" .. Config.Repo .. "@" .. Config.Branch .. "/Assets/Icons.lua"
 
 local ELEMENT_ALIASES = {toggle = "checkbox", colorpick = "colorpicker"}
 local ELEMENT_ICONS = {
@@ -50,7 +56,7 @@ local ELEMENT_ICONS = {
     colorpicker = "palette",
     paragraph = "align-left"
 }
-local ELEMENT_DEFAULTS = {"Button", "Toggle", "Slider", "Paragraph", "Dropdown", "ColorPicker"}
+local ELEMENT_DEFAULTS = {"Button", "Checkbox", "Toggle", "Slider", "Paragraph", "Dropdown", "ColorPicker"}
 
 -- // Ambiente
 local LocalPlayer = Players.LocalPlayer
@@ -137,6 +143,66 @@ function Util.Contains(text, query)
     return true
 end
 
+-- // Http
+local Http = {}
+
+function Http.Get(url)
+    local failure = "request failed"
+    local ok, body = pcall(game.HttpGet, game, url)
+    if ok and type(body) == "string" and body ~= "" then
+        return body
+    end
+    if not ok then
+        failure = tostring(body)
+    end
+
+    local requester = nil
+    if type(request) == "function" then
+        requester = request
+    elseif type(http_request) == "function" then
+        requester = http_request
+    elseif type(syn) == "table" and type(syn.request) == "function" then
+        requester = syn.request
+    end
+
+    if requester and not string.find(failure, "404", 1, true) then
+        local sent, response = pcall(requester, {Url = url, Method = "GET"})
+        if sent and type(response) == "table" then
+            local status = response.StatusCode or response.Status
+            if type(response.Body) == "string" and response.Body ~= "" and (response.Success or status == 200) then
+                return response.Body
+            end
+            failure = "HTTP " .. tostring(status)
+        elseif not sent then
+            failure = tostring(response)
+        end
+    end
+    error(failure, 0)
+end
+
+function Http.Fetch(urls, rounds)
+    rounds = rounds or 2
+    local lastError = "not found"
+    for round = 1, rounds do
+        local retry = false
+        for _, url in ipairs(urls) do
+            local ok, result = pcall(Http.Get, url)
+            if ok then
+                return result
+            end
+            lastError = tostring(result)
+            if not string.find(lastError, "404", 1, true) then
+                retry = true
+            end
+        end
+        if not retry or round == rounds then
+            break
+        end
+        task.wait(0.4 * round)
+    end
+    error(lastError, 0)
+end
+
 -- // Maid
 local Maid = {}
 Maid.__index = Maid
@@ -207,7 +273,7 @@ function Icons.Load()
     Icons.Loading = true
     task.spawn(function()
         local ok, result = pcall(function()
-            return loadstring(game:HttpGet(Config.IconsUrl))()
+            return loadstring(Http.Fetch({Config.IconsUrl, Config.IconsCdn}, 2))()
         end)
         if ok and type(result) == "table" and type(result.assets) == "table" then
             Icons.Assets = result.assets
@@ -217,6 +283,8 @@ function Icons.Load()
                     Icons.Apply(item[1], item[2])
                 end
             end
+        else
+            warn("[EcoHub] could not load icons: " .. tostring(result))
         end
         Icons.Pending = {}
         Icons.Loading = false
@@ -317,46 +385,43 @@ function ElementRegistry:_RunChunk(chunk)
     end
     if not scoped then
         env.Elements = self
+        env.Panel = self.Panel
     end
     return chunk(self, self.Panel)
 end
 
-function ElementRegistry:_LoadFile(file)
+function ElementRegistry:_LoadFile(file, optional)
     local names = {file}
     if not string.match(file, "%.luau?$") then
-        names = {file .. ".luau", file .. ".lua"}
+        names = {file .. ".lua", file .. ".luau"}
     end
-    local lastError = "not found"
+
+    local stamp = "?t=" .. tostring(os.time())
+    local urls = {}
     for _, candidate in ipairs(names) do
-        local ok, result = pcall(function()
-            local source = game:HttpGet(Config.ElementsRaw .. candidate)
-            local chunk, compileError = loadstring(source)
-            if not chunk then
-                error(compileError, 0)
-            end
-            return self:_RunChunk(chunk)
-        end)
-        if ok then
-            return true
-        end
-        lastError = result
+        urls[#urls + 1] = Config.ElementsRaw .. candidate .. stamp
     end
-    warn("[EcoHub] could not load element '" .. file .. "': " .. tostring(lastError))
-    return false
+    for _, candidate in ipairs(names) do
+        urls[#urls + 1] = Config.ElementsCdn .. candidate
+    end
+
+    local ok, result = pcall(function()
+        local source = Http.Fetch(urls, 2)
+        local chunk, compileError = loadstring(source)
+        if not chunk then
+            error(compileError, 0)
+        end
+        return self:_RunChunk(chunk)
+    end)
+    if not ok and not optional then
+        warn("[EcoHub] could not load element '" .. file .. "': " .. tostring(result))
+    end
+    return ok
 end
 
-function ElementRegistry:_ListFiles(names)
+function ElementRegistry:_ParseApi(body)
     local files = {}
-    if type(names) == "table" then
-        for _, name in ipairs(names) do
-            files[#files + 1] = name
-        end
-        return files
-    end
-
-    local ok, list = pcall(function()
-        return HttpService:JSONDecode(game:HttpGet(Config.ElementsApi))
-    end)
+    local ok, list = pcall(HttpService.JSONDecode, HttpService, body)
     if ok and type(list) == "table" then
         for _, item in ipairs(list) do
             if type(item) == "table" and item.type == "file" and type(item.name) == "string" then
@@ -366,12 +431,58 @@ function ElementRegistry:_ListFiles(names)
             end
         end
     end
-    if #files == 0 then
-        for _, name in ipairs(ELEMENT_DEFAULTS) do
-            files[#files + 1] = name
+    table.sort(files)
+    return files
+end
+
+function ElementRegistry:_ParseCdn(body)
+    local files = {}
+    local ok, data = pcall(HttpService.JSONDecode, HttpService, body)
+    if ok and type(data) == "table" and type(data.files) == "table" then
+        local prefix = "/" .. Config.ElementsPath .. "/"
+        for _, item in ipairs(data.files) do
+            local path = type(item) == "table" and item.name
+            if type(path) == "string" and string.sub(path, 1, #prefix) == prefix then
+                local name = string.sub(path, #prefix + 1)
+                if not string.find(name, "/", 1, true) and string.match(name, "%.luau?$") then
+                    files[#files + 1] = name
+                end
+            end
         end
     end
+    table.sort(files)
     return files
+end
+
+function ElementRegistry:_ListFiles(names)
+    if type(names) == "table" then
+        local files = {}
+        for _, name in ipairs(names) do
+            files[#files + 1] = name
+        end
+        return files, false
+    end
+
+    local sources = {
+        {Config.ElementsApi, self._ParseApi},
+        {Config.ElementsList, self._ParseCdn}
+    }
+    for _, source in ipairs(sources) do
+        local ok, body = pcall(Http.Fetch, {source[1]}, 1)
+        if ok then
+            local files = source[2](self, body)
+            if #files > 0 then
+                return files, false
+            end
+        end
+    end
+
+    warn("[EcoHub] could not list elements from the repository, using the default list")
+    local files = {}
+    for _, name in ipairs(ELEMENT_DEFAULTS) do
+        files[#files + 1] = name
+    end
+    return files, true
 end
 
 function ElementRegistry:_WarnPending()
@@ -389,29 +500,56 @@ function ElementRegistry:_Load(names)
     names = names or env.EcoHubElementList
     self.Active = self.Active + 1
     task.spawn(function()
-        local files = self:_ListFiles(names)
-        local remaining = 0
+        local files, optional = self:_ListFiles(names)
+        local queue = {}
 
         for _, file in ipairs(files) do
             local id = string.lower((string.gsub(file, "%.luau?$", "")))
             if not self.Files[id] then
                 self.Files[id] = true
-                remaining = remaining + 1
-                task.spawn(function()
-                    pcall(self._LoadFile, self, file)
-                    remaining = remaining - 1
-                end)
+                queue[#queue + 1] = {File = file, Id = id}
             end
         end
 
+        local cursor = 0
+        local running = 0
+        local loaded = 0
+
+        local function worker()
+            while not self.Destroyed do
+                cursor = cursor + 1
+                local job = queue[cursor]
+                if not job then
+                    break
+                end
+                if self:_LoadFile(job.File, optional) then
+                    loaded = loaded + 1
+                else
+                    self.Files[job.Id] = nil
+                end
+            end
+            running = running - 1
+        end
+
+        for _ = 1, math.min(Config.MaxParallel, #queue) do
+            running = running + 1
+            task.spawn(worker)
+        end
+
         local waited = 0
-        while remaining > 0 and waited < Config.LoadTimeout and not self.Destroyed do
+        while running > 0 and waited < Config.LoadTimeout and not self.Destroyed do
             task.wait(0.1)
             waited = waited + 0.1
         end
 
         self.Active = self.Active - 1
-        if self.Active == 0 and not self.Destroyed then
+        if self.Destroyed then
+            return
+        end
+        if #queue > 0 and loaded == 0 then
+            warn("[EcoHub] no elements could be loaded, check your connection or the repository")
+        end
+        if self.Active == 0 then
             self:_WarnPending()
         end
     end)
@@ -669,7 +807,7 @@ function Tab.new(window, sideSection, name, iconName)
 
     local button = Util.Create("TextButton", {
         Name = name,
-        Size = UDim2.new(1, 0, 0, 32),
+        Size = UDim2.new(1, 0, 0, Config.TabHeight),
         BackgroundColor3 = Color3.fromRGB(255, 255, 255),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
@@ -695,12 +833,12 @@ function Tab.new(window, sideSection, name, iconName)
 
     local icon = Icons.Create(button, iconName, 16, Theme.Inactive)
     icon.AnchorPoint = Vector2.new(0, 0.5)
-    icon.Position = UDim2.new(0, 8, 0.5, 0)
+    icon.Position = UDim2.new(0, 10, 0.5, 0)
 
     local label = Util.Create("TextLabel", {
         Name = "Text",
-        Size = UDim2.new(1, -36, 1, 0),
-        Position = UDim2.new(0, 32, 0, 0),
+        Size = UDim2.new(1, -46, 1, 0),
+        Position = UDim2.new(0, 36, 0, 0),
         BackgroundTransparency = 1,
         Text = name,
         TextColor3 = Theme.Inactive,
@@ -814,11 +952,11 @@ function SideSection.new(window, name)
         TextXAlignment = Enum.TextXAlignment.Left,
         LayoutOrder = 0
     }, frame)
-    Util.Padding(labelButton, 0, 0, 8, 0)
+    Util.Padding(labelButton, 0, 0, 10, 0)
 
     local chevron = Icons.Create(labelButton, "chevron-down", 14, Theme.Dim)
     chevron.AnchorPoint = Vector2.new(1, 0.5)
-    chevron.Position = UDim2.new(1, -6, 0.5, 0)
+    chevron.Position = UDim2.new(1, -8, 0.5, 0)
 
     local menu = Util.Create("Frame", {
         Name = "Menu",
@@ -841,6 +979,10 @@ function SideSection.new(window, name)
     return self
 end
 
+function SideSection:_FullHeight()
+    return math.max(#self.Tabs * (Config.TabHeight + 2) - 2, 0)
+end
+
 function SideSection:SetOpen(state)
     self.Open = state
     Util.Tween(self.Chevron, Config.TweenInfo, {Rotation = state and 0 or -90})
@@ -849,7 +991,7 @@ end
 
 function SideSection:_Animate()
     local menu = self.Menu
-    local full = math.max(menu.AbsoluteSize.Y, #self.Tabs * 34 - 2, 0)
+    local full = math.max(menu.AbsoluteSize.Y, self:_FullHeight())
 
     self.Token = self.Token + 1
     local token = self.Token
@@ -857,7 +999,7 @@ function SideSection:_Animate()
 
     if self.Open then
         menu.Visible = true
-        local tween = Util.Tween(menu, Config.TweenInfo, {Size = UDim2.new(1, 0, 0, #self.Tabs * 34 - 2)})
+        local tween = Util.Tween(menu, Config.TweenInfo, {Size = UDim2.new(1, 0, 0, self:_FullHeight())})
         tween.Completed:Connect(function()
             if self.Token == token and self.Open then
                 menu.AutomaticSize = Enum.AutomaticSize.Y
@@ -1319,6 +1461,7 @@ function Window.new(config)
     self.Tabs = {}
     self.ActiveTab = nil
     self.SectionOrder = 0
+    self.SidebarWidth = Config.SidebarWidth
 
     self:_BuildMain()
     self:_BuildPanel()
@@ -1360,7 +1503,7 @@ function Window:_BuildMain()
 
     local sidebar = Util.Create("Frame", {
         Name = "TabSidebar",
-        Size = UDim2.new(0, 140, 1, 0),
+        Size = UDim2.new(0, self.SidebarWidth, 1, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0
     }, content)
@@ -1382,8 +1525,8 @@ function Window:_BuildMain()
 
     local titleText = Util.Create("TextLabel", {
         Name = "TitleText",
-        Size = UDim2.new(1, -20, 0, 18),
-        Position = UDim2.new(0, 12, 0, 16),
+        Size = UDim2.new(1, -24, 0, 18),
+        Position = UDim2.new(0, 14, 0, 16),
         BackgroundTransparency = 1,
         Text = "EcoHub",
         TextColor3 = Theme.Active,
@@ -1395,8 +1538,8 @@ function Window:_BuildMain()
 
     local subTitleText = Util.Create("TextLabel", {
         Name = "SubTitleText",
-        Size = UDim2.new(1, -20, 0, 14),
-        Position = UDim2.new(0, 12, 0, 34),
+        Size = UDim2.new(1, -24, 0, 14),
+        Position = UDim2.new(0, 14, 0, 34),
         BackgroundTransparency = 1,
         Text = "v1.0.0",
         TextColor3 = Theme.Subtitle,
@@ -1416,13 +1559,13 @@ function Window:_BuildMain()
         CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y
     }, sidebar)
-    Util.Padding(tabList, 2, 8, 8, 8)
+    Util.Padding(tabList, 2, 8, 10, 10)
     Util.List(tabList, 8)
 
     local contentArea = Util.Create("Frame", {
         Name = "ContentArea",
-        Size = UDim2.new(1, -141, 1, 0),
-        Position = UDim2.new(0, 141, 0, 0),
+        Size = UDim2.new(1, -(self.SidebarWidth + 1), 1, 0),
+        Position = UDim2.new(0, self.SidebarWidth + 1, 0, 0),
         BackgroundTransparency = 1
     }, content)
 
@@ -1495,6 +1638,7 @@ function Window:_BuildMain()
     self.TitleText = titleText
     self.SubTitleText = subTitleText
     self.TabList = tabList
+    self.ContentArea = contentArea
     self.Header = header
     self.PageHolder = pageHolder
     self.Breadcrumb = breadcrumb
@@ -1735,7 +1879,8 @@ function Window:_BindResize()
         local viewport = Util.GetViewport()
         local maxWidth = math.max(320, math.min(900, viewport.X - 16))
         local maxHeight = math.max(240, math.min(700, viewport.Y - 16))
-        local newWidth = math.clamp(startSize.X + delta.X, math.min(450, maxWidth), maxWidth)
+        local minWidth = math.min(self.SidebarWidth + 300, maxWidth)
+        local newWidth = math.clamp(startSize.X + delta.X, minWidth, maxWidth)
         local newHeight = math.clamp(startSize.Y + delta.Y, math.min(300, maxHeight), maxHeight)
         self.Main.Size = UDim2.new(0, newWidth, 0, newHeight)
     end)
@@ -1798,12 +1943,23 @@ function Window:Configure(config)
     if config.SubTitle ~= nil then
         self.SubTitleText.Text = tostring(config.SubTitle)
     end
+    if tonumber(config.SidebarWidth) then
+        self:SetSidebarWidth(config.SidebarWidth)
+    end
     if typeof(config.Size) == "UDim2" then
         self:_ApplySize(config.Size)
     end
     if typeof(config.MinimizeKey) == "EnumItem" then
         self.MinimizeKey = config.MinimizeKey
     end
+end
+
+function Window:SetSidebarWidth(width)
+    width = math.clamp(tonumber(width) or Config.SidebarWidth, 120, 320)
+    self.SidebarWidth = width
+    self.Sidebar.Size = UDim2.new(0, width, 1, 0)
+    self.ContentArea.Size = UDim2.new(1, -(width + 1), 1, 0)
+    self.ContentArea.Position = UDim2.new(0, width + 1, 0, 0)
 end
 
 function Window:CreateTab(config)
