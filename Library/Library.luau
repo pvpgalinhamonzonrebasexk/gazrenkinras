@@ -33,6 +33,7 @@ local Config = {
     ToggleImage = "rbxassetid://77526194033506",
     LoadTimeout = 45,
     MaxParallel = 4,
+    MaxQuery = 48,
     SidebarWidth = 180,
     TabHeight = 34,
     TabFillTransparency = 0.3,
@@ -338,6 +339,13 @@ function Icons.Load()
         end
         Icons.Failed = os.clock()
         Icons.Loading = false
+        local alive = {}
+        for _, item in ipairs(Icons.Pending) do
+            if item[1].Parent then
+                alive[#alive + 1] = item
+            end
+        end
+        Icons.Pending = alive
         warn("[EcoHub] could not load icons: " .. failure)
     end)
 end
@@ -806,6 +814,7 @@ function ContentSection.new(tab, name)
         TextSize = 12,
         Font = Enum.Font.SourceSansSemibold,
         TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
         LayoutOrder = 0
     }, frame)
     Util.Padding(title, 0, 0, 2, 0)
@@ -984,13 +993,14 @@ function SideSection.new(window, name)
         TextSize = 12,
         Font = Enum.Font.SourceSansSemibold,
         TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
         LayoutOrder = 0
     }, frame)
-    Util.Padding(labelButton, 0, 0, 10, 0)
+    Util.Padding(labelButton, 0, 0, 10, 26)
 
     local chevron = Icons.Create(labelButton, "chevron-down", 14, Theme.Dim)
     chevron.AnchorPoint = Vector2.new(1, 0.5)
-    chevron.Position = UDim2.new(1, -8, 0.5, 0)
+    chevron.Position = UDim2.new(1, 18, 0.5, 0)
 
     local menu = Util.Create("Frame", {
         Name = "Menu",
@@ -1067,6 +1077,7 @@ function Palette.new(window)
     self.Window = window
     self.IsOpen = false
     self.Token = 0
+    self.RenderId = 0
     self.Items = {}
     self.Selected = 0
     self:_Build()
@@ -1098,6 +1109,7 @@ function Palette:_Build()
         BorderSizePixel = 0,
         Active = true,
         Visible = false,
+        ClipsDescendants = true,
         ZIndex = 21
     }, main)
     Util.Corner(frame, 10)
@@ -1108,7 +1120,8 @@ function Palette:_Build()
     local inputRow = Util.Create("Frame", {
         Name = "InputRow",
         Size = UDim2.new(1, 0, 0, 40),
-        BackgroundTransparency = 1
+        BackgroundTransparency = 1,
+        ClipsDescendants = true
     }, frame)
 
     local searchIcon = Icons.Create(inputRow, "search", 16, Theme.Dim)
@@ -1127,7 +1140,10 @@ function Palette:_Build()
         TextSize = 14,
         Font = Enum.Font.SourceSans,
         TextXAlignment = Enum.TextXAlignment.Left,
-        ClearTextOnFocus = false
+        ClearTextOnFocus = false,
+        ClipsDescendants = true,
+        TextWrapped = false,
+        MultiLine = false
     }, inputRow)
 
     local close = Util.Create("TextButton", {
@@ -1164,7 +1180,8 @@ function Palette:_Build()
         ScrollBarImageColor3 = Theme.Border,
         CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        ScrollingDirection = Enum.ScrollingDirection.Y
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        ClipsDescendants = true
     }, frame)
     Util.Padding(list, 4, 4, 4, 4)
     local layout = Util.List(list, 2)
@@ -1180,9 +1197,27 @@ function Palette:_Build()
         self:_Resize()
     end)
     input:GetPropertyChangedSignal("Text"):Connect(function()
-        if self.IsOpen then
-            self:Render(self:_Query())
+        local text = input.Text
+        local clean = (string.gsub(text, "%c", " "))
+        local length = utf8.len(clean) or #clean
+        if length > Config.MaxQuery then
+            local cut = utf8.offset(clean, Config.MaxQuery + 1)
+            clean = cut and string.sub(clean, 1, cut - 1) or string.sub(clean, 1, Config.MaxQuery)
         end
+        if clean ~= text then
+            input.Text = clean
+            return
+        end
+        if not self.IsOpen then
+            return
+        end
+        self.RenderId = self.RenderId + 1
+        local id = self.RenderId
+        task.delay(0.06, function()
+            if self.IsOpen and self.RenderId == id then
+                self:Render(self:_Query())
+            end
+        end)
     end)
     overlay.Activated:Connect(function()
         self:Close()
@@ -1302,9 +1337,10 @@ function Palette:_CreateHeading(order, text)
         TextSize = 12,
         Font = Enum.Font.SourceSansSemibold,
         TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
         LayoutOrder = order
     }, self.List)
-    Util.Padding(label, 0, 0, 8, 0)
+    Util.Padding(label, 0, 0, 8, 8)
 end
 
 function Palette:_CreateSeparator(order)
@@ -1326,6 +1362,7 @@ function Palette:_CreateRow(order, data)
         BorderSizePixel = 0,
         AutoButtonColor = false,
         Text = "",
+        ClipsDescendants = true,
         LayoutOrder = order
     }, self.List)
     Util.Corner(button, 6)
@@ -1370,7 +1407,7 @@ function Palette:_CreateRow(order, data)
 
     Util.Create("TextLabel", {
         Name = "Text",
-        Size = UDim2.new(0.6, -36, 1, 0),
+        Size = UDim2.new(0.6, -44, 1, 0),
         Position = UDim2.new(0, 32, 0, 0),
         BackgroundTransparency = 1,
         Text = data.Name,
@@ -1487,6 +1524,7 @@ function Palette:Close()
     end
     self.IsOpen = false
     self.Token = self.Token + 1
+    self.RenderId = self.RenderId + 1
     local token = self.Token
 
     self.Input:ReleaseFocus()
@@ -1877,7 +1915,14 @@ function Features:_LoadJobs(jobs, options)
 
     local sources, failures = {}, {}
     if #list > 0 then
-        sources, failures = self:_DownloadAll(list)
+        local downloaded, result, reasons = pcall(self._DownloadAll, self, list)
+        if downloaded then
+            sources, failures = result, reasons
+        else
+            for position = 1, #list do
+                failures[position] = tostring(result)
+            end
+        end
     end
 
     for position, i in ipairs(pending) do
@@ -2211,7 +2256,8 @@ function Window:_BuildMain()
         Position = UDim2.new(1, -12, 0.5, 0),
         Size = UDim2.new(0, 140, 0, isTouch and 30 or 26),
         BackgroundColor3 = Theme.Field,
-        BorderSizePixel = 0
+        BorderSizePixel = 0,
+        ClipsDescendants = true
     }, header)
     Util.Corner(searchFrame, 6)
     Util.Stroke(searchFrame, Theme.Border, 1)
@@ -2230,7 +2276,8 @@ function Window:_BuildMain()
         TextColor3 = Theme.Placeholder,
         TextSize = 13,
         Font = Enum.Font.SourceSans,
-        TextXAlignment = Enum.TextXAlignment.Left
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd
     }, searchFrame)
 
     local resizeButton = Util.Create("TextButton", {
