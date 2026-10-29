@@ -273,7 +273,7 @@ function Maid:Destroy()
 end
 
 -- // Icons
-local Icons = {Assets = env.EcoHubIcons, Pending = {}, Loading = false}
+local Icons = {Assets = env.EcoHubIcons, Pending = {}, Loading = false, Failed = -100}
 
 function Icons.Apply(icon, name)
     local assets = Icons.Assets
@@ -298,8 +298,21 @@ function Icons.Create(parent, name, size, color)
         Icons.Apply(icon, name)
     else
         Icons.Pending[#Icons.Pending + 1] = {icon, name}
+        if not Icons.Loading and os.clock() - Icons.Failed > 10 then
+            Icons.Load()
+        end
     end
     return icon
+end
+
+function Icons.Flush()
+    local pending = Icons.Pending
+    Icons.Pending = {}
+    for _, item in ipairs(pending) do
+        if item[1].Parent then
+            Icons.Apply(item[1], item[2])
+        end
+    end
 end
 
 function Icons.Load()
@@ -308,22 +321,24 @@ function Icons.Load()
     end
     Icons.Loading = true
     task.spawn(function()
-        local ok, result = pcall(function()
-            return loadstring(Http.Fetch({Config.IconsUrl, Config.IconsCdn}, 2))()
-        end)
-        if ok and type(result) == "table" and type(result.assets) == "table" then
-            Icons.Assets = result.assets
-            env.EcoHubIcons = result.assets
-            for _, item in ipairs(Icons.Pending) do
-                if item[1].Parent then
-                    Icons.Apply(item[1], item[2])
-                end
+        local failure = "unknown error"
+        for attempt = 1, 4 do
+            local ok, result = pcall(function()
+                return loadstring(Http.Fetch({Config.IconsUrl, Config.IconsCdn}, 1))()
+            end)
+            if ok and type(result) == "table" and type(result.assets) == "table" then
+                Icons.Assets = result.assets
+                env.EcoHubIcons = result.assets
+                Icons.Loading = false
+                Icons.Flush()
+                return
             end
-        else
-            warn("[EcoHub] could not load icons: " .. tostring(result))
+            failure = tostring(result)
+            task.wait(attempt)
         end
-        Icons.Pending = {}
+        Icons.Failed = os.clock()
         Icons.Loading = false
+        warn("[EcoHub] could not load icons: " .. failure)
     end)
 end
 
@@ -1319,19 +1334,39 @@ function Palette:_CreateRow(order, data)
     icon.AnchorPoint = Vector2.new(0, 0.5)
     icon.Position = UDim2.new(0, 8, 0.5, 0)
 
-    Util.Create("TextLabel", {
+    local hint = Util.Create("Frame", {
         Name = "Hint",
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -8, 0.5, 0),
         Size = UDim2.new(0.4, 0, 0, 16),
         BackgroundTransparency = 1,
-        Text = data.Hint,
-        TextColor3 = Theme.Dim,
-        TextSize = 12,
-        Font = Enum.Font.SourceSans,
-        TextXAlignment = Enum.TextXAlignment.Right,
-        TextTruncate = Enum.TextTruncate.AtEnd
+        ClipsDescendants = true
     }, button)
+    Util.List(hint, 4, {
+        FillDirection = Enum.FillDirection.Horizontal,
+        HorizontalAlignment = Enum.HorizontalAlignment.Right,
+        VerticalAlignment = Enum.VerticalAlignment.Center
+    })
+
+    local trail = data.Trail
+    for i, part in ipairs(trail) do
+        Util.Create("TextLabel", {
+            Name = "Part" .. i,
+            AutomaticSize = Enum.AutomaticSize.X,
+            Size = UDim2.new(0, 0, 1, 0),
+            BackgroundTransparency = 1,
+            Text = tostring(part),
+            TextColor3 = Theme.Dim,
+            TextSize = 12,
+            Font = Enum.Font.SourceSans,
+            LayoutOrder = i * 2 - 1
+        }, hint)
+        if i < #trail then
+            local separator = Icons.Create(hint, "chevron-right", 12, Theme.Dim)
+            separator.Name = "Sep" .. i
+            separator.LayoutOrder = i * 2
+        end
+    end
 
     Util.Create("TextLabel", {
         Name = "Text",
@@ -1369,7 +1404,7 @@ function Palette:Render(query)
 
         for _, tab in ipairs(section.Tabs) do
             if query == "" or sectionMatch or Util.Contains(tab.Name .. " " .. section.Name, query) then
-                rows[#rows + 1] = {Kind = "tab", Name = tab.Name, Icon = tab.IconName, Hint = section.Name, Tab = tab}
+                rows[#rows + 1] = {Kind = "tab", Name = tab.Name, Icon = tab.IconName, Trail = {section.Name}, Tab = tab}
             end
             for _, element in ipairs(tab.Elements) do
                 if element.Built and (query == "" or Util.Contains(element.Search, query)) then
@@ -1377,7 +1412,7 @@ function Palette:Render(query)
                         Kind = "element",
                         Name = element.Name,
                         Icon = ELEMENT_ICONS[Util.ResolveKey(element.Type)] or "box",
-                        Hint = tab.Name .. " > " .. element.Group,
+                        Trail = {tab.Name, element.Group},
                         Element = element
                     }
                 end
