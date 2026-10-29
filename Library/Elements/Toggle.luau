@@ -3,40 +3,41 @@ Elements.Register("Checkbox", function(section, options)
     options = type(options) == "table" and options or {}
 
     local COLORS = {
-        TrackOn = Color3.fromRGB(250, 250, 250),
-        TrackOff = Color3.fromRGB(39, 39, 42),
-        TrackDisabled = Color3.fromRGB(28, 28, 30),
-        KnobOn = Color3.fromRGB(24, 24, 27),
-        KnobOff = Color3.fromRGB(250, 250, 250),
-        KnobDisabled = Color3.fromRGB(90, 90, 96),
-        TextOn = Color3.fromRGB(250, 250, 250),
-        TextOff = Color3.fromRGB(161, 161, 170),
-        TextDisabled = Color3.fromRGB(82, 82, 91),
-        Description = Color3.fromRGB(113, 113, 122),
-        KeyBg = Color3.fromRGB(30, 30, 32),
-        KeyBorder = Color3.fromRGB(55, 55, 60),
-        KeyText = Color3.fromRGB(180, 180, 190),
-        KeyListening = Color3.fromRGB(50, 50, 56),
-        KeyListenText = Color3.fromRGB(220, 220, 255),
+        TrackOn = Color3.fromRGB(240, 240, 240),
+        TrackOff = Color3.fromRGB(55, 55, 55),
+        TrackDisabled = Color3.fromRGB(38, 38, 38),
+        KnobOn = Color3.fromRGB(24, 24, 24),
+        KnobOff = Color3.fromRGB(240, 240, 240),
+        KnobDisabled = Color3.fromRGB(85, 85, 85),
+        TextOn = Color3.fromRGB(240, 240, 240),
+        TextOff = Color3.fromRGB(165, 165, 165),
+        TextDisabled = Color3.fromRGB(85, 85, 85),
+        Description = Color3.fromRGB(125, 125, 125),
+        KeyBg = Color3.fromRGB(28, 28, 28),
+        KeyBorder = Color3.fromRGB(55, 55, 55),
+        KeyText = Color3.fromRGB(165, 165, 165),
+        KeyListening = Color3.fromRGB(42, 42, 42),
+        KeyListenText = Color3.fromRGB(240, 240, 240),
     }
 
     local TITLE_SIZE = 13
     local DESC_SIZE = 11
     local KEY_SIZE = 11
-    local SWITCH_W = 44
-    local SWITCH_H = 24
-    local KNOB = 18
+    local SWITCH_W = 36
+    local SWITCH_H = 20
+    local KNOB = 14
     local KNOB_PAD = 3
-    local SIDE_PAD = 10
-    local PILL_W = 46
-    local PILL_H = 22
+    local SIDE_PAD = 0
+    local PILL_W = 40
+    local PILL_H = 20
     local WORD_MAX = 20
-    local BASE_H = 40
+    local BASE_H = 30
     local NOTIFY_TITLE = "Sistema"
 
     local userInputService = UserInputService or game:GetService("UserInputService")
     local tweenService = game:GetService("TweenService")
-    local fontBold = FONT_BOLD or Enum.Font.SourceSansBold
+    local env = getgenv and getgenv() or _G
+    local fontBold = FONT_BOLD or Enum.Font.SourceSansSemibold
     local fontRegular = FONT or Enum.Font.SourceSans
     local tweenInfo = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     local isDesktop = userInputService.KeyboardEnabled
@@ -200,7 +201,7 @@ Elements.Register("Checkbox", function(section, options)
     local textLayout = Instance.new("UIListLayout")
     textLayout.FillDirection = Enum.FillDirection.Vertical
     textLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    textLayout.Padding = UDim.new(0, 2)
+    textLayout.Padding = UDim.new(0, 1)
     textLayout.VerticalAlignment = Enum.VerticalAlignment.Center
     textLayout.Parent = textFrame
 
@@ -234,7 +235,7 @@ Elements.Register("Checkbox", function(section, options)
         descLabel.TextXAlignment = Enum.TextXAlignment.Left
         descLabel.TextYAlignment = Enum.TextYAlignment.Top
         descLabel.TextWrapped = true
-        descLabel.LineHeight = 1.15
+        descLabel.LineHeight = 1.1
         descLabel.LayoutOrder = 1
         descLabel.ZIndex = 2
         descLabel.Parent = textFrame
@@ -280,7 +281,8 @@ Elements.Register("Checkbox", function(section, options)
         keyBtn = Instance.new("TextButton")
         keyBtn.Name = "KeyBind"
         keyBtn.Size = UDim2.new(0, PILL_W, 0, PILL_H)
-        keyBtn.Position = UDim2.new(1, -(SWITCH_W + SIDE_PAD + 8 + PILL_W), 0.5, -PILL_H / 2)
+        keyBtn.AnchorPoint = Vector2.new(1, 0.5)
+        keyBtn.Position = UDim2.new(1, -(SWITCH_W + SIDE_PAD + 8), 0.5, 0)
         keyBtn.BackgroundColor3 = COLORS.KeyBg
         keyBtn.BorderSizePixel = 0
         keyBtn.Text = ""
@@ -322,7 +324,7 @@ Elements.Register("Checkbox", function(section, options)
             container.Size = UDim2.new(1, 0, 0, BASE_H)
             return
         end
-        container.Size = UDim2.new(1, 0, 0, math.max(textLayout.AbsoluteContentSize.Y + 16, BASE_H))
+        container.Size = UDim2.new(1, 0, 0, math.max(textLayout.AbsoluteContentSize.Y + 10, BASE_H))
     end
 
     local function play(instance, props, animate)
@@ -390,13 +392,18 @@ Elements.Register("Checkbox", function(section, options)
             listeningConnection:Disconnect()
             listeningConnection = nil
         end
+        if data.listening then
+            env.EcoHubBinding = nil
+        end
         data.listening = false
         resetKeyVisual()
     end
 
     local function enterListenMode()
         if destroyed or not hasKeybind or data.disabled or data.listening then return end
+        if env.EcoHubBinding then return end
         data.listening = true
+        env.EcoHubBinding = true
         listenStartedAt = os.clock()
 
         keyBtn.BackgroundColor3 = COLORS.KeyListening
@@ -435,6 +442,7 @@ Elements.Register("Checkbox", function(section, options)
     if hasKeybind then
         connect(userInputService.InputBegan, function(input, gp)
             if destroyed or gp or data.disabled or data.listening then return end
+            if env.EcoHubBinding then return end
             if not data.keybind then return end
             if matchInput(data.keybind, input) then
                 toggle()
@@ -537,6 +545,10 @@ Elements.Register("Checkbox", function(section, options)
     function data:Destroy()
         if destroyed then return end
         destroyed = true
+        if data.listening then
+            env.EcoHubBinding = nil
+            data.listening = false
+        end
         if listeningConnection then
             listeningConnection:Disconnect()
             listeningConnection = nil
