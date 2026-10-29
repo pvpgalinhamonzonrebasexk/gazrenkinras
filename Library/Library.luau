@@ -18,8 +18,7 @@ local Theme = {
     Subtitle = Color3.fromRGB(150, 150, 150),
     Placeholder = Color3.fromRGB(110, 110, 110),
     Text = Color3.fromRGB(230, 230, 230),
-    TabLight = Color3.fromRGB(240, 240, 240),
-    TabDark = Color3.fromRGB(60, 60, 60)
+    TabHover = Color3.fromRGB(205, 205, 205)
 }
 
 -- // Configurações
@@ -36,9 +35,8 @@ local Config = {
     MaxParallel = 4,
     SidebarWidth = 180,
     TabHeight = 34,
-    TabActiveTransparency = 0.72,
-    TabHoverTransparency = 0.88,
-    TabGradientRotation = 25
+    TabFillTransparency = 0.3,
+    TabTween = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 }
 
 Config.ElementsApi = "https://api.github.com/repos/" .. Config.Repo .. "/contents/" .. Config.ElementsPath .. "?ref=" .. Config.Branch
@@ -849,7 +847,7 @@ function Tab.new(window, sideSection, name, iconName)
     local button = Util.Create("TextButton", {
         Name = name,
         Size = UDim2.new(1, 0, 0, Config.TabHeight),
-        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundColor3 = Theme.Accent,
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         AutoButtonColor = false,
@@ -857,20 +855,6 @@ function Tab.new(window, sideSection, name, iconName)
         LayoutOrder = #sideSection.Tabs + 1
     }, sideSection.Menu)
     Util.Corner(button, 6)
-
-    Util.Create("UIGradient", {
-        Name = "Gradient",
-        Color = ColorSequence.new(Theme.TabLight, Theme.TabDark),
-        Rotation = Config.TabGradientRotation
-    }, button)
-
-    local stroke = Util.Create("UIStroke", {
-        Name = "Stroke",
-        Color = Theme.Inactive,
-        Thickness = 1,
-        Transparency = 1,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    }, button)
 
     local icon = Icons.Create(button, iconName, 16, Theme.Inactive)
     icon.AnchorPoint = Vector2.new(0, 0.5)
@@ -911,7 +895,6 @@ function Tab.new(window, sideSection, name, iconName)
     Util.List(scroll, 14)
 
     self.Button = button
-    self.Stroke = stroke
     self.Icon = icon
     self.Label = label
     self.Page = page
@@ -922,9 +905,8 @@ function Tab.new(window, sideSection, name, iconName)
     end)
     button.MouseEnter:Connect(function()
         if window.ActiveTab ~= self then
-            Util.Tween(button, Config.TweenInfo, {BackgroundTransparency = Config.TabHoverTransparency})
-            label.TextColor3 = Theme.Active
-            icon.ImageColor3 = Theme.Active
+            Util.Tween(label, Config.TabTween, {TextColor3 = Theme.TabHover})
+            Util.Tween(icon, Config.TabTween, {ImageColor3 = Theme.TabHover})
         end
     end)
     button.MouseLeave:Connect(function()
@@ -937,13 +919,9 @@ end
 function Tab:Style()
     local isActive = self.Window.ActiveTab == self
     local color = isActive and Theme.Active or Theme.Inactive
-    Util.Tween(self.Button, Config.TweenInfo, {
-        BackgroundTransparency = isActive and Config.TabActiveTransparency or 1
-    })
-    Util.Tween(self.Stroke, Config.TweenInfo, {Transparency = isActive and 0.55 or 1})
-    self.Label.TextColor3 = color
-    self.Label.Font = isActive and Enum.Font.SourceSansSemibold or Enum.Font.SourceSans
-    self.Icon.ImageColor3 = color
+    Util.Tween(self.Button, Config.TabTween, {BackgroundTransparency = isActive and Config.TabFillTransparency or 1})
+    Util.Tween(self.Label, Config.TabTween, {TextColor3 = color})
+    Util.Tween(self.Icon, Config.TabTween, {ImageColor3 = color})
 end
 
 function Tab:Select()
