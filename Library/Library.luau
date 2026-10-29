@@ -27,6 +27,7 @@ local Config = {
     Repo = "pvpgalinhamonzonrebasexk/gazrenkinras",
     Branch = "main",
     ElementsPath = "Library/Elements",
+    FeaturesPath = "Features",
     TweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     FlashInfo = TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     DefaultSize = UDim2.fromOffset(620, 350),
@@ -201,6 +202,43 @@ function Http.Fetch(urls, rounds)
         task.wait(0.4 * round)
     end
     error(lastError, 0)
+end
+
+-- // Source
+local Source = {}
+
+function Source.Build(repo, branch, path)
+    path = string.gsub(tostring(path or ""), "^/+", "")
+    path = string.gsub(path, "/+$", "")
+    local prefix = path ~= "" and (path .. "/") or ""
+    return {
+        Repo = repo,
+        Branch = branch,
+        Path = path,
+        Prefix = prefix,
+        Raw = "https://raw.githubusercontent.com/" .. repo .. "/refs/heads/" .. branch .. "/" .. prefix,
+        Cdn = "https://cdn.jsdelivr.net/gh/" .. repo .. "@" .. branch .. "/" .. prefix,
+        Tree = "https://api.github.com/repos/" .. repo .. "/git/trees/" .. branch .. "?recursive=1",
+        List = "https://data.jsdelivr.com/v1/packages/gh/" .. repo .. "@" .. branch .. "?structure=flat"
+    }
+end
+
+function Source.Parse(url)
+    url = string.match(tostring(url), "^[^%?#]+") or ""
+    local owner, repo, branch, path = string.match(url, "github%.com/([^/]+)/([^/]+)/tree/([^/]+)/?(.*)$")
+    if not owner then
+        owner, repo, branch, path = string.match(url, "github%.com/([^/]+)/([^/]+)/blob/([^/]+)/?(.*)$")
+    end
+    if not owner then
+        owner, repo, branch, path = string.match(url, "raw%.githubusercontent%.com/([^/]+)/([^/]+)/refs/heads/([^/]+)/?(.*)$")
+    end
+    if not owner then
+        owner, repo, branch, path = string.match(url, "raw%.githubusercontent%.com/([^/]+)/([^/]+)/([^/]+)/?(.*)$")
+    end
+    if not owner then
+        return nil
+    end
+    return Source.Build(owner .. "/" .. repo, branch, path)
 end
 
 -- // Maid
@@ -496,8 +534,11 @@ function ElementRegistry:_WarnPending()
     end
 end
 
-function ElementRegistry:_Load(names)
+function ElementRegistry:_Load(names, force)
     names = names or env.EcoHubElementList
+    if force then
+        self.Files = {}
+    end
     self.Active = self.Active + 1
     task.spawn(function()
         local files, optional = self:_ListFiles(names)
@@ -1446,6 +1487,561 @@ function Palette:Close()
     end)
 end
 
+-- // Features
+local Features = {}
+Features.__index = Features
+
+function Features.new(window)
+    local self = setmetatable({}, Features)
+    self.Window = window
+    self.Loaded = {}
+    self.Order = {}
+    self.Loading = {}
+    self.Index = nil
+    self.IndexLoading = false
+    self.IndexFailed = 0
+    self.Source = Source.Build(Config.Repo, Config.Branch, Config.FeaturesPath)
+    self.Config = {
+        Retries = 3,
+        MaxParallel = 4,
+        MaxSize = 1048576,
+        Timeout = 45
+    }
+    return self
+end
+
+function Features._ToRaw(url)
+    local owner, repo, rest = string.match(url, "^https?://github%.com/([^/]+)/([^/]+)/blob/(.+)$")
+    if owner then
+        return "https://raw.githubusercontent.com/" .. owner .. "/" .. repo .. "/" .. rest
+    end
+    return url
+end
+
+function Features._ParseTree(body, prefix)
+    local files = {}
+    local ok, data = pcall(HttpService.JSONDecode, HttpService, body)
+    if ok and type(data) == "table" and type(data.tree) == "table" then
+        for _, item in ipairs(data.tree) do
+            if type(item) == "table" and item.type == "blob" and type(item.path) == "string" then
+                if string.sub(item.path, 1, #prefix) == prefix then
+                    local rel = string.sub(item.path, #prefix + 1)
+                    if rel ~= "" and string.match(rel, "%.luau?$") then
+                        files[#files + 1] = rel
+                    end
+                end
+            end
+        end
+    end
+    return files
+end
+
+function Features._ParseFlat(body, prefix)
+    local files = {}
+    local ok, data = pcall(HttpService.JSONDecode, HttpService, body)
+    if ok and type(data) == "table" and type(data.files) == "table" then
+        local full = "/" .. prefix
+        for _, item in ipairs(data.files) do
+            local path = type(item) == "table" and item.name
+            if type(path) == "string" and string.sub(path, 1, #full) == full then
+                local rel = string.sub(path, #full + 1)
+                if rel ~= "" and string.match(rel, "%.luau?$") then
+                    files[#files + 1] = rel
+                end
+            end
+        end
+    end
+    return files
+end
+
+function Features:_BuildIndex()
+    local source = self.Source
+    local files = {}
+
+    local ok, body = pcall(Http.Fetch, {source.Tree}, 1)
+    if ok then
+        files = Features._ParseTree(body, source.Prefix)
+    end
+    if #files == 0 then
+        ok, body = pcall(Http.Fetch, {source.List}, 1)
+        if ok then
+            files = Features._ParseFlat(body, source.Prefix)
+        end
+    end
+    if #files == 0 then
+        return nil
+    end
+
+    table.sort(files, function(a, b)
+        return string.lower(a) < string.lower(b)
+    end)
+
+    local index = {Files = {}, ByPath = {}, ByStem = {}, Folders = {}}
+    for _, rel in ipairs(files) do
+        local stripped = string.gsub(rel, "%.luau?$", "")
+        local key = string.lower(stripped)
+        if not index.ByPath[key] then
+            index.ByPath[key] = rel
+            index.Files[#index.Files + 1] = rel
+            local stem = string.match(key, "([^/]+)$")
+            if not index.ByStem[stem] then
+                index.ByStem[stem] = rel
+            end
+            local folder = key
+            while true do
+                folder = string.match(folder, "^(.+)/[^/]+$")
+                if not folder then
+                    break
+                end
+                index.Folders[folder] = true
+            end
+        end
+    end
+    return index
+end
+
+function Features:_LoadIndex(force)
+    if self.Index and not force then
+        return self.Index
+    end
+    if self.IndexLoading then
+        local waited = 0
+        while self.IndexLoading and waited < self.Config.Timeout do
+            task.wait(0.05)
+            waited = waited + 0.05
+        end
+        return self.Index
+    end
+    if not force and self.IndexFailed > 0 and os.clock() - self.IndexFailed < 30 then
+        return nil
+    end
+
+    self.IndexLoading = true
+    local ok, index = pcall(self._BuildIndex, self)
+    self.IndexLoading = false
+
+    if ok and index then
+        self.Index = index
+        self.IndexFailed = 0
+    else
+        if not ok then
+            warn("[EcoHub] could not build the feature index: " .. tostring(index))
+        end
+        self.IndexFailed = os.clock()
+    end
+    return self.Index
+end
+
+function Features:_Normalize(name)
+    local text = string.gsub(tostring(name), "^%s+", "")
+    text = string.gsub(text, "%s+$", "")
+    text = string.gsub(text, "\\", "/")
+    text = string.gsub(text, "^/+", "")
+    text = string.gsub(text, "/+$", "")
+    local prefix = string.lower(self.Source.Prefix)
+    if prefix ~= "" and string.lower(string.sub(text, 1, #prefix)) == prefix then
+        text = string.sub(text, #prefix + 1)
+    end
+    text = string.gsub(text, "%.luau?$", "")
+    return text
+end
+
+function Features:_Job(rel)
+    local source = self.Source
+    local stripped = string.gsub(rel, "%.luau?$", "")
+    local stamp = "?t=" .. tostring(os.time())
+    return {
+        Key = string.lower(stripped),
+        Path = stripped,
+        Name = string.match(stripped, "([^/]+)$") or stripped,
+        Urls = {source.Raw .. rel .. stamp, source.Cdn .. rel}
+    }
+end
+
+function Features:_Resolve(name)
+    local original = string.gsub(tostring(name), "^%s+", "")
+    original = string.gsub(original, "%s+$", "")
+
+    if string.match(original, "^https?://") then
+        local raw = Features._ToRaw(original)
+        local clean = string.match(raw, "^[^%?#]+") or raw
+        local display = string.match(clean, "([^/]+)%.luau?$") or string.match(clean, "([^/]+)$") or clean
+        return {{Key = string.lower(clean), Path = clean, Name = display, Urls = {raw}}}
+    end
+
+    local clean = self:_Normalize(original)
+    if clean == "" then
+        return nil, "empty feature name"
+    end
+    local lowered = string.lower(clean)
+
+    local index = self:_LoadIndex()
+    if index then
+        local rel = index.ByPath[lowered] or index.ByStem[lowered]
+        if rel then
+            return {self:_Job(rel)}
+        end
+        if index.Folders[lowered] then
+            local jobs = {}
+            local folder = lowered .. "/"
+            for _, file in ipairs(index.Files) do
+                if string.sub(string.lower(file), 1, #folder) == folder then
+                    jobs[#jobs + 1] = self:_Job(file)
+                end
+            end
+            return jobs
+        end
+        return nil, "not found in " .. self.Source.Path
+    end
+
+    if string.sub(original, -1) == "/" then
+        return nil, "loading a folder needs the GitHub index"
+    end
+
+    local source = self.Source
+    local stamp = "?t=" .. tostring(os.time())
+    local urls = {}
+    for _, extension in ipairs({".lua", ".luau"}) do
+        urls[#urls + 1] = source.Raw .. clean .. extension .. stamp
+    end
+    for _, extension in ipairs({".lua", ".luau"}) do
+        urls[#urls + 1] = source.Cdn .. clean .. extension
+    end
+    return {{Key = lowered, Path = clean, Name = string.match(clean, "([^/]+)$") or clean, Urls = urls}}
+end
+
+function Features:_Download(job)
+    local ok, body = pcall(Http.Fetch, job.Urls, self.Config.Retries)
+    if not ok then
+        return nil, tostring(body)
+    end
+    if #body > self.Config.MaxSize then
+        return nil, "file is too large"
+    end
+    if string.match(body, "^%s*$") then
+        return nil, "file is empty"
+    end
+    local head = string.lower(string.sub(body, 1, 200))
+    if string.find(head, "^%s*<!doctype html") or string.find(head, "^%s*<html") then
+        return nil, "response is a web page, not a script"
+    end
+    return body
+end
+
+function Features:_DownloadAll(jobs)
+    local sources = {}
+    local failures = {}
+    local cursor = 0
+    local running = 0
+    local limit = math.max(1, math.min(self.Config.MaxParallel, #jobs))
+
+    local function worker()
+        while not self.Window.Destroyed do
+            cursor = cursor + 1
+            local index = cursor
+            local job = jobs[index]
+            if not job then
+                break
+            end
+            local body, failure = self:_Download(job)
+            sources[index] = body or false
+            failures[index] = failure
+        end
+        running = running - 1
+    end
+
+    for _ = 1, limit do
+        running = running + 1
+        task.spawn(worker)
+    end
+
+    local waited = 0
+    while running > 0 and waited < self.Config.Timeout and not self.Window.Destroyed do
+        task.wait(0.05)
+        waited = waited + 0.05
+    end
+    return sources, failures
+end
+
+function Features:_Run(job, body)
+    if self.Window.Destroyed then
+        return false, "window was destroyed"
+    end
+    local window = self.Window
+
+    local ok, result = pcall(function()
+        local chunk, compileError = loadstring(body)
+        if not chunk then
+            error(compileError, 0)
+        end
+        local scoped = false
+        if type(setfenv) == "function" and type(getfenv) == "function" then
+            scoped = pcall(function()
+                local scope = setmetatable({
+                    Window = window,
+                    Windows = window,
+                    Library = Library,
+                    Librarys = Library
+                }, {__index = getfenv(chunk)})
+                setfenv(chunk, scope)
+            end)
+        end
+        if not scoped then
+            env.Window = window
+            env.Windows = window
+            env.Library = Library
+            env.Librarys = Library
+        end
+        return chunk(window, Library)
+    end)
+
+    if ok then
+        self.Loaded[job.Key] = {Name = job.Name, Path = job.Path, Key = job.Key}
+        if not table.find(self.Order, job.Key) then
+            self.Order[#self.Order + 1] = job.Key
+        end
+    end
+    return ok, result
+end
+
+function Features:_FindLoaded(name)
+    local text = string.gsub(tostring(name), "^%s+", "")
+    text = string.gsub(text, "%s+$", "")
+    local key
+    if string.match(text, "^https?://") then
+        local raw = Features._ToRaw(text)
+        key = string.lower(string.match(raw, "^[^%?#]+") or raw)
+    else
+        key = string.lower(self:_Normalize(text))
+    end
+    if self.Loaded[key] then
+        return key
+    end
+    for loadedKey, entry in pairs(self.Loaded) do
+        if string.lower(entry.Name) == key then
+            return loadedKey
+        end
+    end
+    return nil
+end
+
+function Features:_LoadJobs(jobs, options)
+    local reload = type(options) == "table" and options.Reload == true
+    local outcomes = {}
+    local pending = {}
+    local first = {}
+    local duplicate = {}
+
+    for i, job in ipairs(jobs) do
+        outcomes[i] = {Name = job.Name, Success = false}
+        if first[job.Key] then
+            duplicate[i] = first[job.Key]
+        else
+            first[job.Key] = i
+            if self.Loading[job.Key] then
+                local waited = 0
+                while self.Loading[job.Key] and waited < self.Config.Timeout do
+                    task.wait(0.05)
+                    waited = waited + 0.05
+                end
+            end
+            if self.Loaded[job.Key] and not reload then
+                outcomes[i].Success = true
+            else
+                if self.Loaded[job.Key] then
+                    self:Unload(job.Key)
+                end
+                self.Loading[job.Key] = true
+                pending[#pending + 1] = i
+            end
+        end
+    end
+
+    local list = {}
+    for _, i in ipairs(pending) do
+        list[#list + 1] = jobs[i]
+    end
+
+    local sources, failures = {}, {}
+    if #list > 0 then
+        sources, failures = self:_DownloadAll(list)
+    end
+
+    for position, i in ipairs(pending) do
+        local job = jobs[i]
+        local body = sources[position]
+        if body then
+            local ok, result = self:_Run(job, body)
+            if ok then
+                outcomes[i].Success = true
+            else
+                outcomes[i].Error = tostring(result)
+                warn("[EcoHub] feature '" .. job.Name .. "' failed: " .. tostring(result))
+            end
+        else
+            outcomes[i].Error = failures[position] or "download timed out"
+            warn("[EcoHub] could not load feature '" .. job.Name .. "': " .. tostring(outcomes[i].Error))
+        end
+        self.Loading[job.Key] = nil
+    end
+
+    for i, target in pairs(duplicate) do
+        outcomes[i].Success = outcomes[target].Success
+        outcomes[i].Error = outcomes[target].Error
+    end
+    return outcomes
+end
+
+function Features:Load(name, options)
+    if self.Window.Destroyed then
+        return false
+    end
+    local jobs, reason = self:_Resolve(name)
+    if not jobs or #jobs == 0 then
+        warn("[EcoHub] could not load feature '" .. tostring(name) .. "': " .. tostring(reason or "no files found"))
+        return false
+    end
+    local outcomes = self:_LoadJobs(jobs, options)
+    for _, outcome in ipairs(outcomes) do
+        if not outcome.Success then
+            return false
+        end
+    end
+    return true
+end
+
+function Features:LoadMany(list, options)
+    local results = {}
+    if self.Window.Destroyed or type(list) ~= "table" then
+        return results
+    end
+
+    local jobs = {}
+    local owners = {}
+    for _, name in ipairs(list) do
+        local label = tostring(name)
+        local resolved, reason = self:_Resolve(name)
+        if not resolved or #resolved == 0 then
+            warn("[EcoHub] could not load feature '" .. label .. "': " .. tostring(reason or "no files found"))
+            results[label] = false
+        else
+            if results[label] == nil then
+                results[label] = true
+            end
+            for _, job in ipairs(resolved) do
+                jobs[#jobs + 1] = job
+                owners[#jobs] = label
+            end
+        end
+    end
+
+    local outcomes = self:_LoadJobs(jobs, options)
+    for i, outcome in ipairs(outcomes) do
+        if not outcome.Success then
+            results[owners[i]] = false
+        end
+    end
+    return results
+end
+
+function Features:LoadAll(options)
+    local results = {}
+    if self.Window.Destroyed then
+        return results
+    end
+    local index = self:_LoadIndex()
+    if not index then
+        warn("[EcoHub] LoadAllFeatures needs the GitHub index, which could not be loaded")
+        return results
+    end
+
+    local jobs = {}
+    for _, rel in ipairs(index.Files) do
+        jobs[#jobs + 1] = self:_Job(rel)
+    end
+    local outcomes = self:_LoadJobs(jobs, options)
+    for i, outcome in ipairs(outcomes) do
+        results[jobs[i].Path] = outcome.Success
+    end
+    return results
+end
+
+function Features:Unload(name)
+    local key = self:_FindLoaded(name)
+    if not key then
+        return false
+    end
+    local entry = self.Loaded[key]
+    self.Loaded[key] = nil
+    local position = table.find(self.Order, key)
+    if position then
+        table.remove(self.Order, position)
+    end
+
+    local callback = env[entry.Name .. "Unload"]
+    if type(callback) == "function" then
+        local ok, failure = pcall(callback)
+        if not ok then
+            warn("[EcoHub] unload of feature '" .. entry.Name .. "' failed: " .. tostring(failure))
+        end
+    end
+    return true
+end
+
+function Features:UnloadAll()
+    for i = #self.Order, 1, -1 do
+        local key = self.Order[i]
+        if key then
+            self:Unload(key)
+        end
+    end
+    return true
+end
+
+function Features:GetLoaded()
+    local names = {}
+    for _, key in ipairs(self.Order) do
+        local entry = self.Loaded[key]
+        if entry then
+            names[#names + 1] = entry.Path
+        end
+    end
+    return names
+end
+
+function Features:IsLoaded(name)
+    return self:_FindLoaded(name) ~= nil
+end
+
+function Features:List()
+    local names = {}
+    local index = self:_LoadIndex()
+    if not index then
+        warn("[EcoHub] the feature index could not be loaded")
+        return names
+    end
+    for _, rel in ipairs(index.Files) do
+        names[#names + 1] = (string.gsub(rel, "%.luau?$", ""))
+    end
+    return names
+end
+
+function Features:Refresh()
+    return self:_LoadIndex(true) ~= nil
+end
+
+function Features:SetSource(url)
+    local source = Source.Parse(url)
+    if not source then
+        warn("[EcoHub] invalid features source: " .. tostring(url))
+        return false
+    end
+    self.Source = source
+    self.Index = nil
+    self.IndexFailed = 0
+    return true
+end
+
 -- // Window
 local Window = {}
 Window.__index = Window
@@ -1462,6 +2058,8 @@ function Window.new(config)
     self.ActiveTab = nil
     self.SectionOrder = 0
     self.SidebarWidth = Config.SidebarWidth
+    self.Features = Features.new(self)
+    self.FeatureConfig = self.Features.Config
 
     self:_BuildMain()
     self:_BuildPanel()
@@ -2067,11 +2665,74 @@ function Window:SetMinimizeKey(keyCode)
     end
 end
 
+function Window:LoadFeature(name, options)
+    return self.Features:Load(name, options)
+end
+
+function Window:LoadFeatures(list, options)
+    return self.Features:LoadMany(list, options)
+end
+
+function Window:LoadAllFeatures(options)
+    return self.Features:LoadAll(options)
+end
+
+function Window:UnloadFeature(name)
+    return self.Features:Unload(name)
+end
+
+function Window:UnloadAllFeatures()
+    return self.Features:UnloadAll()
+end
+
+function Window:GetLoadedFeatures()
+    return self.Features:GetLoaded()
+end
+
+function Window:IsFeatureLoaded(name)
+    return self.Features:IsLoaded(name)
+end
+
+function Window:ListFeatures()
+    return self.Features:List()
+end
+
+function Window:RefreshFeatures()
+    return self.Features:Refresh()
+end
+
+function Window:SetFeaturesSource(url)
+    return self.Features:SetSource(url)
+end
+
+function Window:SetElementsSource(url)
+    local source = Source.Parse(url)
+    if not source then
+        warn("[EcoHub] invalid elements source: " .. tostring(url))
+        return false
+    end
+    Config.ElementsPath = source.Path
+    Config.ElementsApi = "https://api.github.com/repos/" .. source.Repo .. "/contents/" .. source.Path .. "?ref=" .. source.Branch
+    Config.ElementsRaw = source.Raw
+    Config.ElementsCdn = source.Cdn
+    Config.ElementsList = source.List
+    return true
+end
+
+function Window:ListElements()
+    return self.Elements:List()
+end
+
+function Window:LoadElements(force)
+    self.Elements.Load(nil, force)
+end
+
 function Window:Destroy()
     if self.Destroyed then
         return
     end
     self.Destroyed = true
+    self.Features:UnloadAll()
     self.Elements.Destroyed = true
     self.Maid:Destroy()
     self.Gui:Destroy()
@@ -2082,6 +2743,8 @@ function Window:Destroy()
     env.EcoHubDestroy = nil
     if Library.Window == self then
         Library.Window = nil
+        Library.Elements = nil
+        Library.FeatureConfig = nil
     end
 end
 
@@ -2099,6 +2762,8 @@ function Library:CreateWindow(config)
 
     window = Window.new(config)
     Library.Window = window
+    Library.Elements = window.Elements
+    Library.FeatureConfig = window.FeatureConfig
 
     env.EcoHubPanel = window.Panel
     env.EcoHubElements = window.Elements
@@ -2111,6 +2776,34 @@ function Library:CreateWindow(config)
     window.ToggleGui.Enabled = true
     window.Elements:Load()
     return window
+end
+
+-- // Library Features
+local FEATURE_METHODS = {
+    "LoadFeature",
+    "LoadFeatures",
+    "LoadAllFeatures",
+    "UnloadFeature",
+    "UnloadAllFeatures",
+    "GetLoadedFeatures",
+    "IsFeatureLoaded",
+    "ListFeatures",
+    "RefreshFeatures",
+    "SetFeaturesSource",
+    "SetElementsSource",
+    "ListElements",
+    "LoadElements"
+}
+
+for _, method in ipairs(FEATURE_METHODS) do
+    Library[method] = function(_, ...)
+        local window = Library.Window
+        if not window or window.Destroyed then
+            warn("[EcoHub] " .. method .. " needs a window, call CreateWindow first")
+            return nil
+        end
+        return window[method](window, ...)
+    end
 end
 
 -- // Inicialização
