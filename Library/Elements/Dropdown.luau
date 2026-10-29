@@ -3,36 +3,43 @@ Elements.Register("Dropdown", function(section, options)
     options = type(options) == "table" and options or {}
 
     local COLORS = {
-        TextActive = Color3.fromRGB(250, 250, 250),
-        TextInactive = Color3.fromRGB(148, 148, 158),
-        TextDisabled = Color3.fromRGB(75, 75, 84),
-        FieldBg = Color3.fromRGB(24, 24, 27),
-        FieldBorder = Color3.fromRGB(46, 46, 50),
-        FieldBorderHover = Color3.fromRGB(82, 82, 91),
-        RowBg = Color3.fromRGB(20, 20, 22),
-        RowHover = Color3.fromRGB(34, 34, 38),
-        RowSelected = Color3.fromRGB(46, 46, 50),
-        OverlayBg = Color3.fromRGB(20, 20, 22),
-        OverlayBorder = Color3.fromRGB(46, 46, 50),
-        SearchBg = Color3.fromRGB(28, 28, 31),
-        SearchBorder = Color3.fromRGB(46, 46, 50),
-        SearchPlaceholder = Color3.fromRGB(100, 100, 110),
-        DescText = Color3.fromRGB(113, 113, 122),
-        TitleText = Color3.fromRGB(250, 250, 250),
-        Icon = Color3.fromRGB(113, 113, 122),
-        IconActive = Color3.fromRGB(250, 250, 250),
-        ScrollBar = Color3.fromRGB(82, 82, 91),
-        Line = Color3.fromRGB(39, 39, 42),
+        TextActive = Color3.fromRGB(240, 240, 240),
+        TextInactive = Color3.fromRGB(165, 165, 165),
+        TextDisabled = Color3.fromRGB(85, 85, 85),
+        FieldBg = Color3.fromRGB(28, 28, 28),
+        FieldBorder = Color3.fromRGB(55, 55, 55),
+        FieldBorderHover = Color3.fromRGB(85, 85, 85),
+        RowBg = Color3.fromRGB(28, 28, 28),
+        RowHover = Color3.fromRGB(42, 42, 42),
+        RowSelected = Color3.fromRGB(52, 52, 52),
+        OverlayBg = Color3.fromRGB(28, 28, 28),
+        OverlayBorder = Color3.fromRGB(55, 55, 55),
+        SearchBg = Color3.fromRGB(34, 34, 34),
+        SearchBorder = Color3.fromRGB(55, 55, 55),
+        SearchPlaceholder = Color3.fromRGB(110, 110, 110),
+        DescText = Color3.fromRGB(125, 125, 125),
+        TitleText = Color3.fromRGB(240, 240, 240),
+        Icon = Color3.fromRGB(125, 125, 125),
+        IconActive = Color3.fromRGB(240, 240, 240),
+        ScrollBar = Color3.fromRGB(85, 85, 85),
+        Line = Color3.fromRGB(50, 50, 50),
     }
 
     local tweenService = TweenService or game:GetService("TweenService")
     local userInputService = UserInputService or game:GetService("UserInputService")
+    local env = getgenv and getgenv() or _G
     local fontRegular = FONT or Enum.Font.SourceSans
-    local fontTitle = FONT or Enum.Font.SourceSansSemibold
-    local checkImage = (ICONS and ICONS.assets and ICONS.assets["lucide-check"]) or "rbxassetid://10709790644"
-    local searchImage = (ICONS and ICONS.assets and ICONS.assets["lucide-search"]) or "rbxassetid://10734943674"
-    local clearImage = (ICONS and ICONS.assets and ICONS.assets["lucide-x"]) or "rbxassetid://10747384394"
-    local chevronImage = "rbxassetid://10709790948"
+    local fontTitle = FONT_BOLD or Enum.Font.SourceSansSemibold
+    local iconAssets = env.EcoHubIcons or (ICONS and ICONS.assets)
+
+    local function iconId(name, fallback)
+        return (iconAssets and iconAssets["lucide-" .. name]) or fallback
+    end
+
+    local checkImage = iconId("check", "rbxassetid://10709790644")
+    local searchImage = iconId("search", "rbxassetid://10734943674")
+    local clearImage = iconId("x", "rbxassetid://10747384394")
+    local chevronImage = iconId("chevron-down", "rbxassetid://10709790948")
 
     local MOBILE = userInputService.TouchEnabled and not userInputService.KeyboardEnabled
     local LOW_END = MOBILE
@@ -52,20 +59,24 @@ Elements.Register("Dropdown", function(section, options)
     end)
 
     local TITLE_SIZE = MOBILE and 14 or 13
-    local DESC_SIZE = MOBILE and 12 or 11
+    local DESC_SIZE = 11
     local LABEL_SIZE = MOBILE and 13 or 12
-    local ROW_H = MOBILE and 50 or 44
-    local FIELD_W = MOBILE and 150 or 160
-    local FIELD_MIN_W = 100
-    local FIELD_H = MOBILE and 36 or 30
-    local OPT_H = MOBILE and 42 or 32
+    local BASE_ROW_H = MOBILE and 40 or 34
+    local FIELD_W = 130
+    local FIELD_MIN_W = 90
+    local FIELD_H = MOBILE and 30 or 24
+    local OPT_H = MOBILE and 34 or 26
     local OPT_GAP = 2
-    local SEARCH_H = MOBILE and 36 or 30
-    local SEARCH_AREA = SEARCH_H + 12
-    local MAX_H = MOBILE and 280 or 240
+    local SEARCH_H = MOBILE and 30 or 24
+    local SEARCH_AREA = SEARCH_H + 10
+    local MAX_H = MOBILE and 240 or 200
     local MAX_SCREEN = MOBILE and 0.42 or 0.5
-    local CHECK_SIZE = 14
-    local GAP = 6
+    local CHECK_SIZE = 12
+    local GAP = 4
+    local TITLE_Y = 4
+    local TITLE_H = 15
+    local DESC_Y = TITLE_Y + TITLE_H + 1
+    local MAX_QUERY = 40
     local ANIM_T = LOW_END and 0.1 or 0.14
     local WORD_BREAK = 20
     local TAP_SLOP = 14
@@ -73,6 +84,8 @@ Elements.Register("Dropdown", function(section, options)
     local BUILD_BUDGET = LOW_END and 0.003 or 0.006
     local NOTIFY_TITLE = "Sistema"
     local Z = 2
+    local rowH = BASE_ROW_H
+    local applyHeader
 
     local TI_FAST = TweenInfo.new(0.1)
     local TI_ROW = TweenInfo.new(0.09)
@@ -203,14 +216,14 @@ Elements.Register("Dropdown", function(section, options)
 
     local container = Instance.new("Frame")
     container.Name = title .. "_Dropdown"
-    container.Size = UDim2.new(1, 0, 0, ROW_H)
+    container.Size = UDim2.new(1, 0, 0, rowH)
     container.BackgroundTransparency = 1
     container.ClipsDescendants = true
     container.Parent = section.frame
 
     local headerRow = Instance.new("Frame")
     headerRow.Name = "Header"
-    headerRow.Size = UDim2.new(1, 0, 0, ROW_H)
+    headerRow.Size = UDim2.new(1, 0, 0, rowH)
     headerRow.BackgroundTransparency = 1
     headerRow.Parent = container
 
@@ -246,8 +259,8 @@ Elements.Register("Dropdown", function(section, options)
 
     local function layoutText()
         if descLabel then
-            titleLabel.Size = UDim2.new(1, 0, 0, 17)
-            titleLabel.Position = UDim2.new(0, 0, 0, 4)
+            titleLabel.Size = UDim2.new(1, 0, 0, TITLE_H)
+            titleLabel.Position = UDim2.new(0, 0, 0, TITLE_Y)
         else
             titleLabel.Size = UDim2.new(1, 0, 1, 0)
             titleLabel.Position = UDim2.new(0, 0, 0, 0)
@@ -258,7 +271,7 @@ Elements.Register("Dropdown", function(section, options)
         descLabel = Instance.new("TextLabel")
         descLabel.Name = "Desc"
         descLabel.Size = UDim2.new(1, 0, 0, 0)
-        descLabel.Position = UDim2.new(0, 0, 0, 21)
+        descLabel.Position = UDim2.new(0, 0, 0, DESC_Y)
         descLabel.AutomaticSize = Enum.AutomaticSize.Y
         descLabel.BackgroundTransparency = 1
         descLabel.Text = breakWords(text, WORD_BREAK)
@@ -270,6 +283,11 @@ Elements.Register("Dropdown", function(section, options)
         descLabel.TextWrapped = true
         descLabel.LineHeight = 1.1
         descLabel.Parent = textSide
+        connect(descLabel:GetPropertyChangedSignal("AbsoluteSize"), function()
+            if applyHeader then
+                applyHeader()
+            end
+        end)
     end
 
     if hasDesc then
@@ -292,7 +310,7 @@ Elements.Register("Dropdown", function(section, options)
     field.Parent = headerRow
 
     local fieldCorner = Instance.new("UICorner")
-    fieldCorner.CornerRadius = UDim.new(0, 8)
+    fieldCorner.CornerRadius = UDim.new(0, 6)
     fieldCorner.Parent = field
 
     local fStroke = Instance.new("UIStroke")
@@ -303,8 +321,8 @@ Elements.Register("Dropdown", function(section, options)
 
     local fieldText = Instance.new("TextLabel")
     fieldText.Name = "FieldText"
-    fieldText.Size = UDim2.new(1, -32, 1, 0)
-    fieldText.Position = UDim2.new(0, 11, 0, 0)
+    fieldText.Size = UDim2.new(1, -28, 1, 0)
+    fieldText.Position = UDim2.new(0, 9, 0, 0)
     fieldText.BackgroundTransparency = 1
     fieldText.Text = placeholder
     fieldText.TextColor3 = COLORS.TextInactive
@@ -316,8 +334,8 @@ Elements.Register("Dropdown", function(section, options)
 
     local fieldIcon = Instance.new("ImageLabel")
     fieldIcon.Name = "Icon"
-    fieldIcon.Size = UDim2.new(0, 13, 0, 13)
-    fieldIcon.Position = UDim2.new(1, -10, 0.5, 0)
+    fieldIcon.Size = UDim2.new(0, 12, 0, 12)
+    fieldIcon.Position = UDim2.new(1, -8, 0.5, 0)
     fieldIcon.AnchorPoint = Vector2.new(1, 0.5)
     fieldIcon.BackgroundTransparency = 1
     fieldIcon.Image = chevronImage
@@ -342,7 +360,7 @@ Elements.Register("Dropdown", function(section, options)
     panel.Name = title .. "_Panel"
     panel.BackgroundColor3 = COLORS.OverlayBg
     panel.BorderSizePixel = 0
-    panel.Position = UDim2.new(0, 1, 0, ROW_H + GAP)
+    panel.Position = UDim2.new(0, 1, 0, rowH + GAP)
     panel.Size = UDim2.new(1, -2, 0, 0)
     panel.Visible = false
     panel.Active = true
@@ -351,7 +369,7 @@ Elements.Register("Dropdown", function(section, options)
     panel.Parent = container
 
     local panelCorner = Instance.new("UICorner")
-    panelCorner.CornerRadius = UDim.new(0, 10)
+    panelCorner.CornerRadius = UDim.new(0, 8)
     panelCorner.Parent = panel
 
     local pStroke = Instance.new("UIStroke")
@@ -362,15 +380,16 @@ Elements.Register("Dropdown", function(section, options)
 
     local searchFrame = Instance.new("Frame")
     searchFrame.Name = "Search"
-    searchFrame.Size = UDim2.new(1, -12, 0, SEARCH_H)
-    searchFrame.Position = UDim2.new(0, 6, 0, 6)
+    searchFrame.Size = UDim2.new(1, -10, 0, SEARCH_H)
+    searchFrame.Position = UDim2.new(0, 5, 0, 5)
     searchFrame.BackgroundColor3 = COLORS.SearchBg
     searchFrame.BorderSizePixel = 0
+    searchFrame.ClipsDescendants = true
     searchFrame.ZIndex = Z + 1
     searchFrame.Parent = panel
 
     local searchCorner = Instance.new("UICorner")
-    searchCorner.CornerRadius = UDim.new(0, 7)
+    searchCorner.CornerRadius = UDim.new(0, 6)
     searchCorner.Parent = searchFrame
 
     local sStroke = Instance.new("UIStroke")
@@ -381,8 +400,8 @@ Elements.Register("Dropdown", function(section, options)
 
     local searchIcon = Instance.new("ImageLabel")
     searchIcon.Name = "Icon"
-    searchIcon.Size = UDim2.new(0, 14, 0, 14)
-    searchIcon.Position = UDim2.new(0, 9, 0.5, 0)
+    searchIcon.Size = UDim2.new(0, 12, 0, 12)
+    searchIcon.Position = UDim2.new(0, 8, 0.5, 0)
     searchIcon.AnchorPoint = Vector2.new(0, 0.5)
     searchIcon.BackgroundTransparency = 1
     searchIcon.Image = searchImage
@@ -392,8 +411,8 @@ Elements.Register("Dropdown", function(section, options)
 
     local searchBox = Instance.new("TextBox")
     searchBox.Name = "Input"
-    searchBox.Size = UDim2.new(1, -60, 1, 0)
-    searchBox.Position = UDim2.new(0, 30, 0, 0)
+    searchBox.Size = UDim2.new(1, -50, 1, 0)
+    searchBox.Position = UDim2.new(0, 26, 0, 0)
     searchBox.BackgroundTransparency = 1
     searchBox.Text = ""
     searchBox.PlaceholderText = "Search..."
@@ -404,13 +423,16 @@ Elements.Register("Dropdown", function(section, options)
     searchBox.TextXAlignment = Enum.TextXAlignment.Left
     searchBox.TextTruncate = Enum.TextTruncate.AtEnd
     searchBox.ClearTextOnFocus = false
+    searchBox.ClipsDescendants = true
+    searchBox.TextWrapped = false
+    searchBox.MultiLine = false
     searchBox.ZIndex = Z + 2
     searchBox.Parent = searchFrame
 
     local clearBtn = Instance.new("ImageButton")
     clearBtn.Name = "Clear"
-    clearBtn.Size = UDim2.new(0, 18, 0, 18)
-    clearBtn.Position = UDim2.new(1, -7, 0.5, 0)
+    clearBtn.Size = UDim2.new(0, 16, 0, 16)
+    clearBtn.Position = UDim2.new(1, -5, 0.5, 0)
     clearBtn.AnchorPoint = Vector2.new(1, 0.5)
     clearBtn.BackgroundTransparency = 1
     clearBtn.Image = clearImage
@@ -613,8 +635,30 @@ Elements.Register("Dropdown", function(section, options)
     local function resizeOpen()
         if destroyed or not data.expanded then return end
         local h = panelHeight()
-        tweenContainer(ROW_H + GAP + h + 2, TI_RESIZE)
+        tweenContainer(rowH + GAP + h + 2, TI_RESIZE)
         tw(panel, TI_RESIZE, { Size = UDim2.new(1, -2, 0, h) }, true)
+    end
+
+    applyHeader = function()
+        if destroyed then return end
+        local h = BASE_ROW_H
+        if descLabel then
+            h = math.max(BASE_ROW_H, DESC_Y + descLabel.AbsoluteSize.Y + 6)
+        end
+        if h == rowH then return end
+        rowH = h
+        headerRow.Size = UDim2.new(1, 0, 0, rowH)
+        panel.Position = UDim2.new(0, 1, 0, rowH + GAP)
+        if data.expanded then
+            resizeOpen()
+        else
+            if sizeTween then
+                sizeTween:Cancel()
+                sizeTween = nil
+            end
+            panel.Visible = false
+            container.Size = UDim2.new(1, 0, 0, rowH)
+        end
     end
 
     local function applyFilter()
@@ -652,12 +696,12 @@ Elements.Register("Dropdown", function(section, options)
                 sizeTween:Cancel()
                 sizeTween = nil
             end
-            container.Size = UDim2.new(1, 0, 0, ROW_H)
+            container.Size = UDim2.new(1, 0, 0, rowH)
             panel.Visible = false
             return
         end
 
-        tweenContainer(ROW_H, TI_CLOSE, function()
+        tweenContainer(rowH, TI_CLOSE, function()
             if not data.expanded and not destroyed then
                 panel.Visible = false
             end
@@ -706,13 +750,13 @@ Elements.Register("Dropdown", function(section, options)
         optFrame.ZIndex = Z
 
         local optCorner = Instance.new("UICorner")
-        optCorner.CornerRadius = UDim.new(0, 6)
+        optCorner.CornerRadius = UDim.new(0, 5)
         optCorner.Parent = optFrame
 
         local optLabel = Instance.new("TextLabel")
         optLabel.Name = "Label"
-        optLabel.Size = UDim2.new(1, -(CHECK_SIZE + 30), 1, 0)
-        optLabel.Position = UDim2.new(0, 11, 0, 0)
+        optLabel.Size = UDim2.new(1, -(CHECK_SIZE + 26), 1, 0)
+        optLabel.Position = UDim2.new(0, 9, 0, 0)
         optLabel.BackgroundTransparency = 1
         optLabel.Text = tostring(value)
         optLabel.TextColor3 = COLORS.TextInactive
@@ -727,7 +771,7 @@ Elements.Register("Dropdown", function(section, options)
         local optCheck = Instance.new("ImageLabel")
         optCheck.Name = "Check"
         optCheck.Size = UDim2.new(0, CHECK_SIZE, 0, CHECK_SIZE)
-        optCheck.Position = UDim2.new(1, -10, 0.5, 0)
+        optCheck.Position = UDim2.new(1, -8, 0.5, 0)
         optCheck.AnchorPoint = Vector2.new(1, 0.5)
         optCheck.BackgroundTransparency = 1
         optCheck.Image = checkImage
@@ -846,7 +890,7 @@ Elements.Register("Dropdown", function(section, options)
         panel.Visible = true
         scroll.CanvasPosition = Vector2.new(0, 0)
 
-        tweenContainer(ROW_H + GAP + h + 2, TI_OPEN, revealPanel)
+        tweenContainer(rowH + GAP + h + 2, TI_OPEN, revealPanel)
         tw(fieldIcon, TI_ICON, { Rotation = 180, ImageColor3 = COLORS.IconActive })
         updateFieldBorder()
 
@@ -894,6 +938,17 @@ Elements.Register("Dropdown", function(section, options)
     end)
 
     connect(searchBox:GetPropertyChangedSignal("Text"), function()
+        local raw = searchBox.Text
+        local clean = (string.gsub(raw, "%c", " "))
+        local length = utf8.len(clean) or #clean
+        if length > MAX_QUERY then
+            local cut = utf8.offset(clean, MAX_QUERY + 1)
+            clean = cut and string.sub(clean, 1, cut - 1) or string.sub(clean, 1, MAX_QUERY)
+        end
+        if clean ~= raw then
+            searchBox.Text = clean
+            return
+        end
         searchToken = searchToken + 1
         local current = searchToken
         clearBtn.Visible = searchBox.Text ~= ""
@@ -1076,6 +1131,7 @@ Elements.Register("Dropdown", function(section, options)
                 descLabel = nil
             end
             layoutText()
+            applyHeader()
             return
         end
         if not descLabel then
@@ -1084,6 +1140,7 @@ Elements.Register("Dropdown", function(section, options)
             descLabel.Text = breakWords(newDesc, WORD_BREAK)
         end
         layoutText()
+        applyHeader()
     end
 
     function data:Open()

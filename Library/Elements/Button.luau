@@ -4,67 +4,66 @@ Elements.Register("Button", function(section, options)
 
     local VARIANTS = {
         default = {
-            bg = Color3.fromRGB(250, 250, 250), bgT = 0,
-            hover = Color3.fromRGB(228, 228, 231), hoverT = 0,
-            pressed = Color3.fromRGB(212, 212, 216),
-            text = Color3.fromRGB(24, 24, 27), textHover = Color3.fromRGB(24, 24, 27),
-            stroke = Color3.fromRGB(250, 250, 250), strokeT = 1,
+            bg = Color3.fromRGB(240, 240, 240), bgT = 0,
+            hover = Color3.fromRGB(218, 218, 218), hoverT = 0,
+            pressed = Color3.fromRGB(200, 200, 200),
+            text = Color3.fromRGB(24, 24, 24), textHover = Color3.fromRGB(24, 24, 24),
+            stroke = Color3.fromRGB(240, 240, 240), strokeT = 1,
         },
         secondary = {
-            bg = Color3.fromRGB(39, 39, 42), bgT = 0,
-            hover = Color3.fromRGB(52, 52, 56), hoverT = 0,
-            pressed = Color3.fromRGB(63, 63, 68),
-            text = Color3.fromRGB(250, 250, 250), textHover = Color3.fromRGB(250, 250, 250),
-            stroke = Color3.fromRGB(39, 39, 42), strokeT = 1,
+            bg = Color3.fromRGB(42, 42, 42), bgT = 0,
+            hover = Color3.fromRGB(52, 52, 52), hoverT = 0,
+            pressed = Color3.fromRGB(62, 62, 62),
+            text = Color3.fromRGB(240, 240, 240), textHover = Color3.fromRGB(240, 240, 240),
+            stroke = Color3.fromRGB(42, 42, 42), strokeT = 1,
         },
         outline = {
-            bg = Color3.fromRGB(24, 24, 27), bgT = 0,
-            hover = Color3.fromRGB(39, 39, 42), hoverT = 0,
-            pressed = Color3.fromRGB(52, 52, 56),
-            text = Color3.fromRGB(250, 250, 250), textHover = Color3.fromRGB(250, 250, 250),
-            stroke = Color3.fromRGB(52, 52, 56), strokeT = 0,
+            bg = Color3.fromRGB(34, 34, 34), bgT = 0,
+            hover = Color3.fromRGB(42, 42, 42), hoverT = 0,
+            pressed = Color3.fromRGB(52, 52, 52),
+            text = Color3.fromRGB(240, 240, 240), textHover = Color3.fromRGB(240, 240, 240),
+            stroke = Color3.fromRGB(55, 55, 55), strokeT = 0,
         },
         ghost = {
-            bg = Color3.fromRGB(39, 39, 42), bgT = 1,
-            hover = Color3.fromRGB(39, 39, 42), hoverT = 0,
-            pressed = Color3.fromRGB(52, 52, 56),
-            text = Color3.fromRGB(228, 228, 231), textHover = Color3.fromRGB(250, 250, 250),
-            stroke = Color3.fromRGB(39, 39, 42), strokeT = 1,
+            bg = Color3.fromRGB(42, 42, 42), bgT = 1,
+            hover = Color3.fromRGB(42, 42, 42), hoverT = 0,
+            pressed = Color3.fromRGB(52, 52, 52),
+            text = Color3.fromRGB(200, 200, 200), textHover = Color3.fromRGB(240, 240, 240),
+            stroke = Color3.fromRGB(42, 42, 42), strokeT = 1,
         },
         destructive = {
             bg = Color3.fromRGB(58, 24, 27), bgT = 0,
-            hover = Color3.fromRGB(78, 30, 34),
-            hoverT = 0,
+            hover = Color3.fromRGB(78, 30, 34), hoverT = 0,
             pressed = Color3.fromRGB(98, 36, 40),
             text = Color3.fromRGB(248, 113, 113), textHover = Color3.fromRGB(252, 165, 165),
             stroke = Color3.fromRGB(58, 24, 27), strokeT = 1,
         },
         link = {
-            bg = Color3.fromRGB(24, 24, 27), bgT = 1,
-            hover = Color3.fromRGB(24, 24, 27), hoverT = 1,
-            pressed = Color3.fromRGB(24, 24, 27),
-            text = Color3.fromRGB(250, 250, 250), textHover = Color3.fromRGB(161, 161, 170),
-            stroke = Color3.fromRGB(24, 24, 27), strokeT = 1,
+            bg = Color3.fromRGB(24, 24, 24), bgT = 1,
+            hover = Color3.fromRGB(24, 24, 24), hoverT = 1,
+            pressed = Color3.fromRGB(24, 24, 24),
+            text = Color3.fromRGB(240, 240, 240), textHover = Color3.fromRGB(165, 165, 165),
+            stroke = Color3.fromRGB(24, 24, 24), strokeT = 1,
         },
     }
 
     local SIZES = {
-        xs = { height = 24, text = 11, pad = 8 },
-        sm = { height = 30, text = 12, pad = 10 },
-        default = { height = 36, text = 13, pad = 14 },
-        lg = { height = 42, text = 14, pad = 18 },
+        xs = { height = 22, text = 11, pad = 8 },
+        sm = { height = 26, text = 12, pad = 10 },
+        default = { height = 30, text = 13, pad = 12 },
+        lg = { height = 36, text = 14, pad = 16 },
     }
 
-    local COLOR_DESC = Color3.fromRGB(113, 113, 122)
+    local COLOR_DESC = Color3.fromRGB(125, 125, 125)
     local DISABLED_FADE = 0.5
     local WORD_MAX = 20
-    local SPINNER = 14
+    local SPINNER = 12
     local NOTIFY_TITLE = "Sistema"
 
     local tweenService = TweenService or game:GetService("TweenService")
     local userInputService = UserInputService or game:GetService("UserInputService")
     local runService = game:GetService("RunService")
-    local fontBold = FONT_BOLD or Enum.Font.SourceSansBold
+    local fontBold = FONT_BOLD or Enum.Font.SourceSansSemibold
     local fontRegular = FONT or Enum.Font.SourceSans
     local tweenInfo = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     local mobile = userInputService.TouchEnabled and not userInputService.KeyboardEnabled
@@ -140,7 +139,7 @@ Elements.Register("Button", function(section, options)
     }
 
     local function baseHeight()
-        return SIZES[data.size].height + (mobile and 6 or 0)
+        return SIZES[data.size].height + (mobile and 4 or 0)
     end
 
     local container = Instance.new("Frame")
@@ -198,6 +197,10 @@ Elements.Register("Button", function(section, options)
         return safe
     end
 
+    local function descSize()
+        return math.max(SIZES[data.size].text - 2, 10)
+    end
+
     local function createDescription(text)
         descLabel = Instance.new("TextLabel")
         descLabel.Name = "Description"
@@ -206,12 +209,12 @@ Elements.Register("Button", function(section, options)
         descLabel.BackgroundTransparency = 1
         descLabel.Text = breakLongWords(text, WORD_MAX)
         descLabel.TextColor3 = COLOR_DESC
-        descLabel.TextSize = SIZES[data.size].text - 2
+        descLabel.TextSize = descSize()
         descLabel.Font = fontRegular
         descLabel.TextXAlignment = Enum.TextXAlignment.Center
         descLabel.TextYAlignment = Enum.TextYAlignment.Top
         descLabel.TextWrapped = true
-        descLabel.LineHeight = 1.15
+        descLabel.LineHeight = 1.1
         descLabel.LayoutOrder = 1
         descLabel.ZIndex = 1
         descLabel.Parent = textFrame
@@ -275,7 +278,7 @@ Elements.Register("Button", function(section, options)
         if destroyed then return end
         local height = baseHeight()
         if descLabel then
-            height = math.max(textLayout.AbsoluteContentSize.Y + 14, height)
+            height = math.max(textLayout.AbsoluteContentSize.Y + 10, height)
         end
         container.Size = UDim2.new(1, 0, 0, height)
     end
@@ -288,8 +291,7 @@ Elements.Register("Button", function(section, options)
 
         local bg, bgT, textColor = v.bg, v.bgT, v.text
         if live and pressed then
-            bg, bgT, textColor = v.pressed, math.min(v.hoverT, 0), v.textHover
-            if data.variant == "ghost" then bgT = 0 end
+            bg, bgT, textColor = v.pressed, data.variant == "link" and 1 or 0, v.textHover
         elseif live and hovering then
             bg, bgT, textColor = v.hover, v.hoverT, v.textHover
         end
@@ -327,7 +329,7 @@ Elements.Register("Button", function(section, options)
         textFrame.Size = UDim2.new(1, -(s.pad * 2 + SPINNER * 2 + 8), 1, 0)
         spinner.Position = UDim2.new(0, s.pad, 0.5, 0)
         if descLabel then
-            descLabel.TextSize = s.text - 2
+            descLabel.TextSize = descSize()
         end
         resizeContainer()
     end

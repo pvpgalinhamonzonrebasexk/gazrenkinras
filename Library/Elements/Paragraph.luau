@@ -1,3 +1,4 @@
+-- // Paragraph
 Elements.Register("Paragraph", function(section, options)
     options = type(options) == "table" and options or {}
 

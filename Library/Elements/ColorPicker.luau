@@ -3,40 +3,51 @@ Elements.Register("ColorPicker", function(section, options)
     options = type(options) == "table" and options or {}
 
     local COLORS = {
-        TextActive = Color3.fromRGB(255, 255, 255),
-        TextInactive = Color3.fromRGB(105, 105, 115),
-        TextDisabled = Color3.fromRGB(70, 70, 78),
-        Line = Color3.fromRGB(32, 32, 32),
-        Field = Color3.fromRGB(24, 24, 24),
-        FieldAlt = Color3.fromRGB(30, 30, 30),
-        MenuBackground = Color3.fromRGB(18, 18, 18),
-        SectionBackground = Color3.fromRGB(22, 22, 22),
-        DescriptionText = Color3.fromRGB(105, 105, 115),
-        Accent = Color3.fromRGB(255, 255, 255),
+        TextActive = Color3.fromRGB(240, 240, 240),
+        TextInactive = Color3.fromRGB(165, 165, 165),
+        TextDisabled = Color3.fromRGB(85, 85, 85),
+        Line = Color3.fromRGB(55, 55, 55),
+        Field = Color3.fromRGB(34, 34, 34),
+        FieldAlt = Color3.fromRGB(42, 42, 42),
+        MenuBackground = Color3.fromRGB(28, 28, 28),
+        SectionBackground = Color3.fromRGB(34, 34, 34),
+        DescriptionText = Color3.fromRGB(125, 125, 125),
+        Accent = Color3.fromRGB(240, 240, 240),
     }
 
-    local TITLE_TEXT_SIZE = 12
-    local DESCRIPTION_TEXT_SIZE = 10
+    local TITLE_TEXT_SIZE = 13
+    local DESCRIPTION_TEXT_SIZE = 11
     local LABEL_TEXT_SIZE = 11
-    local ROW_HEIGHT = 50
-    local FIELD_WIDTH = 120
-    local FIELD_HEIGHT = 28
+    local BASE_ROW_H = 34
+    local FIELD_WIDTH = 96
+    local FIELD_HEIGHT = 22
     local OVERLAY_ZINDEX = 1000
     local WORD_MAX = 30
-    local MAP_HEIGHT = 130
-    local HUE_HEIGHT = 18
-    local ALPHA_HEIGHT = 18
-    local OVERLAY_PADDING = 14
-    local OVERLAY_GAP = 14
+    local MAP_HEIGHT = 100
+    local HUE_HEIGHT = 14
+    local ALPHA_HEIGHT = 14
+    local OVERLAY_PADDING = 10
+    local OVERLAY_GAP = 10
     local OVERLAY_HEIGHT = (OVERLAY_PADDING * 2) + MAP_HEIGHT + HUE_HEIGHT + ALPHA_HEIGHT + (OVERLAY_GAP * 2)
-    local OVERLAY_OFFSET = ROW_HEIGHT + 6
-    local TOTAL_OPEN_HEIGHT = OVERLAY_OFFSET + OVERLAY_HEIGHT + 6
+    local TITLE_Y = 3
+    local TITLE_H = 15
+    local DESC_Y = TITLE_Y + TITLE_H + 1
+    local rowH = BASE_ROW_H
+    local applyHeader
+
+    local function overlayOffset()
+        return rowH + 4
+    end
+
+    local function totalOpen()
+        return overlayOffset() + OVERLAY_HEIGHT + 4
+    end
     local NOTIFY_TITLE = "Sistema"
 
     local tweenService = TweenService or game:GetService("TweenService")
     local userInputService = UserInputService or game:GetService("UserInputService")
     local guiService = game:GetService("GuiService")
-    local fontBold = FONT_BOLD or Enum.Font.SourceSansBold
+    local fontBold = FONT_BOLD or Enum.Font.SourceSansSemibold
     local fontRegular = FONT or Enum.Font.SourceSans
 
     local TI_OPEN = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -147,25 +158,25 @@ Elements.Register("ColorPicker", function(section, options)
 
     local container = Instance.new("Frame")
     container.Name = title .. "_ColorPicker"
-    container.Size = UDim2.new(1, 0, 0, ROW_HEIGHT)
+    container.Size = UDim2.new(1, 0, 0, rowH)
     container.BackgroundTransparency = 1
     container.ClipsDescendants = false
     container.Parent = section.frame
 
     local textContainer = Instance.new("Frame")
     textContainer.Name = "TextContainer"
-    textContainer.Size = UDim2.new(1, -(FIELD_WIDTH + 16), 0, ROW_HEIGHT)
+    textContainer.Size = UDim2.new(1, -(FIELD_WIDTH + 16), 0, rowH)
     textContainer.BackgroundTransparency = 1
     textContainer.Parent = container
 
     local label = Instance.new("TextLabel")
     label.Name = "Title"
-    label.Size = UDim2.new(1, 0, 0, 16)
+    label.Size = UDim2.new(1, 0, 0, TITLE_H)
     label.BackgroundTransparency = 1
     label.Text = title
     label.TextColor3 = disabled and COLORS.TextDisabled or COLORS.TextActive
     label.TextSize = TITLE_TEXT_SIZE
-    label.Font = fontRegular
+    label.Font = fontBold
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.TextYAlignment = Enum.TextYAlignment.Center
     label.TextTruncate = Enum.TextTruncate.AtEnd
@@ -175,7 +186,7 @@ Elements.Register("ColorPicker", function(section, options)
 
     local function layoutText()
         if descLabel then
-            label.Position = UDim2.new(0, 0, 0, 2)
+            label.Position = UDim2.new(0, 0, 0, TITLE_Y)
             label.AnchorPoint = Vector2.new(0, 0)
         else
             label.Position = UDim2.new(0, 0, 0.5, 0)
@@ -187,7 +198,7 @@ Elements.Register("ColorPicker", function(section, options)
         descLabel = Instance.new("TextLabel")
         descLabel.Name = "Desc"
         descLabel.Size = UDim2.new(1, 0, 0, 0)
-        descLabel.Position = UDim2.new(0, 0, 0, 18)
+        descLabel.Position = UDim2.new(0, 0, 0, DESC_Y)
         descLabel.AutomaticSize = Enum.AutomaticSize.Y
         descLabel.BackgroundTransparency = 1
         descLabel.Text = breakLongWords(text, WORD_MAX)
@@ -199,6 +210,11 @@ Elements.Register("ColorPicker", function(section, options)
         descLabel.TextWrapped = true
         descLabel.LineHeight = 1.1
         descLabel.Parent = textContainer
+        connect(descLabel:GetPropertyChangedSignal("AbsoluteSize"), function()
+            if applyHeader then
+                applyHeader()
+            end
+        end)
     end
 
     if hasDescription then
@@ -210,7 +226,7 @@ Elements.Register("ColorPicker", function(section, options)
     local field = Instance.new("TextButton")
     field.Name = "Field"
     field.Size = UDim2.new(0, FIELD_WIDTH, 0, FIELD_HEIGHT)
-    field.Position = UDim2.new(1, 0, 0, ROW_HEIGHT / 2)
+    field.Position = UDim2.new(1, 0, 0, rowH / 2)
     field.AnchorPoint = Vector2.new(1, 0.5)
     field.BackgroundColor3 = COLORS.Field
     field.BorderSizePixel = 0
@@ -273,7 +289,7 @@ Elements.Register("ColorPicker", function(section, options)
     local overlayCanvas = Instance.new("Frame")
     overlayCanvas.Name = title .. "_PickerOverlay"
     overlayCanvas.Size = UDim2.new(1, 0, 0, 0)
-    overlayCanvas.Position = UDim2.new(0, 0, 0, OVERLAY_OFFSET)
+    overlayCanvas.Position = UDim2.new(0, 0, 0, overlayOffset())
     overlayCanvas.AnchorPoint = Vector2.new(0, 0)
     overlayCanvas.BackgroundColor3 = COLORS.MenuBackground
     overlayCanvas.BorderSizePixel = 0
@@ -365,7 +381,7 @@ Elements.Register("ColorPicker", function(section, options)
 
     local satCursorOuter = Instance.new("Frame")
     satCursorOuter.Name = "SatCursorOuter"
-    satCursorOuter.Size = UDim2.fromOffset(18, 18)
+    satCursorOuter.Size = UDim2.fromOffset(16, 16)
     satCursorOuter.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     satCursorOuter.BackgroundTransparency = 0.35
     satCursorOuter.BorderSizePixel = 0
@@ -378,7 +394,7 @@ Elements.Register("ColorPicker", function(section, options)
 
     local satCursor = Instance.new("Frame")
     satCursor.Name = "SatCursor"
-    satCursor.Size = UDim2.fromOffset(14, 14)
+    satCursor.Size = UDim2.fromOffset(12, 12)
     satCursor.Position = UDim2.new(0.5, 0, 0.5, 0)
     satCursor.AnchorPoint = Vector2.new(0.5, 0.5)
     satCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -540,7 +556,7 @@ Elements.Register("ColorPicker", function(section, options)
     local function display()
         if destroyed then return end
         satVibMap.BackgroundColor3 = Color3.fromHSV(hue, 1, 1)
-        satCursorOuter.Position = UDim2.new(sat, -9, 1 - vib, -9)
+        satCursorOuter.Position = UDim2.new(sat, -8, 1 - vib, -8)
         hueCursor.Position = UDim2.new(hue, 0, 0.5, 0)
         alphaCursor.Position = UDim2.new(data.transparency, 0, 0.5, 0)
 
@@ -690,7 +706,7 @@ Elements.Register("ColorPicker", function(section, options)
 
         local info = open and TI_OPEN or TI_CLOSE
         local overlayHeight = open and OVERLAY_HEIGHT or 0
-        local containerHeight = open and TOTAL_OPEN_HEIGHT or ROW_HEIGHT
+        local containerHeight = open and totalOpen() or rowH
 
         local overlayTween = tweenService:Create(overlayCanvas, info, {
             Size = UDim2.new(1, 0, 0, overlayHeight),
@@ -733,6 +749,28 @@ Elements.Register("ColorPicker", function(section, options)
         data.opened = false
         stopDrag()
         animateMenu(false)
+    end
+
+    applyHeader = function()
+        if destroyed then return end
+        local h = BASE_ROW_H
+        if descLabel then
+            h = math.max(BASE_ROW_H, DESC_Y + descLabel.AbsoluteSize.Y + 6)
+        end
+        if h == rowH then return end
+        rowH = h
+        textContainer.Size = UDim2.new(1, -(FIELD_WIDTH + 16), 0, rowH)
+        field.Position = UDim2.new(1, 0, 0, rowH / 2)
+        overlayCanvas.Position = UDim2.new(0, 0, 0, overlayOffset())
+        disconnectTweens()
+        if data.opened then
+            container.Size = UDim2.new(1, 0, 0, totalOpen())
+            overlayCanvas.Size = UDim2.new(1, 0, 0, OVERLAY_HEIGHT)
+        else
+            container.Size = UDim2.new(1, 0, 0, rowH)
+            overlayCanvas.Size = UDim2.new(1, 0, 0, 0)
+            overlayCanvas.Visible = false
+        end
     end
 
     connect(field.MouseButton1Click, function()
@@ -827,6 +865,7 @@ Elements.Register("ColorPicker", function(section, options)
                 descLabel = nil
             end
             layoutText()
+            applyHeader()
             return
         end
         if not descLabel then
@@ -835,6 +874,7 @@ Elements.Register("ColorPicker", function(section, options)
             descLabel.Text = breakLongWords(newDesc, WORD_MAX)
         end
         layoutText()
+        applyHeader()
     end
 
     function data:Open()
