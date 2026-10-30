@@ -18,7 +18,9 @@ local Theme = {
     Subtitle = Color3.fromRGB(150, 150, 150),
     Placeholder = Color3.fromRGB(110, 110, 110),
     Text = Color3.fromRGB(230, 230, 230),
-    TabHover = Color3.fromRGB(205, 205, 205)
+    TabActive = Color3.fromRGB(255, 255, 255),
+    TabInactive = Color3.fromRGB(128, 128, 128),
+    TabHover = Color3.fromRGB(175, 175, 175)
 }
 
 -- // Configurações
@@ -37,7 +39,13 @@ local Config = {
     SidebarWidth = 180,
     TabHeight = 34,
     TabFillTransparency = 0.3,
-    TabTween = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TabTween = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    TabPress = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    TabRelease = TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+    TabPop = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+    SaveFolder = "Ecohub",
+    SaveDelay = 0.5,
+    SaveRestoreWindow = 0.4
 }
 
 Config.ElementsApi = "https://api.github.com/repos/" .. Config.Repo .. "/contents/" .. Config.ElementsPath .. "?ref=" .. Config.Branch
@@ -141,6 +149,11 @@ function Util.Contains(text, query)
         end
     end
     return true
+end
+
+function Util.Prepare(source, header)
+    source = string.gsub(source, "^\239\187\191", "")
+    return header .. source
 end
 
 -- // Http
@@ -271,6 +284,296 @@ function Maid:Destroy()
         end
     end
     table.clear(self.Tasks)
+end
+
+-- // Save
+local Save = {}
+Save.__index = Save
+
+local SAVE_SKIP = {button = true, paragraph = true, label = true}
+local SAVE_CALLBACKS = {"callback", "Callback", "onChange", "OnChange", "onChanged", "OnChanged", "Changed", "changed", "Function", "func", "Action", "action"}
+local SAVE_VALUES = {"default", "Default", "value", "Value", "state", "State", "checked", "Checked", "toggled", "Toggled"}
+local SAVE_SETTERS = {"SetValue", "SetState", "SetChecked", "SetToggle", "SetToggled", "SetSelected", "SetColor", "Set"}
+local SAVE_ESCAPES = {['"'] = '\\"', ["\\"] = "\\\\", ["\n"] = "\\n", ["\r"] = "\\r", ["\t"] = "\\t"}
+local SAVE_VALID = {
+    checkbox = function(value)
+        return type(value) == "boolean"
+    end,
+    slider = function(value)
+        return type(value) == "number"
+    end,
+    colorpicker = function(value)
+        return typeof(value) == "Color3"
+    end,
+    dropdown = function(value)
+        local kind = type(value)
+        return kind == "string" or kind == "table" or kind == "number"
+    end
+}
+
+function Save.Quote(text)
+    local escaped = string.gsub(text, '[%c"\\]', function(char)
+        return SAVE_ESCAPES[char] or string.format("\\u%04x", string.byte(char))
+    end)
+    return '"' .. escaped .. '"'
+end
+
+function Save.Encode(value, depth)
+    depth = depth or 0
+    local kind = type(value)
+    if kind == "string" then
+        return Save.Quote(value)
+    elseif kind == "number" then
+        if value ~= value or value == math.huge or value == -math.huge then
+            return "0"
+        end
+        return string.format("%.14g", value)
+    elseif kind == "boolean" then
+        return tostring(value)
+    elseif kind ~= "table" then
+        return "null"
+    end
+
+    local count = 0
+    for _ in pairs(value) do
+        count = count + 1
+    end
+    if count == 0 then
+        return "{}"
+    end
+
+    local pad = string.rep("    ", depth + 1)
+    local close = string.rep("    ", depth)
+    local lines = {}
+
+    if count == #value then
+        for i = 1, count do
+            lines[i] = pad .. Save.Encode(value[i], depth + 1)
+        end
+        return "[\n" .. table.concat(lines, ",\n") .. "\n" .. close .. "]"
+    end
+
+    local keys = {}
+    for key in pairs(value) do
+        keys[#keys + 1] = key
+    end
+    table.sort(keys, function(a, b)
+        local first = string.lower(tostring(a))
+        local second = string.lower(tostring(b))
+        if first == second then
+            return tostring(a) < tostring(b)
+        end
+        return first < second
+    end)
+    for i, key in ipairs(keys) do
+        lines[i] = pad .. Save.Quote(tostring(key)) .. ": " .. Save.Encode(value[key], depth + 1)
+    end
+    return "{\n" .. table.concat(lines, ",\n") .. "\n" .. close .. "}"
+end
+
+function Save.Pack(value, depth)
+    depth = depth or 0
+    local kind = typeof(value)
+    if kind == "boolean" or kind == "string" then
+        return value
+    elseif kind == "number" then
+        if value ~= value or value == math.huge or value == -math.huge then
+            return nil
+        end
+        return value
+    elseif kind == "Color3" then
+        return {
+            R = math.floor(value.R * 255 + 0.5),
+            G = math.floor(value.G * 255 + 0.5),
+            B = math.floor(value.B * 255 + 0.5)
+        }
+    elseif kind == "table" and depth < 3 then
+        local count = 0
+        for _ in pairs(value) do
+            count = count + 1
+        end
+        local packed = {}
+        if count == #value then
+            for i = 1, count do
+                local item = Save.Pack(value[i], depth + 1)
+                if item ~= nil then
+                    packed[#packed + 1] = item
+                end
+            end
+        else
+            for key, entry in pairs(value) do
+                local item = Save.Pack(entry, depth + 1)
+                if item ~= nil then
+                    packed[tostring(key)] = item
+                end
+            end
+        end
+        return packed
+    end
+    return nil
+end
+
+function Save.Unpack(value, kind)
+    if kind == "colorpicker" and type(value) == "table" and tonumber(value.R) and tonumber(value.G) and tonumber(value.B) then
+        return Color3.fromRGB(
+            math.clamp(value.R, 0, 255),
+            math.clamp(value.G, 0, 255),
+            math.clamp(value.B, 0, 255)
+        )
+    end
+    return value
+end
+
+function Save.Valid(kind, value)
+    local check = SAVE_VALID[kind]
+    return not check or check(value)
+end
+
+function Save.Equal(a, b)
+    if a == b then
+        return true
+    end
+    if type(a) ~= "table" or type(b) ~= "table" then
+        return false
+    end
+    for key, value in pairs(a) do
+        if not Save.Equal(value, b[key]) then
+            return false
+        end
+    end
+    for key in pairs(b) do
+        if a[key] == nil then
+            return false
+        end
+    end
+    return true
+end
+
+function Save.new()
+    local self = setmetatable({}, Save)
+    self.Enabled = true
+    self.Dirty = false
+    self.Token = 0
+    self.Data = {}
+    self.Folder = Config.SaveFolder
+    self.Path = Config.SaveFolder .. "/" .. tostring(game.PlaceId) .. ".json"
+    self:Prepare()
+    self:Load()
+    return self
+end
+
+function Save:Prepare()
+    pcall(function()
+        if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder(self.Folder) then
+            makefolder(self.Folder)
+        end
+        if type(isfile) == "function" and type(writefile) == "function" and not isfile(self.Path) then
+            writefile(self.Path, "{}")
+        end
+    end)
+end
+
+function Save:Load()
+    self.Data = {}
+    if type(isfile) ~= "function" or type(readfile) ~= "function" then
+        return
+    end
+    local ok, body = pcall(function()
+        if isfile(self.Path) then
+            return readfile(self.Path)
+        end
+        return nil
+    end)
+    if ok and type(body) == "string" and body ~= "" then
+        local parsed, result = pcall(HttpService.JSONDecode, HttpService, body)
+        if parsed and type(result) == "table" then
+            self.Data = result
+        end
+    end
+end
+
+function Save:Flush(force)
+    if not self.Dirty and not force then
+        return
+    end
+    self.Dirty = false
+    if type(writefile) ~= "function" then
+        return
+    end
+    pcall(function()
+        if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder(self.Folder) then
+            makefolder(self.Folder)
+        end
+        writefile(self.Path, Save.Encode(self.Data))
+    end)
+end
+
+function Save:Queue()
+    self.Dirty = true
+    self.Token = self.Token + 1
+    local token = self.Token
+    task.delay(Config.SaveDelay, function()
+        if self.Token == token then
+            self:Flush()
+        end
+    end)
+end
+
+function Save:Clear()
+    self.Data = {}
+    self.Token = self.Token + 1
+    self:Flush(true)
+end
+
+function Save:_Bucket(element, create)
+    local tabName = element.Tab.Name
+    local sectionName = element.Section.Name
+    local tab = self.Data[tabName]
+    if type(tab) ~= "table" then
+        if not create then
+            return nil
+        end
+        tab = {}
+        self.Data[tabName] = tab
+    end
+    local section = tab[sectionName]
+    if type(section) ~= "table" then
+        if not create then
+            return nil
+        end
+        section = {}
+        tab[sectionName] = section
+    end
+    return section
+end
+
+function Save:Get(element)
+    local bucket = self:_Bucket(element, false)
+    if not bucket then
+        return nil
+    end
+    local kind = Util.ResolveKey(element.Type)
+    local value = Save.Unpack(bucket[element.SaveName], kind)
+    if value == nil or not Save.Valid(kind, value) then
+        return nil
+    end
+    return value
+end
+
+function Save:Set(element, value)
+    if not self.Enabled then
+        return
+    end
+    local packed = Save.Pack(value)
+    if packed == nil then
+        return
+    end
+    local bucket = self:_Bucket(element, true)
+    if Save.Equal(bucket[element.SaveName], packed) then
+        return
+    end
+    bucket[element.SaveName] = packed
+    self:Queue()
 end
 
 -- // Icons
@@ -434,17 +737,12 @@ function ElementRegistry:Enqueue(key, element, options)
     queue[#queue + 1] = {Element = element, Options = options}
 end
 
-function ElementRegistry:_RunChunk(chunk)
-    local scoped = false
-    if type(setfenv) == "function" and type(getfenv) == "function" then
-        scoped = pcall(function()
-            local scope = setmetatable({Elements = self, Panel = self.Panel}, {__index = getfenv(chunk)})
-            setfenv(chunk, scope)
-        end)
-    end
-    if not scoped then
-        env.Elements = self
-        env.Panel = self.Panel
+function ElementRegistry:_RunChunk(source)
+    env.Elements = self
+    env.Panel = self.Panel
+    local chunk, compileError = loadstring(Util.Prepare(source, "local Elements, Panel = ...; "))
+    if not chunk then
+        error(compileError, 0)
     end
     return chunk(self, self.Panel)
 end
@@ -466,11 +764,7 @@ function ElementRegistry:_LoadFile(file, optional)
 
     local ok, result = pcall(function()
         local source = Http.Fetch(urls, 2)
-        local chunk, compileError = loadstring(source)
-        if not chunk then
-            error(compileError, 0)
-        end
-        return self:_RunChunk(chunk)
+        return self:_RunChunk(source)
     end)
     if not ok and not optional then
         warn("[EcoHub] could not load element '" .. file .. "': " .. tostring(result))
@@ -644,8 +938,12 @@ function Element.new(contentSection, elementType, options)
     local name = tostring(options.title or options.Title or options.name or options.Name or options.Text or options.Label or elementType)
     local description = tostring(options.description or options.Description or "")
 
+    local used = contentSection.Used
+    used[name] = (used[name] or 0) + 1
+
     self.Type = elementType
     self.Name = name
+    self.SaveName = used[name] > 1 and (name .. " #" .. used[name]) or name
     self.Group = contentSection.Name
     self.Search = string.lower(name .. " " .. elementType .. " " .. contentSection.Name .. " " .. tab.Name .. " " .. description)
     self.Tab = tab
@@ -659,6 +957,9 @@ function Element.new(contentSection, elementType, options)
     self.Destroyed = false
     self.Instance = nil
     self.Registry = tab.Window.Elements
+    self.Restoring = false
+    self.Delivered = nil
+    self.Originals = {}
 
     container.Name = name
     return self
@@ -686,11 +987,111 @@ function Element:Attach(options)
     end
 end
 
+function Element:_Persist(options)
+    local save = self.Tab.Window.Save
+    local kind = Util.ResolveKey(self.Type)
+    if not save or not save.Enabled or SAVE_SKIP[kind] or options.Save == false or options.save == false then
+        return options, nil
+    end
+
+    local element = self
+    local copy = {}
+    for key, value in pairs(options) do
+        copy[key] = value
+    end
+
+    local originals = {}
+    local function wrap(callback)
+        if callback then
+            originals[#originals + 1] = callback
+        end
+        return function(...)
+            if element.Destroyed then
+                return
+            end
+            local value = ...
+            if element.Restoring then
+                if Save.Equal(element.Delivered, value) then
+                    return
+                end
+            else
+                save:Set(element, value)
+            end
+            element.Delivered = value
+            if callback then
+                return callback(...)
+            end
+        end
+    end
+
+    local wrapped = false
+    for _, name in ipairs(SAVE_CALLBACKS) do
+        if type(copy[name]) == "function" then
+            copy[name] = wrap(copy[name])
+            wrapped = true
+        end
+    end
+    if not wrapped then
+        local tracker = wrap(nil)
+        copy.callback = tracker
+        copy.Callback = tracker
+    end
+    self.Originals = originals
+
+    local stored = save:Get(self)
+    if stored ~= nil then
+        local replaced = false
+        for _, name in ipairs(SAVE_VALUES) do
+            if copy[name] ~= nil then
+                copy[name] = stored
+                replaced = true
+            end
+        end
+        if not replaced then
+            copy.Default = stored
+            copy.default = stored
+            copy.Value = stored
+            copy.value = stored
+        end
+        self.Restoring = true
+    else
+        for _, name in ipairs(SAVE_VALUES) do
+            if options[name] ~= nil then
+                save:Set(self, options[name])
+                break
+            end
+        end
+    end
+    return copy, stored
+end
+
+function Element:_Restore(stored)
+    local instance = self.Instance
+    for _, name in ipairs(SAVE_SETTERS) do
+        local method = instance[name]
+        if type(method) == "function" then
+            pcall(method, instance, stored)
+            break
+        end
+    end
+    if not Save.Equal(self.Delivered, stored) then
+        self.Delivered = stored
+        for _, callback in ipairs(self.Originals) do
+            task.spawn(callback, stored)
+        end
+    end
+    task.delay(Config.SaveRestoreWindow, function()
+        self.Restoring = false
+    end)
+end
+
 function Element:Build(entry, options)
     if self.Destroyed then
         return
     end
     self:ApplyFrame(entry.Frameless)
+
+    local prepared, stored = self:_Persist(options)
 
     local scope = {
         frame = self.Container,
@@ -702,7 +1103,7 @@ function Element:Build(entry, options)
         CreateIcon = Icons.Create
     }
 
-    local ok, result = pcall(entry.Builder, scope, options)
+    local ok, result = pcall(entry.Builder, scope, prepared)
     if not ok then
         warn("[EcoHub] element '" .. self.Type .. "' failed: " .. tostring(result))
         self:Destroy()
@@ -720,6 +1121,10 @@ function Element:Build(entry, options)
         if type(method) == "function" then
             pcall(method, self.Instance, table.unpack(call.Args, 1, call.Count))
         end
+    end
+
+    if stored ~= nil then
+        self:_Restore(stored)
     end
 end
 
@@ -795,6 +1200,7 @@ function ContentSection.new(tab, name)
     self.Name = name
     self.Tab = tab
     self.Count = 0
+    self.Used = {}
 
     local frame = Util.Create("Frame", {
         Name = name,
@@ -879,10 +1285,12 @@ function Tab.new(window, sideSection, name, iconName)
         LayoutOrder = #sideSection.Tabs + 1
     }, sideSection.Menu)
     Util.Corner(button, 6)
+    local scale = Util.Create("UIScale", {Scale = 1}, button)
 
-    local icon = Icons.Create(button, iconName, 16, Theme.Inactive)
-    icon.AnchorPoint = Vector2.new(0, 0.5)
-    icon.Position = UDim2.new(0, 10, 0.5, 0)
+    local icon = Icons.Create(button, iconName, 16, Theme.TabInactive)
+    icon.AnchorPoint = Vector2.new(0.5, 0.5)
+    icon.Position = UDim2.new(0, 18, 0.5, 0)
+    local iconScale = Util.Create("UIScale", {Scale = 1}, icon)
 
     local label = Util.Create("TextLabel", {
         Name = "Text",
@@ -890,7 +1298,7 @@ function Tab.new(window, sideSection, name, iconName)
         Position = UDim2.new(0, 36, 0, 0),
         BackgroundTransparency = 1,
         Text = name,
-        TextColor3 = Theme.Inactive,
+        TextColor3 = Theme.TabInactive,
         TextSize = 14,
         Font = Enum.Font.SourceSans,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -921,19 +1329,48 @@ function Tab.new(window, sideSection, name, iconName)
     self.Button = button
     self.Icon = icon
     self.Label = label
+    self.Scale = scale
+    self.IconScale = iconScale
     self.Page = page
     self.Scroll = scroll
 
+    local pressed = false
+    local function release()
+        if not pressed then
+            return
+        end
+        pressed = false
+        Util.Tween(scale, Config.TabRelease, {Scale = 1})
+    end
+
+    button.InputBegan:Connect(function(input)
+        if Util.IsPress(input) then
+            pressed = true
+            Util.Tween(scale, Config.TabPress, {Scale = 0.94})
+        end
+    end)
+    button.InputEnded:Connect(function(input)
+        if Util.IsPress(input) then
+            release()
+        end
+    end)
+    window.Maid:Connect(UserInputService.InputEnded, function(input)
+        if Util.IsPress(input) then
+            release()
+        end
+    end)
     button.Activated:Connect(function()
         self:Select()
     end)
     button.MouseEnter:Connect(function()
-        if window.ActiveTab ~= self then
-            Util.Tween(label, Config.TabTween, {TextColor3 = Theme.TabHover})
-            Util.Tween(icon, Config.TabTween, {ImageColor3 = Theme.TabHover})
+        if isTouch or window.ActiveTab == self then
+            return
         end
+        Util.Tween(label, Config.TabTween, {TextColor3 = Theme.TabHover})
+        Util.Tween(icon, Config.TabTween, {ImageColor3 = Theme.TabHover})
     end)
     button.MouseLeave:Connect(function()
+        release()
         self:Style()
     end)
 
@@ -942,14 +1379,22 @@ end
 
 function Tab:Style()
     local isActive = self.Window.ActiveTab == self
-    local color = isActive and Theme.Active or Theme.Inactive
+    local color = isActive and Theme.TabActive or Theme.TabInactive
     Util.Tween(self.Button, Config.TabTween, {BackgroundTransparency = isActive and Config.TabFillTransparency or 1})
     Util.Tween(self.Label, Config.TabTween, {TextColor3 = color})
     Util.Tween(self.Icon, Config.TabTween, {ImageColor3 = color})
 end
 
+function Tab:Pop()
+    self.IconScale.Scale = 0.65
+    Util.Tween(self.IconScale, Config.TabPop, {Scale = 1})
+    self.Button.BackgroundTransparency = 0.05
+end
+
 function Tab:Select()
+    self:Pop()
     self.Window:SelectTab(self)
+    self:Style()
 end
 
 function Tab:CreateSection(name)
@@ -1821,27 +2266,14 @@ function Features:_Run(job, body)
     local window = self.Window
 
     local ok, result = pcall(function()
-        local chunk, compileError = loadstring(body)
+        env.Window = window
+        env.Windows = window
+        env.Library = Library
+        env.Librarys = Library
+        local header = "local Window, Library = ...; local Windows, Librarys = Window, Library; "
+        local chunk, compileError = loadstring(Util.Prepare(body, header))
         if not chunk then
             error(compileError, 0)
-        end
-        local scoped = false
-        if type(setfenv) == "function" and type(getfenv) == "function" then
-            scoped = pcall(function()
-                local scope = setmetatable({
-                    Window = window,
-                    Windows = window,
-                    Library = Library,
-                    Librarys = Library
-                }, {__index = getfenv(chunk)})
-                setfenv(chunk, scope)
-            end)
-        end
-        if not scoped then
-            env.Window = window
-            env.Windows = window
-            env.Library = Library
-            env.Librarys = Library
         end
         return chunk(window, Library)
     end)
@@ -2118,6 +2550,7 @@ function Window.new(config)
     self.SidebarWidth = Config.SidebarWidth
     self.Features = Features.new(self)
     self.FeatureConfig = self.Features.Config
+    self.Save = Save.new()
 
     self:_BuildMain()
     self:_BuildPanel()
@@ -2128,6 +2561,9 @@ function Window.new(config)
     self:_MakeDraggable(self.Header, self.Main)
     self:_BindResize()
     self:_BindToggleDrag()
+    self.Maid:Connect(LocalPlayer.OnTeleport, function()
+        self.Save:Flush()
+    end)
     self:Configure(config)
     return self
 end
@@ -2725,6 +3161,22 @@ function Window:SetMinimizeKey(keyCode)
     end
 end
 
+function Window:SaveNow()
+    self.Save:Flush(true)
+end
+
+function Window:SetAutoSave(state)
+    self.Save.Enabled = state and true or false
+end
+
+function Window:ClearSave()
+    self.Save:Clear()
+end
+
+function Window:GetSavePath()
+    return self.Save.Path
+end
+
 function Window:LoadFeature(name, options)
     return self.Features:Load(name, options)
 end
@@ -2793,6 +3245,7 @@ function Window:Destroy()
     end
     self.Destroyed = true
     self.Features:UnloadAll()
+    self.Save:Flush()
     self.Elements.Destroyed = true
     self.Maid:Destroy()
     self.Gui:Destroy()
@@ -2801,8 +3254,13 @@ function Window:Destroy()
     env.EcoHubPanel = nil
     env.EcoHubElements = nil
     env.EcoHubDestroy = nil
+    if rawequal(env.Window, self) then
+        env.Window = nil
+        env.Windows = nil
+    end
     if Library.Window == self then
         Library.Window = nil
+        Library.Windows = nil
         Library.Elements = nil
         Library.FeatureConfig = nil
     end
@@ -2822,6 +3280,7 @@ function Library:CreateWindow(config)
 
     window = Window.new(config)
     Library.Window = window
+    Library.Windows = window
     Library.Elements = window.Elements
     Library.FeatureConfig = window.FeatureConfig
 
@@ -2852,7 +3311,14 @@ local FEATURE_METHODS = {
     "SetFeaturesSource",
     "SetElementsSource",
     "ListElements",
-    "LoadElements"
+    "LoadElements",
+    "SaveNow",
+    "SetAutoSave",
+    "ClearSave",
+    "GetSavePath",
+    "CreateTab",
+    "GetTab",
+    "SelectTab"
 }
 
 for _, method in ipairs(FEATURE_METHODS) do
