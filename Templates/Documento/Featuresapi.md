@@ -1,9 +1,15 @@
 # Ecohub Features API
 
-Guia completo de como carregar outros arquivos (tabs + elements) dentro da mesma janela da Ecohub.
+Guia completo para dividir a Ecohub em vários arquivos (tabs + elements) e carregá-los dentro de **uma única janela**.
 
-## Índice
+> [!TIP]
+> Com pressa? Vá direto para o [Início rápido](#início-rápido). Em 3 passos você tem uma janela com uma feature carregada.
 
+---
+
+## Sumário
+
+- [Início rápido](#início-rápido)
 1. [O que é](#1-o-que-é)
 2. [O que significa "baixar"](#2-o-que-significa-baixar)
 3. [Estrutura de pastas no GitHub](#3-estrutura-de-pastas-no-github)
@@ -19,7 +25,56 @@ Guia completo de como carregar outros arquivos (tabs + elements) dentro da mesma
 13. [Funções de consulta](#13-funções-de-consulta)
 14. [Configuração](#14-configuração)
 15. [Erros e notificações](#15-erros-e-notificações)
-16. [Referência rápida](#16-referência-rápida)
+16. [Boas práticas e checklist](#16-boas-práticas-e-checklist)
+17. [Referência rápida](#17-referência-rápida)
+
+---
+
+## Início rápido
+
+**1. Script principal** (executado no jogo):
+
+```lua
+-- // Library
+local Librarys = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/monzonrebasexk/refs/heads/main/Library/Librarys.luau"))()
+
+-- // Window
+local Windows = Librarys:CreateWindow({
+    Title = "Ecohub",
+    SubTitle = "by rip_sheldoohz",
+    Size = UDim2.fromOffset(580, 350),
+    MinimizeKey = Enum.KeyCode.RightShift,
+})
+
+-- // Features
+Windows:LoadFeature("Combate")
+```
+
+**2. Feature** em `Features/Combate.luau` no GitHub:
+
+```lua
+-- // Combate
+local Tab = Window:CreateTab({
+    tab = "Combate",
+    section = "Features",
+    icon = "swords",
+})
+
+local Section = Tab:CreateSection("Aimbot")
+
+Section:CreateToggle({
+    title = "Aimbot",
+    default = false,
+    callback = function(state)
+        print("Aimbot:", state)
+    end,
+})
+```
+
+**3. Pronto.** Ao executar o script principal, a tab **Combate** aparece na janela.
+
+> [!NOTE]
+> Dentro da feature, `Window` já existe. Você não cria janela nem usa `loadstring` ali.
 
 ---
 
@@ -27,21 +82,24 @@ Guia completo de como carregar outros arquivos (tabs + elements) dentro da mesma
 
 A Features API deixa você dividir o hub em vários arquivos. Em vez de um script gigante com todas as tabs, você tem um script principal pequeno que cria a janela e manda carregar arquivos separados. Cada arquivo cria as próprias tabs, sections e elements na mesma janela.
 
-Vantagens:
+**Vantagens**
 
-- O script principal fica curto.
-- Cada jogo pode ter a própria pasta de features.
-- Você edita um arquivo no GitHub sem mexer nos outros.
-- O mesmo script principal serve para vários jogos.
-- Uma feature com erro não derruba as outras.
+| Vantagem | Como ajuda |
+|----------|------------|
+| Script principal curto | Só cria a janela e lista o que carregar |
+| Uma pasta por jogo | Cada jogo tem as próprias features |
+| Edição isolada | Mudar um arquivo no GitHub não mexe nos outros |
+| Um script para vários jogos | O mesmo principal serve para todos |
+| Isolamento de erros | Uma feature com erro não derruba as outras |
 
+> [!IMPORTANT]
 > Só existe **uma janela** por vez. Executar o script principal de novo destrói a janela anterior, descarrega as features dela e limpa qualquer GUI que tenha sobrado.
 
 ---
 
 ## 2. O que significa "baixar"
 
-Quando se diz que a lib "baixa" um arquivo, quer dizer que ela busca o texto do arquivo no seu GitHub pela internet e roda esse texto como código com `loadstring`. Nada é salvo no PC nem no celular.
+Quando se diz que a lib "baixa" um arquivo, quer dizer que ela busca o texto do arquivo no seu GitHub pela internet e roda esse texto como código com `loadstring`. **Nada é salvo** no PC nem no celular.
 
 Quando você faz:
 
@@ -57,15 +115,18 @@ https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/monzonrebasexk/main/F
 
 Depois ela busca o código nesse link, executa, e as tabs e elements aparecem na janela.
 
-Detalhes do download:
+**Detalhes do download**
 
-- Usa `request` do executor quando existe, senão `game:HttpGet`.
-- Cada requisição leva um `?cb=` na URL para não pegar cache velho.
-- Tenta até 3 vezes com espera crescente entre as tentativas.
-- Vários arquivos baixam em paralelo (3 no mobile, 6 no PC).
-- Arquivo vazio, grande demais (mais de 4 MB) ou página HTML é rejeitado.
+| Item | Comportamento |
+|------|---------------|
+| Método | `request` do executor quando existe, senão `game:HttpGet` |
+| Cache | Cada requisição leva um `?cb=` na URL para não pegar cache velho |
+| Tentativas | Até 3, com espera crescente entre elas |
+| Paralelismo | 3 downloads no mobile, 6 no PC |
+| Rejeitado | Arquivo vazio, maior que 4 MB ou página HTML |
 
-Por isso o arquivo precisa existir no GitHub, no caminho certo.
+> [!NOTE]
+> O arquivo precisa existir no GitHub, no caminho certo.
 
 ---
 
@@ -103,7 +164,7 @@ monzonrebasexk/
 | `Library/Elements/` | Um arquivo por tipo de element |
 | `Assets/Icons.luau` | Tabela de ícones lucide |
 
-Regras:
+**Regras**
 
 - Arquivo solto: `Features/Combate.luau`.
 - Arquivo dentro de pasta: `Features/meianoite/Farm.luau`.
@@ -145,15 +206,36 @@ Windows:LoadFeatures({
 })
 ```
 
-No script principal a janela se chama `Windows` (nome que você escolheu). Dentro dos arquivos de feature ela já existe como `Window` e também como `Windows`. Veja a seção 7.
+**Opções da janela**
 
-O `pcall` no `GetProductInfo` evita que o script caia se o Roblox não responder.
+| Opção | Descrição |
+|-------|-----------|
+| `Title` | Título da janela |
+| `SubTitle` | Subtítulo |
+| `Size` | Tamanho inicial (`UDim2`) |
+| `MinimizeKey` | Tecla que minimiza/abre a janela |
+
+> [!NOTE]
+> No script principal a janela se chama `Windows` (nome que você escolheu). Dentro dos arquivos de feature ela já existe como `Window` e também como `Windows`. Veja a [seção 7](#7-como-o-arquivo-de-feature-enxerga-a-janela).
+>
+> O `pcall` no `GetProductInfo` evita que o script caia se o Roblox não responder.
 
 ---
 
 ## 5. Formas de carregar
 
-Todos os métodos são chamados na **janela** (`Windows:`), nunca na lib (`Librarys:`).
+> [!WARNING]
+> Todos os métodos são chamados na **janela** (`Windows:`), nunca na lib (`Librarys:`).
+
+| Quero carregar | Comando |
+|----------------|---------|
+| Uma feature | `Windows:LoadFeature("Combate")` |
+| Arquivo dentro de pasta | `Windows:LoadFeature("meianoite/Farm")` |
+| Pasta inteira | `Windows:LoadFeature("meianoite")` |
+| Várias de uma vez | `Windows:LoadFeatures({ ... })` |
+| Todas | `Windows:LoadAllFeatures()` |
+| Link direto | `Windows:LoadFeature("https://...")` |
+| Recarregar | `Windows:LoadFeature("nome", { Reload = true })` |
 
 ### 5.1 LoadFeature (uma feature)
 
@@ -201,7 +283,10 @@ Faz o mesmo que três linhas de `LoadFeature`, na ordem da lista.
 Windows:LoadAllFeatures()
 ```
 
-Equivale a `LoadFeature("all")`. Também funciona com `"*"`. Carrega todos os arquivos de `Features/`. Precisa do índice do GitHub (seção 6).
+Equivale a `LoadFeature("all")`. Também funciona com `"*"`. Carrega todos os arquivos de `Features/`.
+
+> [!NOTE]
+> Precisa do índice do GitHub ([seção 6](#6-como-a-lib-acha-o-arquivo)).
 
 ### 5.6 Link direto
 
@@ -217,7 +302,7 @@ Se o texto começar com `http://` ou `https://`, a lib usa o link como está. Li
 Windows:LoadFeature("meianoite/Farm", { Reload = true })
 ```
 
-Com `Reload = true`, se a feature já estiver carregada, ela é descarregada (veja a seção 10) e baixada de novo.
+Com `Reload = true`, se a feature já estiver carregada, ela é descarregada (veja a [seção 10](#10-descarregar-features)) e baixada de novo.
 
 ---
 
@@ -235,11 +320,16 @@ A lib faz uma única chamada à API do GitHub (`git/trees`) que lista todos os a
 
 Com o índice, o nome que você passa é comparado nesta ordem, **sem diferenciar maiúscula de minúscula**:
 
-1. Caminho exato: `"meianoite/Farm"`.
-2. Pasta: `"meianoite"` carrega tudo que está dentro.
-3. Nome do arquivo sozinho: `"Farm"` acha `meianoite/Farm`.
+| Ordem | Tipo | Exemplo |
+|-------|------|---------|
+| 1 | Caminho exato | `"meianoite/Farm"` |
+| 2 | Pasta (carrega tudo que está dentro) | `"meianoite"` |
+| 3 | Nome do arquivo sozinho | `"Farm"` acha `meianoite/Farm` |
 
-Se o nome sozinho existir em mais de uma pasta, a lib avisa `Ambiguous name` e sugere o caminho completo. Se nada for achado, ela força uma atualização do índice e tenta de novo uma vez.
+> [!WARNING]
+> Se o nome sozinho existir em mais de uma pasta, a lib avisa `Ambiguous name` e sugere o caminho completo.
+
+Se nada for achado, a lib força uma atualização do índice e tenta de novo uma vez.
 
 ### 6.2 Sem índice (plano B)
 
@@ -250,7 +340,8 @@ Se a API do GitHub falhar ou estourar o limite de requisições, a lib mostra o 
 3. `Features/NOME/ULTIMA_PARTE.luau`
 4. `Features/NOME/init.luau`
 
-Nesse modo carregar pasta inteira e `LoadAllFeatures` não funcionam. Arquivo direto (`pasta/arquivo`) continua funcionando porque usa o `raw.githubusercontent.com`, que não tem esse limite.
+> [!NOTE]
+> Nesse modo, carregar pasta inteira e `LoadAllFeatures` não funcionam. Arquivo direto (`pasta/arquivo`) continua funcionando porque usa o `raw.githubusercontent.com`, que não tem esse limite.
 
 ### 6.3 Detalhes do nome
 
@@ -267,10 +358,10 @@ Antes de rodar o arquivo, a lib cria quatro variáveis globais:
 
 | Variável | O que é |
 |----------|---------|
-| `Window` | a janela criada no script principal |
-| `Windows` | a mesma janela (outro nome) |
-| `Librarys` | a própria lib (Theme, Elements, Notify, etc.) |
-| `Library` | a mesma lib (outro nome) |
+| `Window` | A janela criada no script principal |
+| `Windows` | A mesma janela (outro nome) |
+| `Librarys` | A própria lib (Theme, Elements, Notify, etc.) |
+| `Library` | A mesma lib (outro nome) |
 
 Dentro do arquivo você usa direto, sem `loadstring`, sem `require`, sem criar janela nova:
 
@@ -293,7 +384,7 @@ Section:CreateToggle({
 })
 ```
 
-Como a feature roda:
+**Como a feature roda**
 
 - Em uma thread separada, com identidade elevada quando o executor permite.
 - A lib espera até 2 segundos o arquivo terminar de iniciar. Depois disso a feature segue rodando em segundo plano, então loops longos não travam o carregamento.
@@ -325,7 +416,7 @@ local Section = Tab:CreateSection("Auto Farm")
 
 `CreateSection` cria o bloco dentro da página da tab.
 
-Elements disponíveis em uma section:
+### Elements disponíveis
 
 | Método | Element |
 |--------|---------|
@@ -335,10 +426,10 @@ Elements disponíveis em uma section:
 | `Section:CreateDropdown(opts)` | Dropdown |
 | `Section:CreateColorPicker(opts)` | ColorPicker |
 | `Section:CreateParagraph(opts)` | Paragraph |
-| `Section:CreateElement(nome, opts)` | qualquer element registrado |
-| `Section:CreateNome(opts)` | atalho para um element registrado com o nome `Nome` |
+| `Section:CreateElement(nome, opts)` | Qualquer element registrado |
+| `Section:CreateNome(opts)` | Atalho para um element registrado com o nome `Nome` |
 
-Exemplo completo de uma feature:
+### Exemplo completo de uma feature
 
 ```lua
 -- // Farm
@@ -382,9 +473,10 @@ Section:CreateButton({
 })
 ```
 
-Proteção de callback: qualquer erro dentro de `callback` é capturado e aparece como notificação, o hub não cai.
-
-Pesquisa: se `opts` tiver `name`, `title`, `text` ou `label`, o element entra automaticamente na pesquisa da janela.
+> [!NOTE]
+> **Proteção de callback:** qualquer erro dentro de `callback` é capturado e aparece como notificação. O hub não cai.
+>
+> **Pesquisa:** se `opts` tiver `name`, `title`, `text` ou `label`, o element entra automaticamente na pesquisa da janela.
 
 ---
 
@@ -420,22 +512,26 @@ local info = Section:CreateElement("Label", {
 info:SetText("Novo texto")
 ```
 
+**Regras**
+
 - O construtor recebe `section` (use `section.frame` como pai) e `opts` (a tabela que você passou).
 - O que o construtor retornar é o objeto que você usa depois.
-- Quem registra o element precisa carregar antes de quem usa. Se o element novo está numa feature, carregue essa feature primeiro.
+- Quem registra o element precisa carregar **antes** de quem usa. Se o element novo está numa feature, carregue essa feature primeiro.
 - Se você chamar `CreateElement("Nome", ...)` e o nome não estiver registrado, a lib tenta baixar `Library/Elements/Nome.luau` automaticamente (uma tentativa por nome).
 
-Arquivos dentro de `Library/Elements/` rodam com estas variáveis já disponíveis:
+### Variáveis disponíveis em `Library/Elements/`
+
+Arquivos dentro dessa pasta rodam com estas variáveis já disponíveis:
 
 | Variável | Conteúdo |
 |----------|----------|
-| `Elements` | tabela de elements (`Register`, `List`) |
-| `Library` | a lib |
-| `Notify` / `Report` | notificações |
-| `Theme` / `Metrics` | cores e medidas |
-| `FONT` / `FONT_BOLD` | fontes |
-| `Icon` / `ICONS` | ícones |
-| `TweenService`, `UserInputService`, `Players`, `HttpService` | serviços |
+| `Elements` | Tabela de elements (`Register`, `List`) |
+| `Library` | A lib |
+| `Notify` / `Report` | Notificações |
+| `Theme` / `Metrics` | Cores e medidas |
+| `FONT` / `FONT_BOLD` | Fontes |
+| `Icon` / `ICONS` | Ícones |
+| `TweenService`, `UserInputService`, `Players`, `HttpService` | Serviços |
 
 ---
 
@@ -452,13 +548,14 @@ Windows:UnloadAllFeatures()
 | `UnloadFeature(nome)` | Descarrega um arquivo ou uma pasta inteira. Retorna `true` se achou algo |
 | `UnloadAllFeatures()` | Descarrega todas |
 
-Como funciona:
+**Como funciona**
 
 1. Para cada feature carregada que bate com o nome, a lib procura uma função global chamada `NOMEUnload`, onde `NOME` é a última parte do caminho. Para `meianoite/Farm` a função é `FarmUnload`.
 2. Se a função existir, ela é chamada. Erro dentro dela vira notificação.
 3. A feature sai da lista de carregadas e pode ser carregada de novo.
 
-O descarregamento **não remove as tabs da janela**. Ele chama a sua função de limpeza e libera o nome para recarregar. Por isso, toda feature com loop, conexão ou ESP deve definir a função de limpeza:
+> [!IMPORTANT]
+> O descarregamento **não remove as tabs da janela**. Ele chama a sua função de limpeza e libera o nome para recarregar. Por isso, toda feature com loop, conexão ou ESP deve definir a função de limpeza.
 
 ```lua
 -- // Farm
@@ -525,11 +622,16 @@ end
 
 ## 12. Ordem de carregamento
 
-- Os downloads acontecem em paralelo, mas a execução segue a ordem do pedido.
-- `LoadFeatures` executa exatamente na ordem da lista.
-- Pasta inteira (`LoadFeature("pasta")`) executa em ordem alfabética do caminho.
-- As tabs aparecem na janela na ordem em que foram criadas. A primeira tab criada fica selecionada.
-- Se a ordem das tabs importa, use a lista, ou nomeie os arquivos para a ordem alfabética ficar certa (`1_Combate.luau`, `2_Visual.luau`).
+| Situação | Ordem |
+|----------|-------|
+| Downloads | Em paralelo |
+| Execução | Segue a ordem do pedido |
+| `LoadFeatures` | Exatamente a ordem da lista |
+| `LoadFeature("pasta")` | Ordem alfabética do caminho |
+| Tabs na janela | Na ordem em que foram criadas. A primeira tab criada fica selecionada |
+
+> [!TIP]
+> Se a ordem das tabs importa, use a lista, ou nomeie os arquivos para a ordem alfabética ficar certa (`1_Combate.luau`, `2_Visual.luau`).
 
 ---
 
@@ -543,8 +645,6 @@ end
 | `Windows:IsFeatureLoaded(nome)` | `true` se o nome (caminho ou nome do arquivo) está carregado |
 | `Librarys:ListElements()` | Lista dos elements registrados |
 | `Librarys:LoadElements(force)` | Baixa os elements da pasta. Com `true`, baixa de novo os que já existem |
-
-Exemplo:
 
 ```lua
 if not Windows:IsFeatureLoaded("Visual") then
@@ -571,15 +671,16 @@ O formato é sempre `https://github.com/DONO/REPO/tree/BRANCH/PASTA`. Retorna `f
 
 | Campo | Conteúdo |
 |-------|----------|
-| `Librarys.FeaturesSource` | link original |
+| `Librarys.FeaturesSource` | Link original |
 | `Librarys.FeaturesRepo` | `dono/repo` |
-| `Librarys.FeaturesBranch` | branch |
-| `Librarys.FeaturesRoot` | pasta raiz |
-| `Librarys.FeaturesUrl` | base dos links raw |
-| `Librarys.FeaturesTreeApi` | link da API de índice |
-| `Librarys.ElementsSource` / `Librarys.ElementsUrl` | o mesmo, para elements |
+| `Librarys.FeaturesBranch` | Branch |
+| `Librarys.FeaturesRoot` | Pasta raiz |
+| `Librarys.FeaturesUrl` | Base dos links raw |
+| `Librarys.FeaturesTreeApi` | Link da API de índice |
+| `Librarys.ElementsSource` / `Librarys.ElementsUrl` | O mesmo, para elements |
 
-Só precisa trocar se mover as features para outro repositório, branch ou pasta.
+> [!NOTE]
+> Só precisa trocar se mover as features para outro repositório, branch ou pasta.
 
 ### 14.2 Ajustes de rede
 
@@ -601,7 +702,8 @@ Librarys.FeatureConfig.MaxParallel = 4
 Librarys.FeatureConfig.Retries = 2
 ```
 
-Erros `403` e `429` (limite de requisições) não são repetidos. Erro `404` é lembrado por `MissTtl` segundos.
+> [!NOTE]
+> Erros `403` e `429` (limite de requisições) não são repetidos. Erro `404` é lembrado por `MissTtl` segundos.
 
 ---
 
@@ -609,28 +711,59 @@ Erros `403` e `429` (limite de requisições) não são repetidos. Erro `404` é
 
 As notificações aparecem em inglês.
 
-| Notificação | Causa |
-|-------------|-------|
-| `Use Window:LoadFeature(...), not Librarys:LoadFeature(...)` | você chamou com `Librarys:` em vez da janela |
-| `LoadFeature needs a name or link` | passou vazio ou algo que não é texto |
-| `Feature not found: nome` | nenhum caminho existe no GitHub |
-| `Ambiguous name: nome. Use folder/file, e.g. pasta/nome` | o nome existe em mais de uma pasta |
-| `No features found in the folder` | `LoadAllFeatures` rodou e a pasta `Features/` não tem nenhum arquivo |
-| `GitHub index unavailable, using direct links` | a API do GitHub falhou, usando o plano B |
-| `GitHub index unavailable, cannot load all features` | `all` precisa do índice |
-| `Loaded N feature(s)` | tudo carregou |
-| `Loaded N, failed M: lista` | algumas falharam, com o motivo de cada uma (`not found`, `rate limited`, `HTTP 500`, `empty file`, `html page`) |
-| Título `Ecohub \| nome` com uma mensagem | erro de sintaxe ou erro ao rodar o arquivo |
+| Notificação | Causa | Como resolver |
+|-------------|-------|---------------|
+| `Use Window:LoadFeature(...), not Librarys:LoadFeature(...)` | Chamou com `Librarys:` em vez da janela | Troque por `Windows:` |
+| `LoadFeature needs a name or link` | Passou vazio ou algo que não é texto | Passe o nome ou o link como string |
+| `Feature not found: nome` | Nenhum caminho existe no GitHub | Confira nome, pasta e se o arquivo foi enviado |
+| `Ambiguous name: nome. Use folder/file, e.g. pasta/nome` | O nome existe em mais de uma pasta | Use `pasta/arquivo` |
+| `No features found in the folder` | `LoadAllFeatures` rodou e `Features/` está vazia | Adicione arquivos em `Features/` |
+| `GitHub index unavailable, using direct links` | A API do GitHub falhou, usando o plano B | Veja a [seção 6.2](#62-sem-índice-plano-b) |
+| `GitHub index unavailable, cannot load all features` | `all` precisa do índice | Espere alguns minutos ou carregue por `pasta/arquivo` |
+| `Loaded N feature(s)` | Tudo carregou | Nada a fazer |
+| `Loaded N, failed M: lista` | Algumas falharam, com o motivo de cada uma | Veja os motivos abaixo |
+| Título `Ecohub \| nome` com uma mensagem | Erro de sintaxe ou erro ao rodar o arquivo | Corrija o código da feature indicada |
 
-Dicas:
+**Motivos de falha em `Loaded N, failed M`**
+
+| Motivo | Significado |
+|--------|-------------|
+| `not found` | O arquivo não existe no caminho |
+| `rate limited` | Limite da API do GitHub. Espere alguns minutos ou carregue por `pasta/arquivo` |
+| `HTTP 500` | Erro no servidor |
+| `empty file` | O arquivo está vazio |
+| `html page` | O link devolveu uma página HTML em vez de código |
+
+**Dicas**
 
 - O GitHub pode demorar alguns minutos para atualizar o arquivo depois de um commit (cache do `raw`).
 - Com o índice ativo, maiúscula e minúscula não importam. No plano B e nos links diretos, `combate.luau` e `Combate.luau` são arquivos diferentes.
-- `rate limited` significa limite da API do GitHub. Espere alguns minutos ou carregue por `pasta/arquivo`.
 
 ---
 
-## 16. Referência rápida
+## 16. Boas práticas e checklist
+
+**Checklist de uma feature nova**
+
+- [ ] O arquivo está em `Features/` (ou em uma pasta do jogo) com extensão `.luau` ou `.lua`.
+- [ ] Usa `Window` direto, sem criar janela nem `loadstring` da lib.
+- [ ] Cria a tab com `tab`, `section` e `icon`.
+- [ ] Se tem loop, conexão ou ESP, define `NOMEUnload` com a limpeza.
+- [ ] Se usa um element customizado, quem o registra é carregado antes.
+- [ ] Nome único, ou chamada por `pasta/arquivo` para evitar `Ambiguous name`.
+- [ ] Carregado pela janela (`Windows:`), nunca pela lib (`Librarys:`).
+
+**Boas práticas**
+
+- Mantenha o script principal pequeno e deixe a lógica nas features.
+- Use uma pasta por jogo e escolha pelo `PlaceId`.
+- Prefira `LoadFeatures` com lista quando a ordem das tabs importa.
+- Use `{ Reload = true }` para testar mudanças sem reiniciar a janela.
+- Depois de um commit, espere alguns minutos antes de recarregar, por causa do cache do `raw`.
+
+---
+
+## 17. Referência rápida
 
 ```lua
 -- // Carregar
