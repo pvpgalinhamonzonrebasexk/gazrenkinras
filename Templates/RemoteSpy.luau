@@ -246,7 +246,7 @@ local notify
 
 do
 	local Notify
-	local Notifications = Utils:Load("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/monzonrebasexk/refs/heads/main/Library/Notifications.luau")
+	local Notifications = Utils:Load("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.luau")
 	if Notifications then
 		pcall(function()
 			Notify = Notifications.Notify

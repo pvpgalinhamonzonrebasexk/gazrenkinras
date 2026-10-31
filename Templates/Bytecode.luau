@@ -1,5 +1,5 @@
 --bytecode
-local NOTIF_URL = "https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/monzonrebasexk/refs/heads/main/Library/Notifications.luau"
+local NOTIF_URL = "https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.luau"
 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
