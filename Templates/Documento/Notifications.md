@@ -50,28 +50,23 @@ Fundo, borda, brilho, ícone e barra de progresso usam <code>UIGradient</code>.<
 <br>
 <h2 id="inicio-rapido">Início rápido</h2>
  
-```lua
--- // Notifications
+<pre lang="lua">-- // Notifications
 local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.lua"))()
 local Notify = Notifications.Notify
- 
 Notify("Hello world", 3)
- 
 Notify("Title", "Description", 5, "Warning")
- 
 local loading = Notifications.Loading("Loading", "Fetching data...")
 task.wait(2)
 loading.Success("Done", "Data loaded", 3)
-```
+</pre>
  
 <br>
 <h2 id="carregar">1. Carregar</h2>
  
-```lua
--- // Notifications
+<pre lang="lua">-- // Notifications
 local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.lua"))()
 local Notify = Notifications.Notify
-```
+</pre>
  
 <table>
 <tr><th align="left">Item</th><th align="left">Valor</th></tr>
@@ -93,23 +88,21 @@ local Notify = Notifications.Notify
  
 <h4>Tabela completa</h4>
  
-```lua
-Notify({
+<pre lang="lua">Notify({
     Title = "Early | Wave 1",
     Description = "This description is super long and should cause an overlap in wrapping",
     Duration = 5,
 })
-```
+</pre>
  
 <h4>Formas curtas</h4>
  
-```lua
-Notify("Description only")
+<pre lang="lua">Notify("Description only")
 Notify("Description only", 3)
 Notify("Description only", 3, "Success")
 Notify("Title", "Description", 5, "Warning")
 Notifications("Description only")
-```
+</pre>
  
 <table>
 <tr><th align="left">Forma</th><th align="left">Argumentos</th></tr>
@@ -126,8 +119,7 @@ Notifications("Description only")
 <br>
 <h2 id="propriedades">3. Propriedades</h2>
  
-```lua
-Notify({
+<pre lang="lua">Notify({
     Title = "Title",
     Description = "Description",
     Duration = 5,
@@ -146,7 +138,7 @@ Notify({
     Sound = "rbxassetid://123",
     Volume = 0.5,
 })
-```
+</pre>
  
 <table>
 <tr><th align="left">Propriedade</th><th align="left">Tipo</th><th align="left">Descrição</th></tr>
@@ -169,53 +161,48 @@ Notify({
 </table>
 <h4>Fixa</h4>
  
-```lua
-Notify({
+<pre lang="lua">Notify({
     Title = "Persistent",
     Duration = 0,
 })
-```
+</pre>
  
 <h4>Sem nome e sem ícone</h4>
  
-```lua
-Notify({
+<pre lang="lua">Notify({
     Title = "No name",
     Name = false,
     Icon = false,
 })
-```
+</pre>
  
 <h4>Com thumbnail</h4>
  
-```lua
-Notify({
+<pre lang="lua">Notify({
     Title = "Thumbnail",
     Thumbnail = "rbxassetid://123",
 })
-```
+</pre>
  
 <h4>Rich text</h4>
  
-```lua
-Notify({
+<pre lang="lua">Notify({
     Title = "Rich",
-    Description = "<b>bold</b> <i>italic</i>",
+    Description = "&lt;b&gt;bold&lt;/b&gt; &lt;i&gt;italic&lt;/i&gt;",
     RichText = true,
 })
-```
+</pre>
  
 <h4>Clique com callback</h4>
  
-```lua
-Notify({
+<pre lang="lua">Notify({
     Title = "Click",
     Callback = function()
         print("clicked")
     end,
     ClickToClose = false,
 })
-```
+</pre>
  
 <br>
 <h2 id="tipos">4. Tipos</h2>
@@ -229,26 +216,23 @@ Notify({
 </table>
 <h4>Atalhos</h4>
  
-```lua
-Notifications.Info("Title", "Description", 4)
+<pre lang="lua">Notifications.Info("Title", "Description", 4)
 Notifications.Success("Title", "Description", 4)
 Notifications.Warning("Title", "Description", 4)
 Notifications.Error("Title", "Description", 4)
-```
+</pre>
  
 <h4>Por propriedade</h4>
  
-```lua
-Notify({
+<pre lang="lua">Notify({
     Title = "Success",
     Type = "Success",
 })
- 
 Notify({
     Title = "Alias",
     Type = "ok",
 })
-```
+</pre>
  
 <blockquote>
 <b>Nota</b><br>
@@ -256,15 +240,13 @@ A busca do tipo não diferencia maiúscula de minúscula. Um tipo desconhecido p
 </blockquote>
 <h4>Tipo customizado</h4>
  
-```lua
-Notifications.Types.Custom = Color3.fromRGB(255, 120, 0)
+<pre lang="lua">Notifications.Types.Custom = Color3.fromRGB(255, 120, 0)
 Notifications.SetIcon("Custom", "lucide-star")
- 
 Notify({
     Title = "Custom",
     Type = "Custom",
 })
-```
+</pre>
  
 <br>
 <h2 id="icones">5. Ícones</h2>
@@ -272,29 +254,26 @@ Notify({
 <p>Cada tipo tem um ícone dentro de um quadrado com gradiente. Sem tipo, a notificação usa o ícone padrão.</p>
 <h4>Ícone pelo nome</h4>
  
-```lua
-Notify({
+<pre lang="lua">Notify({
     Title = "Heart",
     Description = "Icon by name",
     Icon = "heart",
 })
-```
+</pre>
  
 <h4>Ícone por id</h4>
  
-```lua
-Notify({
+<pre lang="lua">Notify({
     Title = "Asset",
     Icon = "rbxassetid://10709790644",
 })
-```
+</pre>
  
 <h4>Trocar o ícone de um tipo</h4>
  
-```lua
-Notifications.SetIcon("Success", "lucide-check-circle")
+<pre lang="lua">Notifications.SetIcon("Success", "lucide-check-circle")
 Notifications.SetIcon("Error", "lucide-x-circle")
-```
+</pre>
  
 <table>
 <tr><th align="left">Valor</th><th align="left">Resultado</th></tr>
@@ -311,31 +290,26 @@ O <code>Icons.lua</code> só é baixado na primeira vez que um nome é usado. Os
 <h2 id="loading">6. Loading</h2>
  
 <p>Notificação com spinner girando. Ela fica fixa até você finalizar ou fechar.</p>
-```lua
-local loading = Notifications.Loading("Loading", "Fetching data...")
- 
+<pre lang="lua">local loading = Notifications.Loading("Loading", "Fetching data...")
 local loading = Notify({
     Title = "Loading",
     Description = "Fetching data...",
     Loading = true,
 })
-```
+</pre>
  
 <h3>Finalizar</h3>
  
 <p>Ao finalizar, o spinner some e o ícone do tipo aparece com uma animação. A notificação fecha depois da duração.</p>
-```lua
-loading.Success("Done", "Data loaded", 3)
- 
+<pre lang="lua">loading.Success("Done", "Data loaded", 3)
 loading.Error("Failed", "Could not load", 4)
- 
 loading.Finish({
     Title = "Done",
     Description = "Data loaded",
     Type = "Success",
     Duration = 3,
 })
-```
+</pre>
  
 <blockquote>
 <b>Nota</b><br>
@@ -343,9 +317,7 @@ Se um argumento for <code>nil</code>, o texto anterior é mantido. Exemplo: <cod
 </blockquote>
 <h3>Progresso</h3>
  
-```lua
-local loading = Notifications.Loading("Downloading", "0%")
- 
+<pre lang="lua">local loading = Notifications.Loading("Downloading", "0%")
 for step = 1, 10 do
     task.wait(0.3)
     loading.Progress(step / 10)
@@ -353,23 +325,19 @@ for step = 1, 10 do
         Description = (step * 10) .. "%",
     })
 end
- 
 loading.Success("Done", "100%", 2)
-```
+</pre>
  
 <h3>Finalizar pelo Id</h3>
  
 <p>Chamar <code>Notify</code> com o mesmo <code>Id</code> de um loading finaliza ele, sem precisar guardar o handle.</p>
-```lua
-Notify({
+<pre lang="lua">Notify({
     Id = "load",
     Title = "Loading",
     Description = "Please wait",
     Loading = true,
 })
- 
 task.wait(2)
- 
 Notify({
     Id = "load",
     Title = "Done",
@@ -377,32 +345,28 @@ Notify({
     Type = "Success",
     Duration = 3,
 })
-```
+</pre>
  
 <br>
 <h2 id="handle">7. Handle</h2>
  
 <p><code>Notify</code> retorna um handle para controlar a notificação depois de criada.</p>
-```lua
-local handle = Notify({
+<pre lang="lua">local handle = Notify({
     Title = "Downloading",
     Description = "0%",
     Duration = 0,
 })
- 
 handle.Update({
     Description = "50%",
 })
- 
 handle.Update({
     Title = "Done",
     Description = "100%",
     Type = "Success",
     Duration = 2,
 })
- 
 handle.Close()
-```
+</pre>
  
 <table>
 <tr><th align="left">Membro</th><th align="left">Descrição</th></tr>
@@ -423,21 +387,18 @@ handle.Close()
 <h2 id="id">8. Id</h2>
  
 <p>Notificações com o mesmo <code>Id</code> são atualizadas em vez de empilhar.</p>
-```lua
-Notify({
+<pre lang="lua">Notify({
     Id = "download",
     Title = "Downloading",
     Description = "10%",
     Duration = 5,
 })
- 
 Notify({
     Id = "download",
     Title = "Downloading",
     Description = "60%",
     Duration = 5,
 })
- 
 Notify({
     Id = "download",
     Title = "Done",
@@ -445,36 +406,31 @@ Notify({
     Type = "Success",
     Duration = 2,
 })
-```
+</pre>
  
 <br>
 <h2 id="setters">9. Setters</h2>
  
 <p>Mudam o comportamento padrão de todas as notificações seguintes.</p>
-```lua
-Notifications.SetName("Hub")
+<pre lang="lua">Notifications.SetName("Hub")
 Notifications.SetName(false)
 Notifications.SetThumbnail("rbxassetid://123")
 Notifications.SetIcon("Success", "lucide-check-circle")
- 
 Notifications.SetSide("Left")
 Notifications.SetPosition("TopRight")
 Notifications.SetWidth(260)
- 
 Notifications.SetDuration(4)
 Notifications.SetGroup(true)
 Notifications.SetMaxVisible(4)
 Notifications.SetClickToClose(false)
- 
 Notifications.SetSound("rbxassetid://123", 0.5)
 Notifications.SetSound(false)
- 
 Notifications.SetTheme({
     Panel = Color3.fromRGB(16, 16, 18),
     PanelTop = Color3.fromRGB(30, 30, 34),
 })
 Notifications.SetFont(Enum.Font.Gotham)
-```
+</pre>
  
 <table>
 <tr><th align="left">Setter</th><th align="left">Descrição</th></tr>
@@ -495,11 +451,9 @@ Notifications.SetFont(Enum.Font.Gotham)
 <br>
 <h2 id="controle">10. Controle</h2>
  
-```lua
-Notifications.Clear()
- 
+<pre lang="lua">Notifications.Clear()
 Notifications.Destroy()
-```
+</pre>
  
 <table>
 <tr><th align="left">Função</th><th align="left">Descrição</th></tr>
@@ -512,8 +466,7 @@ Notifications.Destroy()
 <p>Todas as opções ficam em <code>Notifications.Config</code>. Os valores abaixo são exemplos.</p>
 <h4>Geral</h4>
  
-```lua
-Notifications.Config.Name = false
+<pre lang="lua">Notifications.Config.Name = false
 Notifications.Config.GuiName = "Notifications"
 Notifications.Config.Thumbnail = "rbxassetid://0"
 Notifications.Config.Side = "Left"
@@ -525,47 +478,43 @@ Notifications.Config.MaxVisible = 6
 Notifications.Config.DefaultDuration = 5
 Notifications.Config.ThumbnailSize = 44
 Notifications.Config.RingSize = 20
-```
+</pre>
  
 <h4>Visual</h4>
  
-```lua
-Notifications.Config.ShowIcon = true
+<pre lang="lua">Notifications.Config.ShowIcon = true
 Notifications.Config.Glow = true
 Notifications.Config.IconBox = 32
 Notifications.Config.IconSize = 18
 Notifications.Config.Radius = 10
-```
+</pre>
  
 <h4>Comportamento</h4>
  
-```lua
-Notifications.Config.ShowProgress = true
+<pre lang="lua">Notifications.Config.ShowProgress = true
 Notifications.Config.ShowType = true
 Notifications.Config.HoverPause = true
 Notifications.Config.Group = false
 Notifications.Config.ClickToClose = true
 Notifications.Config.Sound = false
 Notifications.Config.SoundVolume = 0.5
-```
+</pre>
  
 <h4>Texto</h4>
  
-```lua
-Notifications.Config.TitleSize = 14
+<pre lang="lua">Notifications.Config.TitleSize = 14
 Notifications.Config.DescriptionSize = 13
 Notifications.Config.NameSize = 11
 Notifications.Config.TitleFont = Enum.Font.GothamSemibold
 Notifications.Config.DescriptionFont = Enum.Font.Gotham
 Notifications.Config.NameFont = Enum.Font.GothamBold
-```
+</pre>
  
 <h4>Animações</h4>
  
-```lua
-Notifications.Config.TweenIn = TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+<pre lang="lua">Notifications.Config.TweenIn = TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 Notifications.Config.TweenOut = TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
-```
+</pre>
  
 <h4>Referência das chaves</h4>
  
@@ -602,13 +551,12 @@ Notifications.Config.TweenOut = TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.
 <h2 id="tema">12. Tema</h2>
  
 <p>As cores ficam em <code>Notifications.Theme</code>. Mude com <code>SetTheme</code> ou direto na tabela. Vale para as próximas notificações.</p>
-```lua
-Notifications.SetTheme({
+<pre lang="lua">Notifications.SetTheme({
     Panel = Color3.fromRGB(16, 16, 18),
     PanelTop = Color3.fromRGB(30, 30, 34),
     Accent = Color3.fromRGB(130, 110, 255),
 })
-```
+</pre>
  
 <table>
 <tr><th align="left">Chave</th><th align="left">Descrição</th></tr>
@@ -626,13 +574,12 @@ Notifications.SetTheme({
 <br>
 <h2 id="utils">13. Utils</h2>
  
-```lua
-Notifications.NormalizeImage("rbxassetid://123")
+<pre lang="lua">Notifications.NormalizeImage("rbxassetid://123")
 Notifications.ResolveIcon("heart")
 Notifications.ResolveType("warn")
 Notifications.GetParents()
 Notifications.Protect(gui)
-```
+</pre>
  
 <table>
 <tr><th align="left">Função</th><th align="left">Descrição</th></tr>
@@ -646,25 +593,18 @@ Notifications.Protect(gui)
 <br>
 <h2 id="exemplo-completo">14. Exemplo completo</h2>
  
-```lua
--- // Notifications
+<pre lang="lua">-- // Notifications
 local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.lua"))()
 local Notify = Notifications.Notify
- 
 task.wait(1)
- 
 Notifications.Info("Info", "Something happened", 4)
 task.wait(1)
- 
 Notifications.Success("Success", "Everything worked", 4)
 task.wait(1)
- 
 Notifications.Warning("Warning", "Be careful", 4)
 task.wait(1)
- 
 Notifications.Error("Error", "Something failed", 4)
 task.wait(1)
- 
 Notify({
     Title = "Custom icon",
     Description = "Icon by name",
@@ -672,9 +612,7 @@ Notify({
     Duration = 4,
 })
 task.wait(1)
- 
 local loading = Notifications.Loading("Downloading", "0%")
- 
 for step = 1, 10 do
     task.wait(0.3)
     loading.Progress(step / 10)
@@ -682,7 +620,5 @@ for step = 1, 10 do
         Description = (step * 10) .. "%",
     })
 end
- 
 loading.Success("Done", "100%", 3)
-```
- 
+</pre>
