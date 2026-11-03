@@ -8,8 +8,15 @@ local Services = {
 local White = Color3.new(1, 1, 1)
 local Black = Color3.new(0, 0, 0)
 
+local IconsUrl = "https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Assets/Icons.lua"
+local IconAssets = nil
+
+local IconFill = 0.8
+local IconLine = 0.55
+
 local HoverInfo = TweenInfo.new(0.15)
-local RingInfo = TweenInfo.new(0.25)
+local FadeInfo = TweenInfo.new(0.25)
+local PopInfo = TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local ProgressInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local SpinInfo = TweenInfo.new(0.9, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1)
 local SpinFade = NumberSequence.new({
@@ -17,19 +24,24 @@ local SpinFade = NumberSequence.new({
     NumberSequenceKeypoint.new(0.75, 1),
     NumberSequenceKeypoint.new(1, 1),
 })
+local GlowFade = NumberSequence.new({
+    NumberSequenceKeypoint.new(0, 0.76),
+    NumberSequenceKeypoint.new(0.55, 0.95),
+    NumberSequenceKeypoint.new(1, 1),
+})
 
 local Notifications = {
     Theme = {
-        Panel = Color3.fromRGB(16, 16, 18),
-        PanelTop = Color3.fromRGB(30, 30, 34),
+        Panel = Color3.fromRGB(14, 14, 17),
+        PanelTop = Color3.fromRGB(32, 32, 38),
         HoverFill = White,
         TextPrimary = White,
-        TextSecondary = Color3.fromRGB(125, 125, 135),
+        TextSecondary = Color3.fromRGB(150, 150, 162),
         TextHeader = Color3.fromRGB(130, 130, 140),
         TitleText = White,
-        Line = Color3.fromRGB(38, 38, 42),
+        Line = Color3.fromRGB(40, 40, 46),
         Track = Color3.fromRGB(42, 42, 48),
-        Accent = White,
+        Accent = Color3.fromRGB(140, 120, 255),
     },
     Config = {
         Name = false,
@@ -44,6 +56,11 @@ local Notifications = {
         DefaultDuration = 5,
         ThumbnailSize = 44,
         RingSize = 20,
+        IconBox = 32,
+        IconSize = 18,
+        Radius = 10,
+        ShowIcon = true,
+        Glow = true,
         ShowProgress = false,
         ShowType = true,
         HoverPause = true,
@@ -65,6 +82,13 @@ local Notifications = {
         Success = Color3.fromRGB(80, 200, 120),
         Warning = Color3.fromRGB(255, 190, 70),
         Error = Color3.fromRGB(255, 85, 85),
+    },
+    Icons = {
+        Info = "rbxassetid://10723415903",
+        Success = "rbxassetid://10709790644",
+        Warning = "rbxassetid://10709753149",
+        Error = "rbxassetid://10747384394",
+        Default = "rbxassetid://10709775704",
     },
     State = {
         Gui = nil,
@@ -186,6 +210,45 @@ local function StopSpin(item)
     end
 end
 
+local function HideRing(item)
+    local ring = item.Ring
+    if not ring then
+        return
+    end
+    local stroke = item.RingStroke
+    item.Ring = nil
+    item.RingStroke = nil
+    if stroke and stroke.Parent then
+        local tween = Play(stroke, FadeInfo, { Transparency = 1 })
+        tween.Completed:Connect(function()
+            ring:Destroy()
+        end)
+    else
+        ring:Destroy()
+    end
+end
+
+local function ShowIcon(item)
+    if not item.IconFrame or item.IconShown then
+        return
+    end
+    item.IconShown = true
+    Play(item.IconFrame, FadeInfo, { BackgroundTransparency = IconFill })
+    Play(item.IconStroke, FadeInfo, { Transparency = IconLine })
+    Play(item.IconImage, FadeInfo, { ImageTransparency = 0 })
+    Play(item.IconScale, PopInfo, { Scale = 1 })
+end
+
+local function ApplyIcon(item, source)
+    if not item.IconImage or source == nil then
+        return
+    end
+    local image = Notifications.ResolveIcon(source)
+    if image then
+        item.IconImage.Image = image
+    end
+end
+
 local function Remove(item)
     if not item or item.Closed then
         return
@@ -270,15 +333,20 @@ end
 local function Tint(item, color)
     local Theme = Notifications.Theme
     item.Accent = color
-    item.StrokeGradient.Color = ColorSequence.new(color:Lerp(Theme.Line, 0.55), Theme.Line)
-    item.BarGradient.Color = ColorSequence.new(color, color:Lerp(Black, 0.5))
+    item.StrokeGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, color),
+        ColorSequenceKeypoint.new(0.6, color:Lerp(Theme.Line, 0.75)),
+        ColorSequenceKeypoint.new(1, Theme.Line),
+    })
+    item.Glow.BackgroundColor3 = color
     item.FillGradient.Color = ColorSequence.new(color:Lerp(White, 0.3), color)
+    if item.IconGradient then
+        item.IconGradient.Color = ColorSequence.new(color:Lerp(White, 0.25), color:Lerp(Black, 0.35))
+        item.IconStroke.Color = color
+        item.IconImage.ImageColor3 = color:Lerp(White, 0.35)
+    end
     if item.SpinGradient then
         item.SpinGradient.Color = ColorSequence.new(color)
-    end
-    if item.Ring and not item.Spin then
-        Play(item.RingStroke, RingInfo, { Color = color })
-        Play(item.Ring, RingInfo, { BackgroundColor3 = color, BackgroundTransparency = 0.85 })
     end
 end
 
@@ -310,6 +378,14 @@ local function Update(item, Properties)
         item.NameLabel.Visible = true
     end
 
+    local iconSource = Properties.Icon
+    if iconSource == nil and typeColor then
+        iconSource = Notifications.Icons[typeName] or Notifications.Icons.Default
+    end
+    if iconSource ~= false then
+        ApplyIcon(item, iconSource)
+    end
+
     local seconds = tonumber(Properties.Duration)
     if seconds then
         if seconds > 0 and seconds ~= math.huge then
@@ -333,9 +409,14 @@ local function Finish(item, Properties)
     if Properties.Duration == nil then
         Properties.Duration = Notifications.Config.DefaultDuration
     end
+    local wasLoading = item.Spin ~= nil
+    if wasLoading and Properties.Type == nil and Properties.Color == nil then
+        Properties.Type = "Success"
+    end
     StopSpin(item)
+    HideRing(item)
     Update(item, Properties)
-    Tint(item, item.Accent)
+    ShowIcon(item)
 end
 
 local function MakeHandle(item)
@@ -403,9 +484,12 @@ local function CreateCard(Properties, title, description, persistent)
 
     local richText = Properties.RichText ~= false
     local isTop = Config.Vertical == "Top"
-    local leftSlot = thumb and Config.ThumbnailSize or (loading and Config.RingSize or 0)
-    local textX = leftSlot > 0 and (18 + leftSlot + 10) or 18
-    local minHeight = thumb and (Config.ThumbnailSize + 24) or 48
+    local radius = UDim.new(0, Config.Radius)
+    local hasIcon = thumb == nil and Properties.Icon ~= false and (loading or Config.ShowIcon)
+    local leftSlot = thumb and Config.ThumbnailSize or ((loading or hasIcon) and Config.IconBox or 0)
+    local textX = leftSlot > 0 and (18 + leftSlot + 12) or 18
+    local minHeight = math.max(48, leftSlot + 24)
+    local slotCenter = 18 + Config.IconBox / 2
 
     local Card = New("Frame", {
         Name = "Notification",
@@ -418,7 +502,7 @@ local function CreateCard(Properties, title, description, persistent)
         BorderSizePixel = 0,
     }, {
         New("UISizeConstraint", { MinSize = Vector2.new(0, minHeight) }),
-        New("UICorner", { CornerRadius = UDim.new(0, 8) }),
+        New("UICorner", { CornerRadius = radius }),
         New("UIGradient", {
             Color = ColorSequence.new(Theme.PanelTop, Theme.Panel),
             Rotation = 90,
@@ -433,6 +517,18 @@ local function CreateCard(Properties, title, description, persistent)
     })
     local StrokeGradient = New("UIGradient", { Parent = Stroke })
 
+    local Glow = New("Frame", {
+        Name = "Glow",
+        BackgroundColor3 = White,
+        BorderSizePixel = 0,
+        Size = UDim2.fromScale(1, 1),
+        Visible = Config.Glow,
+        Parent = Card,
+    }, {
+        New("UICorner", { CornerRadius = radius }),
+        New("UIGradient", { Transparency = GlowFade }),
+    })
+
     local Hover = New("Frame", {
         Name = "Hover",
         BackgroundColor3 = Theme.HoverFill,
@@ -440,40 +536,30 @@ local function CreateCard(Properties, title, description, persistent)
         BorderSizePixel = 0,
         Size = UDim2.fromScale(1, 1),
         Parent = Card,
-    }, { New("UICorner", { CornerRadius = UDim.new(0, 8) }) })
-
-    local Bar = New("Frame", {
-        Name = "Accent",
-        AnchorPoint = Vector2.new(0, 0.5),
-        BackgroundColor3 = White,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, 6, 0.5, 0),
-        Size = UDim2.new(0, 3, 1, -20),
-        Parent = Card,
-    }, { New("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-    local BarGradient = New("UIGradient", { Rotation = 90, Parent = Bar })
+    }, { New("UICorner", { CornerRadius = radius }) })
 
     if thumb then
         New("ImageLabel", {
             Name = "Thumbnail",
+            AnchorPoint = Vector2.new(0, 0.5),
             BackgroundColor3 = Theme.Line,
             BorderSizePixel = 0,
             Image = thumb,
             ScaleType = Enum.ScaleType.Crop,
-            Position = UDim2.new(0, 18, 0, 12),
+            Position = UDim2.new(0, 18, 0.5, 0),
             Size = UDim2.new(0, Config.ThumbnailSize, 0, Config.ThumbnailSize),
             Parent = Card,
-        }, { New("UICorner", { CornerRadius = UDim.new(0, 6) }) })
+        }, { New("UICorner", { CornerRadius = UDim.new(0, 8) }) })
     end
 
     local Ring, RingStroke, Spin, SpinGradient, SpinTween
     if loading then
         Ring = New("Frame", {
             Name = "Ring",
-            BackgroundColor3 = accent,
+            AnchorPoint = Vector2.new(0.5, 0.5),
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
-            Position = UDim2.new(0, 18, 0, 14),
+            Position = UDim2.new(0, slotCenter, 0.5, 0),
             Size = UDim2.fromOffset(Config.RingSize, Config.RingSize),
             Parent = Card,
         }, { New("UICorner", { CornerRadius = UDim.new(1, 0) }) })
@@ -502,6 +588,50 @@ local function CreateCard(Properties, title, description, persistent)
             Parent = SpinStroke,
         })
         SpinTween = Play(SpinGradient, SpinInfo, { Rotation = 360 })
+    end
+
+    local IconFrame, IconScale, IconStroke, IconGradient, IconImage
+    if hasIcon then
+        local source = Properties.Icon
+        if source == nil and typeColor then
+            source = Notifications.Icons[Properties.Type] or Notifications.Icons.Default
+        end
+        if source == nil then
+            source = Notifications.Icons.Default
+        end
+        IconFrame = New("Frame", {
+            Name = "Icon",
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = White,
+            BackgroundTransparency = loading and 1 or IconFill,
+            BorderSizePixel = 0,
+            Position = UDim2.new(0, slotCenter, 0.5, 0),
+            Size = UDim2.fromOffset(Config.IconBox, Config.IconBox),
+            Parent = Card,
+        }, { New("UICorner", { CornerRadius = UDim.new(0, 9) }) })
+        IconScale = New("UIScale", {
+            Scale = loading and 0.4 or 1,
+            Parent = IconFrame,
+        })
+        IconStroke = New("UIStroke", {
+            Color = accent,
+            Thickness = 1,
+            Transparency = loading and 1 or IconLine,
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+            Parent = IconFrame,
+        })
+        IconGradient = New("UIGradient", { Rotation = 45, Parent = IconFrame })
+        IconImage = New("ImageLabel", {
+            Name = "Image",
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = Notifications.ResolveIcon(source) or "",
+            ImageTransparency = loading and 1 or 0,
+            ScaleType = Enum.ScaleType.Fit,
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(Config.IconSize, Config.IconSize),
+            Parent = IconFrame,
+        })
     end
 
     local Column = New("Frame", {
@@ -569,10 +699,16 @@ local function CreateCard(Properties, title, description, persistent)
         Spin = Spin,
         SpinGradient = SpinGradient,
         SpinTween = SpinTween,
+        IconFrame = IconFrame,
+        IconScale = IconScale,
+        IconStroke = IconStroke,
+        IconGradient = IconGradient,
+        IconImage = IconImage,
+        IconShown = hasIcon and not loading,
+        Glow = Glow,
         Track = Track,
         Fill = Fill,
         StrokeGradient = StrokeGradient,
-        BarGradient = BarGradient,
         FillGradient = FillGradient,
         NameLabel = NameLabel,
         TitleLabel = TitleLabel,
@@ -717,6 +853,20 @@ local function Build()
     ApplySide()
 end
 
+local function LoadIcons()
+    if IconAssets ~= nil then
+        return IconAssets
+    end
+    IconAssets = false
+    local ok, result = pcall(function()
+        return loadstring(game:HttpGet(IconsUrl))()
+    end)
+    if ok and type(result) == "table" then
+        IconAssets = result.assets or result
+    end
+    return IconAssets
+end
+
 function Notifications.NormalizeImage(id)
     if type(id) == "number" then
         if id <= 0 then
@@ -738,6 +888,31 @@ function Notifications.NormalizeImage(id)
         return id
     end
     return nil
+end
+
+function Notifications.ResolveIcon(value)
+    if value == nil or value == false then
+        return nil
+    end
+    if type(value) == "number" then
+        return Notifications.NormalizeImage(value)
+    end
+    if type(value) ~= "string" then
+        return nil
+    end
+    local direct = Notifications.Icons[value] or Notifications.Icons[Notifications.ResolveType(value) or ""]
+    if direct then
+        return direct
+    end
+    if value:match("^rbxassetid://") or value:match("^https?://") or value:match("^%d+$") then
+        return Notifications.NormalizeImage(value)
+    end
+    local key = value:lower():gsub("%s+", "-")
+    if not key:find("^lucide%-") then
+        key = "lucide-" .. key
+    end
+    local assets = LoadIcons()
+    return assets and assets[key] or nil
 end
 
 function Notifications.ResolveType(value)
@@ -847,6 +1022,7 @@ function Notifications.Notify(first, second, third, fourth)
                     Type = Properties.Type,
                     Color = Properties.Color,
                     Progress = Properties.Progress,
+                    Icon = Properties.Icon,
                 }
                 if existing.Spin and not loading then
                     Finish(existing, changes)
@@ -938,6 +1114,11 @@ end
 
 function Notifications.SetThumbnail(id)
     Notifications.Config.Thumbnail = id
+end
+
+function Notifications.SetIcon(typeName, icon)
+    local resolved = Notifications.ResolveType(typeName) or typeName
+    Notifications.Icons[resolved] = icon
 end
 
 function Notifications.SetFont(font)
