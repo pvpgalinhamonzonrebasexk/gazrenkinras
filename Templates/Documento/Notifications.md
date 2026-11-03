@@ -1,6 +1,6 @@
 # Notifications
 
-Módulo de notificações do Ecohub: toasts com título, descrição, thumbnail, tipos, progresso e controle por handle.
+Módulo de notificações do Ecohub: toasts com título, descrição, thumbnail, tipos, sistema de loading com progresso e controle por handle. O visual usa `UIGradient` no fundo, na borda, na barra de destaque e na barra de progresso.
 
 > [!TIP]
 > Com pressa? Vá direto para o [Início rápido](#início-rápido).
@@ -14,13 +14,15 @@ Módulo de notificações do Ecohub: toasts com título, descrição, thumbnail,
 2. [Notify](#2-notify)
 3. [Propriedades](#3-propriedades)
 4. [Tipos](#4-tipos)
-5. [Handle](#5-handle)
-6. [Id](#6-id)
-7. [Setters](#7-setters)
-8. [Controle](#8-controle)
-9. [Config](#9-config)
-10. [Utils](#10-utils)
-11. [Exemplo completo](#11-exemplo-completo)
+5. [Loading](#5-loading)
+6. [Handle](#6-handle)
+7. [Id](#7-id)
+8. [Setters](#8-setters)
+9. [Controle](#9-controle)
+10. [Config](#10-config)
+11. [Tema](#11-tema)
+12. [Utils](#12-utils)
+13. [Exemplo completo](#13-exemplo-completo)
 
 ---
 
@@ -28,7 +30,7 @@ Módulo de notificações do Ecohub: toasts com título, descrição, thumbnail,
 
 ```lua
 -- // Notifications
-local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.luau"))()
+local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.lua"))()
 local Notify = Notifications.Notify
 
 -- // Notificação simples
@@ -36,6 +38,11 @@ Notify("Hello world", 3)
 
 -- // Com título, descrição, duração e tipo
 Notify("Title", "Description", 5, "Warning")
+
+-- // Loading que vira sucesso
+local loading = Notifications.Loading("Loading", "Fetching data...")
+task.wait(2)
+loading.Success("Done", "Data loaded", 3)
 ```
 
 ---
@@ -44,14 +51,14 @@ Notify("Title", "Description", 5, "Warning")
 
 ```lua
 -- // Notifications
-local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.luau"))()
+local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.lua"))()
 local Notify = Notifications.Notify
 ```
 
 | Item | Valor |
 |------|-------|
 | Repositório | `pvpgalinhamonzonrebasexk/gazrenkinras` |
-| Arquivo | `Templates/Notification.luau` |
+| Arquivo | `Templates/Notification.lua` |
 | Branch | `main` |
 
 A library de UI já carrega este módulo sozinha e expõe em `Librarys.Notify` e `Librarys.Notifications`. Ela também aplica:
@@ -101,7 +108,7 @@ Notifications("Description only")
 | `Notifications(...)` | Igual a `Notify(...)` |
 
 > [!NOTE]
-> `Notify` retorna um [handle](#5-handle). Se a chamada não tiver título nem descrição, nada é mostrado e o retorno é `nil`.
+> `Notify` retorna um [handle](#6-handle). Se a chamada não tiver título nem descrição, nada é mostrado e o retorno é `nil`.
 
 ---
 
@@ -122,6 +129,8 @@ Notify({
     end,
     ClickToClose = true,
     Id = "download",
+    Loading = false,
+    Progress = 0.5,
     Sound = "rbxassetid://123",
     Volume = 0.5,
 })
@@ -140,6 +149,8 @@ Notify({
 | `Callback` | function | Chamado ao clicar |
 | `ClickToClose` | boolean | Fecha ao clicar |
 | `Id` | string | Identificador para atualizar a mesma notificação |
+| `Loading` | boolean | Mostra o spinner e deixa a notificação fixa. Veja [Loading](#5-loading) |
+| `Progress` | number | Progresso de `0` a `1`. Só vale em notificação fixa |
 | `Sound` | string | Som ao aparecer |
 | `Volume` | number | Volume do som |
 
@@ -249,7 +260,89 @@ Notify({
 
 ---
 
-## 5. Handle
+## 5. Loading
+
+Notificação com spinner girando. Ela fica fixa até você finalizar ou fechar.
+
+```lua
+-- // Atalho
+local loading = Notifications.Loading("Loading", "Fetching data...")
+
+-- // Pela tabela
+local loading = Notify({
+    Title = "Loading",
+    Description = "Fetching data...",
+    Loading = true,
+})
+```
+
+### Finalizar
+
+Ao finalizar, o spinner para, o círculo ganha a cor do tipo e a notificação some depois da duração.
+
+```lua
+-- // Sucesso
+loading.Success("Done", "Data loaded", 3)
+
+-- // Erro
+loading.Error("Failed", "Could not load", 4)
+
+-- // Tabela completa
+loading.Finish({
+    Title = "Done",
+    Description = "Data loaded",
+    Type = "Success",
+    Duration = 3,
+})
+```
+
+> [!NOTE]
+> Se um argumento for `nil`, o texto anterior é mantido. Exemplo: `loading.Success(nil, "Data loaded")` troca só a descrição.
+
+### Progresso
+
+A barra de progresso aparece quando você define um valor de `0` a `1`.
+
+```lua
+local loading = Notifications.Loading("Downloading", "0%")
+
+for step = 1, 10 do
+    task.wait(0.3)
+    loading.Progress(step / 10)
+    loading.Update({
+        Description = (step * 10) .. "%",
+    })
+end
+
+loading.Success("Done", "100%", 2)
+```
+
+### Finalizar pelo Id
+
+Chamar `Notify` com o mesmo `Id` de um loading finaliza ele, sem precisar guardar o handle.
+
+```lua
+Notify({
+    Id = "load",
+    Title = "Loading",
+    Description = "Please wait",
+    Loading = true,
+})
+
+task.wait(2)
+
+Notify({
+    Id = "load",
+    Title = "Done",
+    Description = "Ready",
+    Type = "Success",
+    Duration = 3,
+})
+```
+
+---
+
+## 6. Handle
 
 `Notify` retorna um handle para controlar a notificação depois de criada.
 
@@ -267,6 +360,7 @@ handle.Update({
 handle.Update({
     Title = "Done",
     Description = "100%",
+    Type = "Success",
     Duration = 2,
 })
 
@@ -275,17 +369,21 @@ handle.Close()
 
 | Membro | Descrição |
 |--------|-----------|
-| `handle.Update(opts)` | Atualiza `Title`, `Description` e `Duration` |
+| `handle.Update(opts)` | Atualiza `Title`, `Description`, `Duration`, `Type`, `Color` e `Progress` |
+| `handle.Progress(valor)` | Define o progresso de `0` a `1` |
+| `handle.Finish(opts)` | Para o spinner e aplica as opções. Sem `Duration`, usa a duração padrão |
+| `handle.Success(título, descrição, duração)` | `Finish` com o tipo `Success` |
+| `handle.Error(título, descrição, duração)` | `Finish` com o tipo `Error` |
 | `handle.Close()` | Fecha a notificação |
 | `handle.IsClosed()` | Retorna se já foi fechada |
 | `handle.Frame` | Frame da notificação |
 
 > [!NOTE]
-> `Update` aceita só `Title`, `Description` e `Duration`. Para mudar outras propriedades, crie a notificação de novo ou use o mesmo [`Id`](#6-id).
+> `Update` com `Duration = 0` deixa a notificação fixa, e com `Duration` maior que zero reinicia a contagem. Para mudar outras propriedades, crie a notificação de novo ou use o mesmo [`Id`](#7-id).
 
 ---
 
-## 6. Id
+## 7. Id
 
 Notificações com o mesmo `Id` são atualizadas em vez de empilhar.
 
@@ -308,13 +406,14 @@ Notify({
     Id = "download",
     Title = "Done",
     Description = "100%",
+    Type = "Success",
     Duration = 2,
 })
 ```
 
 ---
 
-## 7. Setters
+## 8. Setters
 
 Mudam o comportamento padrão de todas as notificações seguintes.
 
@@ -334,6 +433,9 @@ Notifications.SetPosition("TopRight")
 Notifications.SetPosition("BottomLeft")
 Notifications.SetPosition("BottomRight")
 
+-- // Tamanho
+Notifications.SetWidth(260)
+
 -- // Comportamento
 Notifications.SetDuration(4)
 Notifications.SetGroup(true)
@@ -346,7 +448,8 @@ Notifications.SetSound(false)
 
 -- // Visual
 Notifications.SetTheme({
-    Background = Color3.fromRGB(22, 22, 27),
+    Panel = Color3.fromRGB(16, 16, 18),
+    PanelTop = Color3.fromRGB(30, 30, 34),
 })
 Notifications.SetFont(Enum.Font.Gotham)
 ```
@@ -357,17 +460,18 @@ Notifications.SetFont(Enum.Font.Gotham)
 | `SetThumbnail(imagem)` | Thumbnail padrão |
 | `SetSide(lado)` | `Left` ou `Right` |
 | `SetPosition(canto)` | `TopLeft`, `TopRight`, `BottomLeft`, `BottomRight` |
+| `SetWidth(largura)` | Largura das notificações |
 | `SetDuration(segundos)` | Duração padrão |
 | `SetGroup(boolean)` | Agrupa notificações iguais |
 | `SetMaxVisible(numero)` | Máximo de notificações na tela |
 | `SetSound(som, volume)` | Som padrão. `false` desativa |
 | `SetClickToClose(boolean)` | Fechar ao clicar |
-| `SetTheme(tabela)` | Sobrescreve cores da tabela `Notifications.Theme` |
+| `SetTheme(tabela)` | Sobrescreve cores da tabela `Notifications.Theme`. Veja [Tema](#11-tema) |
 | `SetFont(fonte)` | Define a fonte de título, descrição e nome |
 
 ---
 
-## 8. Controle
+## 9. Controle
 
 ```lua
 -- // Fecha todas
@@ -379,7 +483,7 @@ Notifications.Destroy()
 
 ---
 
-## 9. Config
+## 10. Config
 
 Todas as opções ficam em `Notifications.Config`. Os valores abaixo são exemplos.
 
@@ -397,12 +501,14 @@ Notifications.Config.Padding = 8
 Notifications.Config.MaxVisible = 6
 Notifications.Config.DefaultDuration = 5
 Notifications.Config.ThumbnailSize = 44
+Notifications.Config.RingSize = 20
 ```
 
 ### Comportamento
 
 ```lua
 Notifications.Config.ShowProgress = true
+Notifications.Config.ShowType = true
 Notifications.Config.HoverPause = true
 Notifications.Config.Group = false
 Notifications.Config.ClickToClose = true
@@ -419,16 +525,6 @@ Notifications.Config.NameSize = 11
 Notifications.Config.TitleFont = Enum.Font.GothamSemibold
 Notifications.Config.DescriptionFont = Enum.Font.Gotham
 Notifications.Config.NameFont = Enum.Font.GothamBold
-```
-
-### Cores
-
-```lua
-Notifications.Config.Background = Color3.fromRGB(22, 22, 27)
-Notifications.Config.Stroke = Color3.fromRGB(55, 55, 66)
-Notifications.Config.Accent = Color3.fromRGB(130, 110, 255)
-Notifications.Config.TitleColor = Color3.fromRGB(255, 255, 255)
-Notifications.Config.DescriptionColor = Color3.fromRGB(185, 185, 195)
 ```
 
 ### Animações
@@ -453,20 +549,47 @@ Notifications.Config.TweenOut = TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.
 | `MaxVisible` | Máximo na tela |
 | `DefaultDuration` | Duração padrão |
 | `ThumbnailSize` | Tamanho da thumbnail |
-| `ShowProgress` | Barra de tempo |
+| `RingSize` | Tamanho do spinner do loading |
+| `ShowProgress` | Barra de tempo visível |
+| `ShowType` | Mostra o tipo em maiúsculas acima do título |
 | `HoverPause` | Pausa a contagem com o mouse em cima |
 | `Group` | Agrupa notificações iguais |
 | `ClickToClose` | Fecha ao clicar |
 | `Sound` / `SoundVolume` | Som e volume |
 | `TitleSize` / `DescriptionSize` / `NameSize` | Tamanhos de texto |
 | `TitleFont` / `DescriptionFont` / `NameFont` | Fontes |
-| `Background` / `Stroke` / `Accent` | Cores do card |
-| `TitleColor` / `DescriptionColor` | Cores do texto |
 | `TweenIn` / `TweenOut` | Animações de entrada e saída |
 
 ---
 
-## 10. Utils
+## 11. Tema
+
+As cores ficam em `Notifications.Theme`. Mude com `SetTheme` ou direto na tabela. Vale para as próximas notificações.
+
+```lua
+Notifications.SetTheme({
+    Panel = Color3.fromRGB(16, 16, 18),
+    PanelTop = Color3.fromRGB(30, 30, 34),
+    Accent = Color3.fromRGB(130, 110, 255),
+})
+```
+
+| Chave | Descrição |
+|-------|-----------|
+| `Panel` | Cor de baixo do gradiente do fundo |
+| `PanelTop` | Cor de cima do gradiente do fundo |
+| `Line` | Cor final do gradiente da borda |
+| `Track` | Fundo da barra de progresso e do círculo do loading |
+| `Accent` | Cor de destaque quando não há tipo nem `Color` |
+| `TitleText` | Cor do título |
+| `TextSecondary` | Cor da descrição |
+| `TextHeader` | Cor do nome do painel |
+| `TextPrimary` | Cor do contador do agrupamento |
+| `HoverFill` | Cor do brilho ao passar o mouse |
+
+---
+
+## 12. Utils
 
 ```lua
 Notifications.NormalizeImage("rbxassetid://123")
@@ -485,11 +608,11 @@ Notifications.Protect(gui)
 
 ---
 
-## 11. Exemplo completo
+## 13. Exemplo completo
 
 ```lua
 -- // Notifications
-local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.luau"))()
+local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.lua"))()
 local Notify = Notifications.Notify
 
 task.wait(1)
@@ -503,27 +626,25 @@ Notify({
 
 task.wait(1)
 
--- // Duração 10
-Notify({
-    Title = "Early | Wave 1",
-    Description = "This description is super long and should cause an overlap in wrapping",
-    Duration = 10,
-})
-
-task.wait(1)
-
--- // Duração 1
-Notify({
-    Title = "Early | Wave 1",
-    Description = "This description is super long and should cause an overlap in wrapping",
-    Duration = 1,
-})
-
-task.wait(1)
-
 -- // Sem título
 Notify({
     Description = "This description is super long and should cause an overlap in wrapping",
     Duration = 3,
 })
+
+task.wait(1)
+
+-- // Loading com progresso
+local loading = Notifications.Loading("Downloading", "0%")
+
+for step = 1, 10 do
+    task.wait(0.3)
+    loading.Progress(step / 10)
+    loading.Update({
+        Description = (step * 10) .. "%",
+    })
+end
+
+-- // Finaliza com sucesso
+loading.Success("Done", "100%", 3)
 ```

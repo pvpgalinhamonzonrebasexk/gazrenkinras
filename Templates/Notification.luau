@@ -1,19 +1,35 @@
+-- // Notification
 local Services = {
     Tween = game:GetService("TweenService"),
     Run = game:GetService("RunService"),
     Players = game:GetService("Players"),
 }
 
+local White = Color3.new(1, 1, 1)
+local Black = Color3.new(0, 0, 0)
+
+local HoverInfo = TweenInfo.new(0.15)
+local RingInfo = TweenInfo.new(0.25)
+local ProgressInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local SpinInfo = TweenInfo.new(0.9, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1)
+local SpinFade = NumberSequence.new({
+    NumberSequenceKeypoint.new(0, 0),
+    NumberSequenceKeypoint.new(0.75, 1),
+    NumberSequenceKeypoint.new(1, 1),
+})
+
 local Notifications = {
     Theme = {
-        Panel = Color3.fromRGB(20, 20, 20),
-        HoverFill = Color3.fromRGB(255, 255, 255),
-        TextPrimary = Color3.fromRGB(255, 255, 255),
-        TextSecondary = Color3.fromRGB(105, 105, 115),
+        Panel = Color3.fromRGB(16, 16, 18),
+        PanelTop = Color3.fromRGB(30, 30, 34),
+        HoverFill = White,
+        TextPrimary = White,
+        TextSecondary = Color3.fromRGB(125, 125, 135),
         TextHeader = Color3.fromRGB(130, 130, 140),
-        TitleText = Color3.fromRGB(255, 255, 255),
-        Line = Color3.fromRGB(32, 32, 32),
-        Accent = Color3.fromRGB(255, 255, 255),
+        TitleText = White,
+        Line = Color3.fromRGB(38, 38, 42),
+        Track = Color3.fromRGB(42, 42, 48),
+        Accent = White,
     },
     Config = {
         Name = false,
@@ -27,6 +43,7 @@ local Notifications = {
         MaxVisible = 6,
         DefaultDuration = 5,
         ThumbnailSize = 44,
+        RingSize = 20,
         ShowProgress = false,
         ShowType = true,
         HoverPause = true,
@@ -92,6 +109,7 @@ local function NewLabel(parent, text, font, size, color, wrapped, richText, orde
         AutomaticSize = Enum.AutomaticSize.Y,
         Size = UDim2.new(1, 0, 0, 0),
         Text = text,
+        Visible = text ~= "",
         Font = font,
         TextSize = size,
         TextColor3 = color,
@@ -129,6 +147,7 @@ local function ApplySide()
         return
     end
     local Config = Notifications.Config
+    container.Size = UDim2.new(0, Config.Width, 1, -Config.Margin * 2)
     if Config.Side == "Left" then
         container.Position = UDim2.new(0, Config.Margin, 0, Config.Margin)
     else
@@ -155,6 +174,18 @@ local function Relayout()
     end
 end
 
+local function StopSpin(item)
+    if item.SpinTween then
+        item.SpinTween:Cancel()
+        item.SpinTween = nil
+    end
+    if item.Spin then
+        item.Spin:Destroy()
+        item.Spin = nil
+        item.SpinGradient = nil
+    end
+end
+
 local function Remove(item)
     if not item or item.Closed then
         return
@@ -168,9 +199,13 @@ local function Remove(item)
     if item.Tween then
         item.Tween:Cancel()
     end
-    if item.BarTween then
-        item.BarTween:Cancel()
+    if item.Timer then
+        item.Timer:Cancel()
     end
+    if item.FillTween then
+        item.FillTween:Cancel()
+    end
+    StopSpin(item)
     local frame = item.Frame
     if frame and frame.Parent then
         local position = frame.Position
@@ -184,20 +219,30 @@ local function Remove(item)
     Relayout()
 end
 
+local function StopTimer(item)
+    if item.Timer then
+        item.Timer:Cancel()
+        item.Timer = nil
+    end
+    if item.FillTween then
+        item.FillTween:Cancel()
+        item.FillTween = nil
+    end
+    item.Persistent = true
+    item.ProgressShown = false
+    item.Fill.Size = UDim2.fromScale(1, 1)
+    item.Track.Visible = Notifications.Config.ShowProgress and not item.Spin
+end
+
 local function StartTimer(item, duration)
-    if not item.Bar then
-        return
-    end
-    if item.BarTween then
-        item.BarTween:Cancel()
-    end
-    item.Bar.Size = UDim2.new(1, -24, 0, 2)
-    local tween = Services.Tween:Create(item.Bar, TweenInfo.new(duration, Enum.EasingStyle.Linear), {
-        Size = UDim2.new(0, 0, 0, 2),
+    StopTimer(item)
+    item.Persistent = false
+    local tween = Services.Tween:Create(item.Fill, TweenInfo.new(duration, Enum.EasingStyle.Linear), {
+        Size = UDim2.new(0, 0, 1, 0),
     })
-    item.BarTween = tween
+    item.Timer = tween
     tween.Completed:Connect(function(state)
-        if state == Enum.PlaybackState.Completed and item.BarTween == tween then
+        if state == Enum.PlaybackState.Completed and item.Timer == tween then
             Remove(item)
         end
     end)
@@ -207,46 +252,125 @@ local function StartTimer(item, duration)
     end
 end
 
+local function SetProgress(item, value)
+    if item.Closed or not item.Persistent then
+        return
+    end
+    value = math.clamp(value, 0, 1)
+    if not item.ProgressShown then
+        item.ProgressShown = true
+        item.Fill.Size = UDim2.fromScale(0, 1)
+        item.Track.Visible = true
+    elseif item.FillTween then
+        item.FillTween:Cancel()
+    end
+    item.FillTween = Play(item.Fill, ProgressInfo, { Size = UDim2.fromScale(value, 1) })
+end
+
+local function Tint(item, color)
+    local Theme = Notifications.Theme
+    item.Accent = color
+    item.StrokeGradient.Color = ColorSequence.new(color:Lerp(Theme.Line, 0.55), Theme.Line)
+    item.BarGradient.Color = ColorSequence.new(color, color:Lerp(Black, 0.5))
+    item.FillGradient.Color = ColorSequence.new(color:Lerp(White, 0.3), color)
+    if item.SpinGradient then
+        item.SpinGradient.Color = ColorSequence.new(color)
+    end
+    if item.Ring and not item.Spin then
+        Play(item.RingStroke, RingInfo, { Color = color })
+        Play(item.Ring, RingInfo, { BackgroundColor3 = color, BackgroundTransparency = 0.85 })
+    end
+end
+
+local function SetText(label, value)
+    if value == nil then
+        return
+    end
+    value = tostring(value)
+    label.Text = value
+    label.Visible = value ~= ""
+end
+
+local function Update(item, Properties)
+    if item.Closed or type(Properties) ~= "table" then
+        return
+    end
+    SetText(item.TitleLabel, Properties.Title)
+    SetText(item.DescriptionLabel, Properties.Description)
+
+    local typeName = Notifications.ResolveType(Properties.Type) or Properties.Type
+    local typeColor = Notifications.Types[typeName]
+    local color = Properties.Color or typeColor
+    if color then
+        Tint(item, color)
+    end
+    if typeColor and not item.CustomName and Notifications.Config.ShowType then
+        item.NameLabel.Text = tostring(typeName):upper()
+        item.NameLabel.TextColor3 = typeColor
+        item.NameLabel.Visible = true
+    end
+
+    local seconds = tonumber(Properties.Duration)
+    if seconds then
+        if seconds > 0 and seconds ~= math.huge then
+            StartTimer(item, seconds)
+        else
+            StopTimer(item)
+        end
+    end
+
+    local progress = tonumber(Properties.Progress)
+    if progress then
+        SetProgress(item, progress)
+    end
+end
+
+local function Finish(item, Properties)
+    if item.Closed then
+        return
+    end
+    Properties = type(Properties) == "table" and table.clone(Properties) or {}
+    if Properties.Duration == nil then
+        Properties.Duration = Notifications.Config.DefaultDuration
+    end
+    StopSpin(item)
+    Update(item, Properties)
+    Tint(item, item.Accent)
+end
+
 local function MakeHandle(item)
-    return {
-        Frame = item.Frame,
-        Close = function()
-            Remove(item)
-        end,
-        IsClosed = function()
-            return item.Closed
-        end,
-        Update = function(Properties)
-            if item.Closed or type(Properties) ~= "table" then
-                return
-            end
-            if Properties.Title ~= nil and item.TitleLabel then
-                item.TitleLabel.Text = tostring(Properties.Title)
-            end
-            if Properties.Description ~= nil and item.DescriptionLabel then
-                item.DescriptionLabel.Text = tostring(Properties.Description)
-            end
-            local seconds = tonumber(Properties.Duration)
-            if seconds and item.Bar then
-                if seconds > 0 and seconds ~= math.huge then
-                    StartTimer(item, seconds)
-                else
-                    if item.BarTween then
-                        item.BarTween:Cancel()
-                    end
-                    item.Bar.Size = UDim2.new(1, -24, 0, 2)
-                end
-            end
-        end,
-    }
+    local handle = { Frame = item.Frame }
+    function handle.Close()
+        Remove(item)
+    end
+    function handle.IsClosed()
+        return item.Closed
+    end
+    function handle.Update(Properties)
+        Update(item, Properties)
+    end
+    function handle.Progress(value)
+        SetProgress(item, tonumber(value) or 0)
+    end
+    function handle.Finish(Properties)
+        Finish(item, Properties)
+    end
+    function handle.Success(title, description, duration)
+        Finish(item, { Title = title, Description = description, Duration = duration, Type = "Success" })
+    end
+    function handle.Error(title, description, duration)
+        Finish(item, { Title = title, Description = description, Duration = duration, Type = "Error" })
+    end
+    return handle
 end
 
 local function CreateCard(Properties, title, description, persistent)
     local Config = Notifications.Config
     local Theme = Notifications.Theme
+    local loading = Properties.Loading == true
 
     local thumb = nil
-    if Properties.Thumbnail ~= false then
+    if Properties.Thumbnail ~= false and not loading then
         local source = Properties.Thumbnail
         if source == nil then
             source = Config.Thumbnail
@@ -279,7 +403,8 @@ local function CreateCard(Properties, title, description, persistent)
 
     local richText = Properties.RichText ~= false
     local isTop = Config.Vertical == "Top"
-    local textX = thumb and (14 + Config.ThumbnailSize + 10) or 14
+    local leftSlot = thumb and Config.ThumbnailSize or (loading and Config.RingSize or 0)
+    local textX = leftSlot > 0 and (18 + leftSlot + 10) or 18
     local minHeight = thumb and (Config.ThumbnailSize + 24) or 48
 
     local Card = New("Frame", {
@@ -288,18 +413,25 @@ local function CreateCard(Properties, title, description, persistent)
         Position = UDim2.new(0, HiddenX(), isTop and 0 or 1, 0),
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundColor3 = Theme.Panel,
-        BackgroundTransparency = 0.05,
+        BackgroundColor3 = White,
+        BackgroundTransparency = 0.03,
         BorderSizePixel = 0,
     }, {
         New("UISizeConstraint", { MinSize = Vector2.new(0, minHeight) }),
-        New("UICorner", { CornerRadius = UDim.new(0, 6) }),
-        New("UIStroke", {
-            Color = Theme.Line,
-            Thickness = 1,
-            ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+        New("UICorner", { CornerRadius = UDim.new(0, 8) }),
+        New("UIGradient", {
+            Color = ColorSequence.new(Theme.PanelTop, Theme.Panel),
+            Rotation = 90,
         }),
     })
+
+    local Stroke = New("UIStroke", {
+        Color = White,
+        Thickness = 1,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+        Parent = Card,
+    })
+    local StrokeGradient = New("UIGradient", { Parent = Stroke })
 
     local Hover = New("Frame", {
         Name = "Hover",
@@ -308,7 +440,18 @@ local function CreateCard(Properties, title, description, persistent)
         BorderSizePixel = 0,
         Size = UDim2.fromScale(1, 1),
         Parent = Card,
-    }, { New("UICorner", { CornerRadius = UDim.new(0, 6) }) })
+    }, { New("UICorner", { CornerRadius = UDim.new(0, 8) }) })
+
+    local Bar = New("Frame", {
+        Name = "Accent",
+        AnchorPoint = Vector2.new(0, 0.5),
+        BackgroundColor3 = White,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 6, 0.5, 0),
+        Size = UDim2.new(0, 3, 1, -20),
+        Parent = Card,
+    }, { New("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+    local BarGradient = New("UIGradient", { Rotation = 90, Parent = Bar })
 
     if thumb then
         New("ImageLabel", {
@@ -317,10 +460,48 @@ local function CreateCard(Properties, title, description, persistent)
             BorderSizePixel = 0,
             Image = thumb,
             ScaleType = Enum.ScaleType.Crop,
-            Position = UDim2.new(0, 14, 0, 12),
+            Position = UDim2.new(0, 18, 0, 12),
             Size = UDim2.new(0, Config.ThumbnailSize, 0, Config.ThumbnailSize),
             Parent = Card,
         }, { New("UICorner", { CornerRadius = UDim.new(0, 6) }) })
+    end
+
+    local Ring, RingStroke, Spin, SpinGradient, SpinTween
+    if loading then
+        Ring = New("Frame", {
+            Name = "Ring",
+            BackgroundColor3 = accent,
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Position = UDim2.new(0, 18, 0, 14),
+            Size = UDim2.fromOffset(Config.RingSize, Config.RingSize),
+            Parent = Card,
+        }, { New("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+        RingStroke = New("UIStroke", {
+            Color = Theme.Track,
+            Thickness = 2.5,
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+            Parent = Ring,
+        })
+        Spin = New("Frame", {
+            Name = "Spin",
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Size = UDim2.fromScale(1, 1),
+            Parent = Ring,
+        }, { New("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+        local SpinStroke = New("UIStroke", {
+            Color = White,
+            Thickness = 2.5,
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+            Parent = Spin,
+        })
+        SpinGradient = New("UIGradient", {
+            Color = ColorSequence.new(accent),
+            Transparency = SpinFade,
+            Parent = SpinStroke,
+        })
+        SpinTween = Play(SpinGradient, SpinInfo, { Rotation = 360 })
     end
 
     local Column = New("Frame", {
@@ -338,26 +519,34 @@ local function CreateCard(Properties, title, description, persistent)
         }),
         New("UIPadding", {
             PaddingTop = UDim.new(0, 12),
-            PaddingBottom = UDim.new(0, Config.ShowProgress and 18 or 12),
+            PaddingBottom = UDim.new(0, 14),
         }),
     })
 
-    local TitleLabel
-    local DescriptionLabel
+    local NameLabel = NewLabel(Column, header or "", Config.NameFont, Config.NameSize, headerColor or Theme.TextHeader, false, false, 1)
+    NameLabel.Name = "Name"
+    local TitleLabel = NewLabel(Column, title or "", Config.TitleFont, Config.TitleSize, Theme.TitleText, true, richText, 2)
+    TitleLabel.Name = "Title"
+    local DescriptionLabel = NewLabel(Column, description or "", Config.DescriptionFont, Config.DescriptionSize, Theme.TextSecondary, true, richText, 3)
+    DescriptionLabel.Name = "Description"
 
-    if header then
-        NewLabel(Column, header, Config.NameFont, Config.NameSize, headerColor, false, false, 1).Name = "Name"
-    end
-
-    if title then
-        TitleLabel = NewLabel(Column, title, Config.TitleFont, Config.TitleSize, Theme.TitleText, true, richText, 2)
-        TitleLabel.Name = "Title"
-    end
-
-    if description then
-        DescriptionLabel = NewLabel(Column, description, Config.DescriptionFont, Config.DescriptionSize, Theme.TextSecondary, true, richText, 3)
-        DescriptionLabel.Name = "Description"
-    end
+    local Track = New("Frame", {
+        Name = "Track",
+        BackgroundColor3 = Theme.Track,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 18, 1, -8),
+        Size = UDim2.new(1, -32, 0, 3),
+        Visible = Config.ShowProgress and not loading,
+        Parent = Card,
+    }, { New("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+    local Fill = New("Frame", {
+        Name = "Fill",
+        BackgroundColor3 = White,
+        BorderSizePixel = 0,
+        Size = UDim2.fromScale(1, 1),
+        Parent = Track,
+    }, { New("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+    local FillGradient = New("UIGradient", { Parent = Fill })
 
     local item = {
         Frame = Card,
@@ -368,14 +557,31 @@ local function CreateCard(Properties, title, description, persistent)
         Closed = false,
         Hover = false,
         Count = 1,
+        Persistent = persistent,
+        ProgressShown = false,
+        CustomName = name ~= nil,
+        Accent = accent,
         Tween = nil,
-        BarTween = nil,
-        Bar = nil,
-        Badge = nil,
+        Timer = nil,
+        FillTween = nil,
+        Ring = Ring,
+        RingStroke = RingStroke,
+        Spin = Spin,
+        SpinGradient = SpinGradient,
+        SpinTween = SpinTween,
+        Track = Track,
+        Fill = Fill,
+        StrokeGradient = StrokeGradient,
+        BarGradient = BarGradient,
+        FillGradient = FillGradient,
+        NameLabel = NameLabel,
         TitleLabel = TitleLabel,
         DescriptionLabel = DescriptionLabel,
+        Badge = nil,
         Callback = Properties.Callback,
     }
+
+    Tint(item, accent)
 
     if Config.Group then
         item.Badge = New("TextLabel", {
@@ -392,18 +598,6 @@ local function CreateCard(Properties, title, description, persistent)
             Visible = false,
             Parent = Card,
         })
-    end
-
-    if not persistent then
-        item.Bar = New("Frame", {
-            Name = "Progress",
-            BackgroundColor3 = accent,
-            BackgroundTransparency = Config.ShowProgress and 0.35 or 1,
-            BorderSizePixel = 0,
-            Position = UDim2.new(0, 12, 1, -6),
-            Size = UDim2.new(1, -24, 0, 2),
-            Parent = Card,
-        }, { New("UICorner", { CornerRadius = UDim.new(1, 0) }) })
     end
 
     local Button = New("TextButton", {
@@ -427,17 +621,17 @@ local function CreateCard(Properties, title, description, persistent)
 
     Button.MouseEnter:Connect(function()
         item.Hover = true
-        Play(Hover, TweenInfo.new(0.15), { BackgroundTransparency = 0.94 })
-        local tween = item.BarTween
-        if Config.HoverPause and tween and tween.PlaybackState == Enum.PlaybackState.Playing then
+        Play(Hover, HoverInfo, { BackgroundTransparency = 0.94 })
+        local tween = item.Timer
+        if Notifications.Config.HoverPause and tween and tween.PlaybackState == Enum.PlaybackState.Playing then
             tween:Pause()
         end
     end)
 
     Button.MouseLeave:Connect(function()
         item.Hover = false
-        Play(Hover, TweenInfo.new(0.15), { BackgroundTransparency = 1 })
-        local tween = item.BarTween
+        Play(Hover, HoverInfo, { BackgroundTransparency = 1 })
+        local tween = item.Timer
         if tween and tween.PlaybackState == Enum.PlaybackState.Paused then
             tween:Play()
         end
@@ -636,7 +830,8 @@ function Notifications.Notify(first, second, third, fourth)
     end
 
     local Config = Notifications.Config
-    local duration = tonumber(Properties.Duration) or Config.DefaultDuration
+    local loading = Properties.Loading == true
+    local duration = tonumber(Properties.Duration) or (loading and 0 or Config.DefaultDuration)
     local persistent = duration <= 0 or duration == math.huge
 
     Build()
@@ -645,26 +840,31 @@ function Notifications.Notify(first, second, third, fourth)
     if Properties.Id ~= nil then
         for _, existing in ipairs(State.Items) do
             if existing.Id == Properties.Id then
-                local handle = MakeHandle(existing)
-                handle.Update({
+                local changes = {
                     Title = title,
                     Description = description,
                     Duration = Properties.Duration,
-                })
-                return handle
+                    Type = Properties.Type,
+                    Color = Properties.Color,
+                    Progress = Properties.Progress,
+                }
+                if existing.Spin and not loading then
+                    Finish(existing, changes)
+                else
+                    Update(existing, changes)
+                end
+                return MakeHandle(existing)
             end
         end
     end
 
-    if Config.Group then
+    if Config.Group and not loading then
         local key = MakeKey(title, description, Properties)
         for _, existing in ipairs(State.Items) do
-            if existing.Key == key then
+            if existing.Key == key and existing.Badge then
                 existing.Count = existing.Count + 1
-                if existing.Badge then
-                    existing.Badge.Text = "x" .. existing.Count
-                    existing.Badge.Visible = true
-                end
+                existing.Badge.Text = "x" .. existing.Count
+                existing.Badge.Visible = true
                 if not persistent then
                     StartTimer(existing, duration)
                 end
@@ -682,7 +882,12 @@ function Notifications.Notify(first, second, third, fourth)
         Remove(State.Items[1])
     end
 
-    if not persistent then
+    if persistent then
+        local progress = tonumber(Properties.Progress)
+        if progress then
+            SetProgress(item, progress)
+        end
+    else
         StartTimer(item, duration)
     end
 
@@ -705,6 +910,16 @@ for typeName in pairs(Notifications.Types) do
             Type = typeName,
         })
     end
+end
+
+function Notifications.Loading(title, description, progress)
+    return Notifications.Notify({
+        Title = title,
+        Description = description,
+        Duration = 0,
+        Loading = true,
+        Progress = progress,
+    })
 end
 
 function Notifications.Clear()
@@ -738,6 +953,11 @@ end
 
 function Notifications.SetSide(side)
     Notifications.Config.Side = side == "Right" and "Right" or "Left"
+    ApplySide()
+end
+
+function Notifications.SetWidth(width)
+    Notifications.Config.Width = tonumber(width) or Notifications.Config.Width
     ApplySide()
 end
 
