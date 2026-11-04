@@ -1,5 +1,7 @@
 -- // Games
-local Librarys = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Library/Library.luau"))()
+local Librarys = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Library/Library.luau"
+    ))()
 local Bypass = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Bypass.luau"
     ))()
