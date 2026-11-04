@@ -51,7 +51,7 @@ Fundo, borda, brilho, ícone e barra de progresso usam <code>UIGradient</code>.<
 <h2 id="inicio-rapido">Início rápido</h2>
  
 <pre lang="lua">-- // Notifications
-local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.lua"))()
+local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.luau"))()
 local Notify = Notifications.Notify
 Notify("Hello world", 3)
 Notify("Title", "Description", 5, "Warning")
@@ -64,14 +64,14 @@ loading.Success("Done", "Data loaded", 3)
 <h2 id="carregar">1. Carregar</h2>
  
 <pre lang="lua">-- // Notifications
-local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.lua"))()
+local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.luau"))()
 local Notify = Notifications.Notify
 </pre>
  
 <table>
 <tr><th align="left">Item</th><th align="left">Valor</th></tr>
 <tr><td>Repositório</td><td><code>pvpgalinhamonzonrebasexk/gazrenkinras</code></td></tr>
-<tr><td>Módulo</td><td><code>Templates/Notification.lua</code></td></tr>
+<tr><td>Módulo</td><td><code>Templates/Notification.luau</code></td></tr>
 <tr><td>Ícones</td><td><code>Assets/Icons.lua</code></td></tr>
 <tr><td>Branch</td><td><code>main</code></td></tr>
 </table>
@@ -594,7 +594,7 @@ Notifications.Protect(gui)
 <h2 id="exemplo-completo">14. Exemplo completo</h2>
  
 <pre lang="lua">-- // Notifications
-local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.lua"))()
+local Notifications = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpgalinhamonzonrebasexk/gazrenkinras/refs/heads/main/Templates/Notification.luau"))()
 local Notify = Notifications.Notify
 task.wait(1)
 Notifications.Info("Info", "Something happened", 4)
