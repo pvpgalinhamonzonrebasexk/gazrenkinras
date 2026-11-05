@@ -34,6 +34,9 @@ local Config = {
     DefaultSize = UDim2.fromOffset(620, 350),
     ToggleImage = "rbxassetid://77526194033506",
     LoadTimeout = 45,
+    LoadRounds = 3,
+    RetryDelay = 2,
+    BuildRetries = 3,
     MaxParallel = 4,
     MaxQuery = 48,
     SidebarWidth = 180,
@@ -48,6 +51,7 @@ local Config = {
     SaveRestoreWindow = 0.4
 }
 
+Config.ElementsCache = Config.SaveFolder .. "/Elements.json"
 Config.ElementsApi = "https://api.github.com/repos/" .. Config.Repo .. "/contents/" .. Config.ElementsPath .. "?ref=" .. Config.Branch
 Config.ElementsRaw = "https://raw.githubusercontent.com/" .. Config.Repo .. "/refs/heads/" .. Config.Branch .. "/" .. Config.ElementsPath .. "/"
 Config.ElementsCdn = "https://cdn.jsdelivr.net/gh/" .. Config.Repo .. "@" .. Config.Branch .. "/" .. Config.ElementsPath .. "/"
@@ -709,7 +713,13 @@ function ElementRegistry:_Register(name, builder, meta)
     if queue then
         self.Pending[key] = nil
         for _, job in ipairs(queue) do
-            job.Element:Build(entry, job.Options)
+            local element = job.Element
+            task.spawn(function()
+                local ok, failure = pcall(element.Build, element, entry, job.Options)
+                if not ok then
+                    warn("[EcoHub] element '" .. tostring(element.Type) .. "' failed: " .. tostring(failure))
+                end
+            end)
         end
     end
     self:_Changed()
@@ -762,14 +772,69 @@ function ElementRegistry:_LoadFile(file, optional)
         urls[#urls + 1] = Config.ElementsCdn .. candidate
     end
 
-    local ok, result = pcall(function()
-        local source = Http.Fetch(urls, 2)
-        return self:_RunChunk(source)
-    end)
-    if not ok and not optional then
-        warn("[EcoHub] could not load element '" .. file .. "': " .. tostring(result))
+    local fetched, source = pcall(Http.Fetch, urls, 2)
+    if not fetched then
+        local missing = string.find(tostring(source), "404", 1, true) ~= nil
+        if not optional then
+            warn("[EcoHub] could not load element '" .. file .. "': " .. tostring(source))
+        end
+        return false, missing
     end
-    return ok
+
+    local ran, result = pcall(self._RunChunk, self, source)
+    if not ran then
+        warn("[EcoHub] could not load element '" .. file .. "': " .. tostring(result))
+        return false, true
+    end
+    return true, false
+end
+
+function ElementRegistry:_LoadRound(files, optional)
+    local queue = {}
+    for _, file in ipairs(files) do
+        local id = string.lower((string.gsub(file, "%.luau?$", "")))
+        if not self.Files[id] then
+            self.Files[id] = true
+            queue[#queue + 1] = {File = file, Id = id}
+        end
+    end
+
+    local cursor = 0
+    local running = 0
+    local loaded = 0
+    local retryable = 0
+    local progress = os.clock()
+
+    local function worker()
+        while not self.Destroyed do
+            cursor = cursor + 1
+            local job = queue[cursor]
+            if not job then
+                break
+            end
+            local ok, permanent = self:_LoadFile(job.File, optional)
+            if ok then
+                loaded = loaded + 1
+            elseif permanent then
+                self.Files[job.Id] = "missing"
+            else
+                self.Files[job.Id] = nil
+                retryable = retryable + 1
+            end
+            progress = os.clock()
+        end
+        running = running - 1
+    end
+
+    for _ = 1, math.min(Config.MaxParallel, #queue) do
+        running = running + 1
+        task.spawn(worker)
+    end
+
+    while running > 0 and os.clock() - progress < Config.LoadTimeout and not self.Destroyed do
+        task.wait(0.1)
+    end
+    return loaded, #queue, retryable
 end
 
 function ElementRegistry:_ParseApi(body)
@@ -807,7 +872,48 @@ function ElementRegistry:_ParseCdn(body)
     return files
 end
 
-function ElementRegistry:_ListFiles(names)
+function ElementRegistry._ReadCache()
+    local cached = env.EcoHubElementCache
+    if type(cached) == "table" and #cached > 0 then
+        return cached
+    end
+    if type(isfile) ~= "function" or type(readfile) ~= "function" then
+        return nil
+    end
+    local ok, body = pcall(function()
+        if isfile(Config.ElementsCache) then
+            return readfile(Config.ElementsCache)
+        end
+        return nil
+    end)
+    if not ok or type(body) ~= "string" or body == "" then
+        return nil
+    end
+    local parsed, list = pcall(HttpService.JSONDecode, HttpService, body)
+    if parsed and type(list) == "table" and #list > 0 then
+        env.EcoHubElementCache = list
+        return list
+    end
+    return nil
+end
+
+function ElementRegistry._WriteCache(files)
+    if Save.Equal(env.EcoHubElementCache, files) then
+        return
+    end
+    env.EcoHubElementCache = files
+    if type(writefile) ~= "function" then
+        return
+    end
+    pcall(function()
+        if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder(Config.SaveFolder) then
+            makefolder(Config.SaveFolder)
+        end
+        writefile(Config.ElementsCache, HttpService:JSONEncode(files))
+    end)
+end
+
+function ElementRegistry:_ListFiles(names, quiet)
     if type(names) == "table" then
         local files = {}
         for _, name in ipairs(names) do
@@ -825,12 +931,27 @@ function ElementRegistry:_ListFiles(names)
         if ok then
             local files = source[2](self, body)
             if #files > 0 then
+                ElementRegistry._WriteCache(files)
                 return files, false
             end
         end
     end
 
-    warn("[EcoHub] could not list elements from the repository, using the default list")
+    local saved = ElementRegistry._ReadCache()
+    if saved then
+        if not quiet then
+            warn("[EcoHub] could not list elements from the repository, using the saved list")
+        end
+        local files = {}
+        for _, name in ipairs(saved) do
+            files[#files + 1] = name
+        end
+        return files, true
+    end
+
+    if not quiet then
+        warn("[EcoHub] could not list elements from the repository, using the default list")
+    end
     local files = {}
     for _, name in ipairs(ELEMENT_DEFAULTS) do
         files[#files + 1] = name
@@ -840,12 +961,21 @@ end
 
 function ElementRegistry:_WarnPending()
     for key, queue in pairs(self.Pending) do
+        local alive = {}
         for _, job in ipairs(queue) do
             if not job.Element.Destroyed then
-                warn("[EcoHub] element type '" .. job.Element.Type .. "' was not found in " .. Config.ElementsPath)
+                alive[#alive + 1] = job
+                if not job.Warned then
+                    job.Warned = true
+                    warn("[EcoHub] element type '" .. job.Element.Type .. "' was not found in " .. Config.ElementsPath)
+                end
             end
         end
-        self.Pending[key] = nil
+        if #alive > 0 then
+            self.Pending[key] = alive
+        else
+            self.Pending[key] = nil
+        end
     end
 end
 
@@ -856,53 +986,34 @@ function ElementRegistry:_Load(names, force)
     end
     self.Active = self.Active + 1
     task.spawn(function()
-        local files, optional = self:_ListFiles(names)
-        local queue = {}
-
-        for _, file in ipairs(files) do
-            local id = string.lower((string.gsub(file, "%.luau?$", "")))
-            if not self.Files[id] then
-                self.Files[id] = true
-                queue[#queue + 1] = {File = file, Id = id}
-            end
-        end
-
-        local cursor = 0
-        local running = 0
+        local queued = 0
         local loaded = 0
+        local files, optional = self:_ListFiles(names, false)
 
-        local function worker()
-            while not self.Destroyed do
-                cursor = cursor + 1
-                local job = queue[cursor]
-                if not job then
-                    break
-                end
-                if self:_LoadFile(job.File, optional) then
-                    loaded = loaded + 1
-                else
-                    self.Files[job.Id] = nil
-                end
+        for round = 1, Config.LoadRounds do
+            if self.Destroyed then
+                break
             end
-            running = running - 1
-        end
+            local roundLoaded, roundQueued, retryable = self:_LoadRound(files, optional)
+            loaded = loaded + roundLoaded
+            queued = queued + roundQueued
 
-        for _ = 1, math.min(Config.MaxParallel, #queue) do
-            running = running + 1
-            task.spawn(worker)
-        end
+            local missing = next(self.Pending) ~= nil
+            if round == Config.LoadRounds or (retryable == 0 and not (optional and missing)) then
+                break
+            end
 
-        local waited = 0
-        while running > 0 and waited < Config.LoadTimeout and not self.Destroyed do
-            task.wait(0.1)
-            waited = waited + 0.1
+            task.wait(Config.RetryDelay * round)
+            if optional and not self.Destroyed then
+                files, optional = self:_ListFiles(names, true)
+            end
         end
 
         self.Active = self.Active - 1
         if self.Destroyed then
             return
         end
-        if #queue > 0 and loaded == 0 then
+        if queued > 0 and loaded == 0 then
             warn("[EcoHub] no elements could be loaded, check your connection or the repository")
         end
         if self.Active == 0 then
@@ -1085,10 +1196,11 @@ function Element:_Restore(stored)
     end)
 end
 
-function Element:Build(entry, options)
-    if self.Destroyed then
+function Element:Build(entry, options, attempt)
+    if self.Destroyed or self.Built then
         return
     end
+    attempt = attempt or 1
     self:ApplyFrame(entry.Frameless)
 
     local prepared, stored = self:_Persist(options)
@@ -1103,8 +1215,30 @@ function Element:Build(entry, options)
         CreateIcon = Icons.Create
     }
 
+    local existing = {}
+    for _, child in ipairs(self.Container:GetChildren()) do
+        existing[child] = true
+    end
+
     local ok, result = pcall(entry.Builder, scope, prepared)
+    if self.Destroyed then
+        return
+    end
     if not ok then
+        for _, child in ipairs(self.Container:GetChildren()) do
+            if not existing[child] then
+                child:Destroy()
+            end
+        end
+        if attempt < Config.BuildRetries then
+            task.delay(0.5 * attempt, function()
+                if not self.Destroyed and not self.Built then
+                    self:Build(entry, options, attempt + 1)
+                    self.Registry:_Changed()
+                end
+            end)
+            return
+        end
         warn("[EcoHub] element '" .. self.Type .. "' failed: " .. tostring(result))
         self:Destroy()
         return
@@ -1509,6 +1643,9 @@ end
 function SideSection:AddTab(tabName, iconName)
     local tab = Tab.new(self.Window, self, tabName, iconName)
     self.Tabs[#self.Tabs + 1] = tab
+    if self.Open then
+        self.Menu.Visible = true
+    end
     self.Window:_RegisterTab(tab)
     return tab.Page, tab
 end
@@ -2229,6 +2366,7 @@ function Features:_DownloadAll(jobs)
     local failures = {}
     local cursor = 0
     local running = 0
+    local progress = os.clock()
     local limit = math.max(1, math.min(self.Config.MaxParallel, #jobs))
 
     local function worker()
@@ -2242,6 +2380,7 @@ function Features:_DownloadAll(jobs)
             local body, failure = self:_Download(job)
             sources[index] = body or false
             failures[index] = failure
+            progress = os.clock()
         end
         running = running - 1
     end
@@ -2251,10 +2390,8 @@ function Features:_DownloadAll(jobs)
         task.spawn(worker)
     end
 
-    local waited = 0
-    while running > 0 and waited < self.Config.Timeout and not self.Window.Destroyed do
+    while running > 0 and os.clock() - progress < self.Config.Timeout and not self.Window.Destroyed do
         task.wait(0.05)
-        waited = waited + 0.05
     end
     return sources, failures
 end
@@ -2360,19 +2497,25 @@ function Features:_LoadJobs(jobs, options)
     for position, i in ipairs(pending) do
         local job = jobs[i]
         local body = sources[position]
-        if body then
-            local ok, result = self:_Run(job, body)
-            if ok then
-                outcomes[i].Success = true
+        local handled, failure = pcall(function()
+            if body then
+                local ok, result = self:_Run(job, body)
+                if ok then
+                    outcomes[i].Success = true
+                else
+                    outcomes[i].Error = tostring(result)
+                    warn("[EcoHub] feature '" .. job.Name .. "' failed: " .. tostring(result))
+                end
             else
-                outcomes[i].Error = tostring(result)
-                warn("[EcoHub] feature '" .. job.Name .. "' failed: " .. tostring(result))
+                outcomes[i].Error = failures[position] or "download timed out"
+                warn("[EcoHub] could not load feature '" .. job.Name .. "': " .. tostring(outcomes[i].Error))
             end
-        else
-            outcomes[i].Error = failures[position] or "download timed out"
-            warn("[EcoHub] could not load feature '" .. job.Name .. "': " .. tostring(outcomes[i].Error))
-        end
+        end)
         self.Loading[job.Key] = nil
+        if not handled then
+            outcomes[i].Error = tostring(failure)
+            warn("[EcoHub] feature '" .. job.Name .. "' failed: " .. tostring(failure))
+        end
     end
 
     for i, target in pairs(duplicate) do
@@ -2556,6 +2699,8 @@ function Window.new(config)
     self:_BuildPanel()
     self.Palette = Palette.new(self)
     self:_BuildToggle()
+    self:_Guard(self.Gui)
+    self:_Guard(self.ToggleGui)
     self:_BindInput()
     self:_MakeDraggable(self.Dashboard, self.Main)
     self:_MakeDraggable(self.Header, self.Main)
@@ -2566,6 +2711,22 @@ function Window.new(config)
     end)
     self:Configure(config)
     return self
+end
+
+function Window:_Guard(gui)
+    self.Maid:Connect(gui.AncestryChanged, function()
+        if self.Destroyed or gui.Parent then
+            return
+        end
+        task.defer(function()
+            if self.Destroyed or gui.Parent then
+                return
+            end
+            pcall(function()
+                gui.Parent = PlayerGui
+            end)
+        end)
+    end)
 end
 
 function Window:_BuildMain()
