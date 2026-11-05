@@ -1115,6 +1115,10 @@ end
 local Element = {}
 Element.__index = Element
 
+function Element.NameOf(elementType, options)
+    return tostring(options.title or options.Title or options.name or options.Name or options.Text or options.Label or elementType)
+end
+
 function Element.new(contentSection, elementType, options)
     local self = setmetatable({}, Element)
     local tab = contentSection.Tab
@@ -1135,7 +1139,7 @@ function Element.new(contentSection, elementType, options)
     local flash = Util.Create("UIStroke", {Name = "Flash", Color = Theme.Active, Thickness = 1.5, Transparency = 1}, container)
     local inset = Util.Create("UIPadding", {Name = "Inset"}, container)
 
-    local name = tostring(options.title or options.Title or options.name or options.Name or options.Text or options.Label or elementType)
+    local name = Element.NameOf(elementType, options)
     local description = tostring(options.description or options.Description or "")
 
     local used = contentSection.Used
@@ -1479,7 +1483,21 @@ function ContentSection:AddElement(elementType, options)
     elementType = tostring(elementType)
     self.Count = self.Count + 1
 
+    local name = Element.NameOf(elementType, options)
+    local order = nil
+    for _, existing in ipairs(self.Tab.Elements) do
+        if existing.Section == self and existing.Type == elementType and existing.Name == name and not existing.Destroyed then
+            order = existing.Container.LayoutOrder
+            existing:Destroy()
+            self.Used[name] = math.max((self.Used[name] or 1) - 1, 0)
+            break
+        end
+    end
+
     local element = Element.new(self, elementType, options)
+    if order then
+        element.Container.LayoutOrder = order
+    end
     self.Tab.Elements[#self.Tab.Elements + 1] = element
     element:Attach(options)
 
@@ -1632,7 +1650,13 @@ function Tab:Select()
 end
 
 function Tab:CreateSection(name)
-    local section = ContentSection.new(self, tostring(name or "Section"))
+    name = tostring(name or "Section")
+    for _, existing in ipairs(self.Sections) do
+        if existing.Name == name then
+            return existing
+        end
+    end
+    local section = ContentSection.new(self, name)
     self.Sections[#self.Sections + 1] = section
     return section
 end
@@ -3357,6 +3381,12 @@ function Window:CreateTab(config)
         section = SideSection.new(self, sectionName)
         self.SideSections[#self.SideSections + 1] = section
         self.SideSectionsByName[sectionName] = section
+    end
+
+    for _, existing in ipairs(section.Tabs) do
+        if existing.Name == tabName then
+            return existing
+        end
     end
 
     local _, tab = section:AddTab(tabName, iconName)
