@@ -1154,6 +1154,7 @@ function Element.new(contentSection, elementType, options)
     self.Inset = inset
     self.Calls = {}
     self.Built = false
+    self.Building = false
     self.Destroyed = false
     self.Instance = nil
     self.Registry = tab.Window.Elements
@@ -1286,13 +1287,18 @@ function Element:_Restore(stored)
 end
 
 function Element:Build(entry, options, attempt)
-    if self.Destroyed or self.Built then
+    if self.Destroyed or self.Built or self.Building then
         return
     end
+    self.Building = true
     attempt = attempt or 1
     self:ApplyFrame(entry.Frameless)
 
-    local prepared, stored = self:_Persist(options)
+    local persisted, prepared, stored = pcall(self._Persist, self, options)
+    if not persisted then
+        prepared, stored = options, nil
+        self.Restoring = false
+    end
 
     local scope = {
         frame = self.Container,
@@ -1310,6 +1316,7 @@ function Element:Build(entry, options, attempt)
     end
 
     local ok, result = pcall(entry.Builder, scope, prepared)
+    self.Building = false
     if self.Destroyed then
         return
     end
