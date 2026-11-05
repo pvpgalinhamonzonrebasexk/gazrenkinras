@@ -14,8 +14,6 @@ local Windows = Librarys:CreateWindow({
 })
 
 -- // API
-Windows:LoadFeatures({
-    "MidnightChasers/Farm",
-    "MidnightChasers/Event",
-    "MidnightChasers/Misc"
-})
+Windows:LoadFeature("MidnightChasers/Farm")
+Windows:LoadFeature("MidnightChasers/Event")
+Windows:LoadFeature("MidnightChasers/Misc")
