@@ -81,6 +81,15 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local env = getgenv and getgenv() or _G
 local isTouch = UserInputService.TouchEnabled
 
+do
+    local current = env.EcoHubLibrary
+    local alive = type(current) == "table" and type(current.Window) == "table" and not current.Window.Destroyed
+    if alive and env.EcoHubReload ~= true then
+        return current
+    end
+    env.EcoHubReload = nil
+end
+
 -- // Util
 local Util = {}
 
@@ -3303,7 +3312,7 @@ function Window:_RegisterTab(tab)
     self:RefreshSearch()
 end
 
-function Window:Configure(config)
+function Window:Configure(config, keepLayout)
     config = type(config) == "table" and config or {}
     if config.Title ~= nil then
         self.TitleText.Text = tostring(config.Title)
@@ -3311,10 +3320,10 @@ function Window:Configure(config)
     if config.SubTitle ~= nil then
         self.SubTitleText.Text = tostring(config.SubTitle)
     end
-    if tonumber(config.SidebarWidth) then
+    if not keepLayout and tonumber(config.SidebarWidth) then
         self:SetSidebarWidth(config.SidebarWidth)
     end
-    if typeof(config.Size) == "UDim2" then
+    if not keepLayout and typeof(config.Size) == "UDim2" then
         self:_ApplySize(config.Size)
     end
     if typeof(config.MinimizeKey) == "EnumItem" then
@@ -3548,7 +3557,7 @@ function Library:CreateWindow(config)
 
     local window = Library.Window
     if window and not window.Destroyed then
-        window:Configure(config)
+        window:Configure(config, true)
         return window
     end
 
