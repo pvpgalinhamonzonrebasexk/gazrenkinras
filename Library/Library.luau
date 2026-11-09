@@ -4,6 +4,7 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local LocalizationService = game:GetService("LocalizationService")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 -- // Tema
 local Theme = {
@@ -13,6 +14,7 @@ local Theme = {
     Accent = Color3.fromRGB(42, 42, 42),
     Field = Color3.fromRGB(34, 34, 34),
     Border = Color3.fromRGB(55, 55, 55),
+    BorderHover = Color3.fromRGB(88, 88, 88),
     Palette = Color3.fromRGB(28, 28, 28),
     Background = Color3.fromRGB(24, 24, 24),
     Divider = Color3.fromRGB(50, 50, 50),
@@ -52,10 +54,12 @@ local Config = {
     TabPress = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     TabRelease = TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
     TabPop = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-    SaveFolder = "Ecohub"
+    SaveFolder = "Ecohub",
+    SaveDelay = 1
 }
 
-Config.ElementsCache = Config.SaveFolder .. "/Elements.json"
+Config.SaveFile = Config.SaveFolder .. "/Save.json"
+Config.LegacyElementsFile = Config.SaveFolder .. "/Elements.json"
 Config.ElementsApi = "https://api.github.com/repos/" .. Config.Repo .. "/contents/" .. Config.ElementsPath .. "?ref=" .. Config.Branch
 Config.ElementsRaw = "https://raw.githubusercontent.com/" .. Config.Repo .. "/refs/heads/" .. Config.Branch .. "/" .. Config.ElementsPath .. "/"
 Config.ElementsCdn = "https://cdn.jsdelivr.net/gh/" .. Config.Repo .. "@" .. Config.Branch .. "/" .. Config.ElementsPath .. "/"
@@ -79,15 +83,6 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local env = getgenv and getgenv() or _G
 local isTouch = UserInputService.TouchEnabled
-
-do
-    local current = env.EcoHubLibrary
-    local alive = type(current) == "table" and type(current.Window) == "table" and not current.Window.Destroyed
-    if alive and env.EcoHubReload ~= true then
-        return current
-    end
-    env.EcoHubReload = nil
-end
 
 -- // Util
 local Util = {}
@@ -183,6 +178,532 @@ function Util.DeepEqual(a, b)
         if a[key] == nil then return false end
     end
     return true
+end
+
+-- // Notificação
+local Notify = {
+    Config = {
+        GuiName = "EcoHubNotification",
+        Width = 320,
+        Margin = 20,
+        Radius = 10,
+        Duration = 6,
+        Icon = "rbxassetid://10747384394",
+        TitleSize = 16,
+        DescriptionSize = 14,
+        NameSize = 12,
+        Font = Enum.Font.Arcade,
+        TweenIn = TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+        TweenOut = TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
+        HoverInfo = TweenInfo.new(0.15),
+        PopInfo = TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    },
+    Theme = {
+        Panel = Color3.fromRGB(14, 14, 17),
+        PanelTop = Color3.fromRGB(32, 32, 38),
+        Line = Color3.fromRGB(40, 40, 46),
+        Text = Color3.fromRGB(255, 255, 255),
+        Muted = Color3.fromRGB(150, 150, 162),
+        Error = Color3.fromRGB(255, 85, 85)
+    },
+    State = {Gui = nil, Container = nil, Item = nil}
+}
+
+function Notify.HiddenX()
+    return Notify.Config.Width + Notify.Config.Margin + 20
+end
+
+function Notify.Build()
+    local state = Notify.State
+    local config = Notify.Config
+    if state.Gui and state.Gui.Parent and state.Container and state.Container.Parent then
+        return
+    end
+    if state.Gui then
+        pcall(state.Gui.Destroy, state.Gui)
+    end
+    state.Item = nil
+    local old = PlayerGui:FindFirstChild(config.GuiName)
+    if old then
+        old:Destroy()
+    end
+    local gui = Util.Create("ScreenGui", {
+        Name = config.GuiName,
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        DisplayOrder = 999999,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    }, PlayerGui)
+    state.Gui = gui
+    state.Container = Util.Create("Frame", {
+        Name = "Container",
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -(config.Width + config.Margin), 0, config.Margin),
+        Size = UDim2.new(0, config.Width, 1, -config.Margin * 2)
+    }, gui)
+end
+
+function Notify.Label(parent, text, size, color, wrapped, order)
+    return Util.Create("TextLabel", {
+        BackgroundTransparency = 1,
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Size = UDim2.new(1, 0, 0, 0),
+        Text = text,
+        Visible = text ~= "",
+        Font = Notify.Config.Font,
+        TextSize = size,
+        TextColor3 = color,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        TextWrapped = wrapped,
+        TextTruncate = wrapped and Enum.TextTruncate.None or Enum.TextTruncate.AtEnd,
+        RichText = false,
+        LineHeight = 1.1,
+        LayoutOrder = order
+    }, parent)
+end
+
+function Notify.Start(item)
+    if item.Timer then
+        item.Timer:Cancel()
+    end
+    item.Fill.Size = UDim2.fromScale(1, 1)
+    local tween = TweenService:Create(item.Fill, TweenInfo.new(Notify.Config.Duration, Enum.EasingStyle.Linear), {
+        Size = UDim2.new(0, 0, 1, 0)
+    })
+    item.Timer = tween
+    tween.Completed:Connect(function(state)
+        if state == Enum.PlaybackState.Completed and item.Timer == tween then
+            Notify.Remove(item)
+        end
+    end)
+    tween:Play()
+    if item.Hover then
+        tween:Pause()
+    end
+end
+
+function Notify.Remove(item, instant)
+    if not item or item.Closed then
+        return
+    end
+    item.Closed = true
+    local state = Notify.State
+    if state.Item == item then
+        state.Item = nil
+    end
+    if item.Timer then
+        item.Timer:Cancel()
+        item.Timer = nil
+    end
+    if item.Tween then
+        item.Tween:Cancel()
+    end
+    local frame = item.Frame
+    if not frame.Parent then
+        return
+    end
+    if instant then
+        frame:Destroy()
+        return
+    end
+    local out = Util.Tween(frame, Notify.Config.TweenOut, {Position = UDim2.new(0, Notify.HiddenX(), 1, 0)})
+    out.Completed:Connect(function()
+        frame:Destroy()
+    end)
+end
+
+function Notify.Create(title, description, key)
+    local config = Notify.Config
+    local theme = Notify.Theme
+    local color = theme.Error
+    local white = Color3.new(1, 1, 1)
+    local black = Color3.new(0, 0, 0)
+    local radius = UDim.new(0, config.Radius)
+
+    local card = Util.Create("Frame", {
+        Name = "Notification",
+        AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.new(0, Notify.HiddenX(), 1, 0),
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundColor3 = white,
+        BackgroundTransparency = 0.03,
+        BorderSizePixel = 0
+    }, Notify.State.Container)
+    Util.Create("UISizeConstraint", {MinSize = Vector2.new(0, 64)}, card)
+    Util.Create("UICorner", {CornerRadius = radius}, card)
+    Util.Create("UIGradient", {Color = ColorSequence.new(theme.PanelTop, theme.Panel), Rotation = 90}, card)
+
+    local stroke = Util.Create("UIStroke", {
+        Color = white,
+        Thickness = 1,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    }, card)
+    Util.Create("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, color),
+            ColorSequenceKeypoint.new(0.6, color:Lerp(theme.Line, 0.75)),
+            ColorSequenceKeypoint.new(1, theme.Line)
+        })
+    }, stroke)
+
+    local glow = Util.Create("Frame", {
+        Name = "Glow",
+        BackgroundColor3 = color,
+        BorderSizePixel = 0,
+        Size = UDim2.fromScale(1, 1)
+    }, card)
+    Util.Create("UICorner", {CornerRadius = radius}, glow)
+    Util.Create("UIGradient", {
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.76),
+            NumberSequenceKeypoint.new(0.55, 0.95),
+            NumberSequenceKeypoint.new(1, 1)
+        })
+    }, glow)
+
+    local hover = Util.Create("Frame", {
+        Name = "Hover",
+        BackgroundColor3 = white,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.fromScale(1, 1)
+    }, card)
+    Util.Create("UICorner", {CornerRadius = radius}, hover)
+
+    local iconFrame = Util.Create("Frame", {
+        Name = "Icon",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = white,
+        BackgroundTransparency = 0.8,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 34, 0.5, 0),
+        Size = UDim2.fromOffset(32, 32)
+    }, card)
+    Util.Corner(iconFrame, 9)
+    Util.Create("UIGradient", {
+        Color = ColorSequence.new(color:Lerp(white, 0.25), color:Lerp(black, 0.35)),
+        Rotation = 45
+    }, iconFrame)
+    Util.Create("UIStroke", {
+        Color = color,
+        Thickness = 1,
+        Transparency = 0.55,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    }, iconFrame)
+    local iconScale = Util.Create("UIScale", {Scale = 0.4}, iconFrame)
+    Util.Create("ImageLabel", {
+        Name = "Image",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        Image = config.Icon,
+        ImageColor3 = color:Lerp(white, 0.35),
+        ScaleType = Enum.ScaleType.Fit,
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(18, 18)
+    }, iconFrame)
+    Util.Tween(iconScale, config.PopInfo, {Scale = 1})
+
+    local column = Util.Create("Frame", {
+        Name = "Content",
+        BackgroundTransparency = 1,
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Position = UDim2.new(0, 62, 0, 0),
+        Size = UDim2.new(1, -76, 0, 0)
+    }, card)
+    Util.List(column, 2)
+    Util.Padding(column, 12, 14, 0, 0)
+    Notify.Label(column, "ERROR", config.NameSize, color, false, 1).Name = "Name"
+    Notify.Label(column, title, config.TitleSize, theme.Text, true, 2).Name = "Title"
+    Notify.Label(column, description, config.DescriptionSize, theme.Muted, true, 3).Name = "Description"
+
+    local track = Util.Create("Frame", {
+        Name = "Track",
+        BackgroundTransparency = 1,
+        Visible = false,
+        Size = UDim2.new(1, 0, 0, 1)
+    }, card)
+    local fill = Util.Create("Frame", {
+        Name = "Fill",
+        BackgroundTransparency = 1,
+        Size = UDim2.fromScale(1, 1)
+    }, track)
+
+    local item = {
+        Frame = card,
+        Fill = fill,
+        Key = key,
+        Hover = false,
+        Closed = false,
+        Timer = nil,
+        Tween = nil
+    }
+
+    local button = Util.Create("TextButton", {
+        Name = "Click",
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+        Size = UDim2.fromScale(1, 1),
+        ZIndex = 10
+    }, card)
+
+    button.Activated:Connect(function()
+        Notify.Remove(item)
+    end)
+
+    button.MouseEnter:Connect(function()
+        item.Hover = true
+        Util.Tween(hover, config.HoverInfo, {BackgroundTransparency = 0.94})
+        local tween = item.Timer
+        if tween and tween.PlaybackState == Enum.PlaybackState.Playing then
+            tween:Pause()
+        end
+    end)
+
+    button.MouseLeave:Connect(function()
+        item.Hover = false
+        Util.Tween(hover, config.HoverInfo, {BackgroundTransparency = 1})
+        local tween = item.Timer
+        if tween and tween.PlaybackState == Enum.PlaybackState.Paused then
+            tween:Play()
+        end
+    end)
+
+    return item
+end
+
+function Notify.Error(title, description)
+    title = title ~= nil and tostring(title) or ""
+    description = description ~= nil and tostring(description) or ""
+    if title == "" and description == "" then
+        return
+    end
+    Notify.Build()
+    local state = Notify.State
+    local key = title .. "\n" .. description
+    local current = state.Item
+    if current and not current.Closed then
+        if current.Key == key then
+            Notify.Start(current)
+            return
+        end
+        Notify.Remove(current, true)
+    end
+    local item = Notify.Create(title, description, key)
+    state.Item = item
+    item.Tween = Util.Tween(item.Frame, Notify.Config.TweenIn, {Position = UDim2.new(0, 0, 1, 0)})
+    Notify.Start(item)
+end
+
+function Notify.Destroy()
+    local state = Notify.State
+    if state.Item then
+        Notify.Remove(state.Item, true)
+    end
+    if state.Gui then
+        pcall(state.Gui.Destroy, state.Gui)
+    end
+    state.Gui = nil
+    state.Container = nil
+    state.Item = nil
+end
+
+local function Report(title, detail)
+    local message = tostring(detail)
+    warn("[EcoHub] " .. title .. ": " .. message)
+    pcall(Notify.Error, title, message)
+end
+
+-- // Salvamento
+local Save = {Data = nil, Entry = nil, Key = nil, Name = nil, Dirty = false, Token = 0, Started = false}
+
+function Save.Read()
+    if Save.Data then
+        return Save.Data
+    end
+    local data = nil
+    if type(isfile) == "function" and type(readfile) == "function" then
+        local ok, body = pcall(function()
+            if isfile(Config.SaveFile) then
+                return readfile(Config.SaveFile)
+            end
+            return nil
+        end)
+        if ok and type(body) == "string" and body ~= "" then
+            local parsed, decoded = pcall(HttpService.JSONDecode, HttpService, body)
+            if parsed and type(decoded) == "table" then
+                data = decoded
+            end
+        end
+    end
+    data = data or {}
+    if type(data.Elements) ~= "table" then
+        data.Elements = {}
+    end
+    if type(data.Games) ~= "table" then
+        data.Games = {}
+    end
+    Save.Data = data
+    Save.Migrate()
+    return data
+end
+
+function Save.Migrate()
+    if type(isfile) ~= "function" or type(delfile) ~= "function" then
+        return
+    end
+    pcall(function()
+        if not isfile(Config.LegacyElementsFile) then
+            return
+        end
+        local data = Save.Data
+        if type(data.Elements.Files) ~= "table" or #data.Elements.Files == 0 then
+            local parsed, list = pcall(function()
+                return HttpService:JSONDecode(readfile(Config.LegacyElementsFile))
+            end)
+            if parsed and type(list) == "table" and #list > 0 then
+                data.Elements.Files = list
+                Save.Touch()
+            end
+        end
+        delfile(Config.LegacyElementsFile)
+    end)
+end
+
+function Save.Find()
+    local data = Save.Read()
+    local placeId = tostring(game.PlaceId)
+    for name, entry in pairs(data.Games) do
+        if type(entry) == "table" and tostring(entry.PlaceId) == placeId then
+            return name, entry
+        end
+    end
+    return nil, nil
+end
+
+function Save.Class()
+    if Save.Entry then
+        return Save.Entry
+    end
+    local data = Save.Read()
+    local name, entry = Save.Find()
+    if not entry then
+        name = Save.Name or ("Place " .. tostring(game.PlaceId))
+        if data.Games[name] then
+            name = name .. " [" .. tostring(game.PlaceId) .. "]"
+        end
+        entry = {PlaceId = game.PlaceId, AutoSave = {}}
+        data.Games[name] = entry
+    end
+    if type(entry.AutoSave) ~= "table" then
+        entry.AutoSave = {}
+    end
+    Save.Key = name
+    Save.Entry = entry
+    return entry
+end
+
+function Save.Rename(name)
+    local entry = Save.Entry
+    if not entry or Save.Key == name then
+        return
+    end
+    local data = Save.Read()
+    if data.Games[name] and data.Games[name] ~= entry then
+        name = name .. " [" .. tostring(game.PlaceId) .. "]"
+        if Save.Key == name then
+            return
+        end
+    end
+    data.Games[Save.Key] = nil
+    data.Games[name] = entry
+    Save.Key = name
+    Save.Touch()
+end
+
+function Save.Init()
+    if Save.Started then
+        return
+    end
+    Save.Started = true
+    task.spawn(function()
+        local ok, info = pcall(function()
+            return MarketplaceService:GetProductInfo(game.PlaceId)
+        end)
+        if not ok or type(info) ~= "table" or type(info.Name) ~= "string" or info.Name == "" then
+            return
+        end
+        Save.Name = info.Name
+        Save.Rename(info.Name)
+    end)
+end
+
+function Save.Touch()
+    Save.Dirty = true
+    Save.Token = Save.Token + 1
+    local token = Save.Token
+    task.delay(Config.SaveDelay, function()
+        if Save.Token == token then
+            Save.Flush()
+        end
+    end)
+end
+
+function Save.Flush()
+    if not Save.Dirty or not Save.Data then
+        return
+    end
+    Save.Dirty = false
+    Save.Token = Save.Token + 1
+    if type(writefile) ~= "function" then
+        return
+    end
+    local ok, failure = pcall(function()
+        if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder(Config.SaveFolder) then
+            makefolder(Config.SaveFolder)
+        end
+        writefile(Config.SaveFile, HttpService:JSONEncode(Save.Data))
+    end)
+    if not ok then
+        Report("Save failed", failure)
+    end
+end
+
+function Save.Get(key, default)
+    local value = Save.Class().AutoSave[tostring(key)]
+    if value == nil then
+        return default
+    end
+    return value
+end
+
+function Save.Set(key, value)
+    Save.Class().AutoSave[tostring(key)] = value
+    Save.Touch()
+end
+
+function Save.Delete(key)
+    Save.Class().AutoSave[tostring(key)] = nil
+    Save.Touch()
+end
+
+function Save.GetElements()
+    local files = Save.Read().Elements.Files
+    if type(files) == "table" and #files > 0 then
+        return files
+    end
+    return nil
+end
+
+function Save.SetElements(files)
+    local data = Save.Read()
+    if Util.DeepEqual(data.Elements.Files, files) then
+        return
+    end
+    data.Elements.Files = files
+    Save.Touch()
 end
 
 -- // Http
@@ -426,7 +947,7 @@ function Icons.Load()
             end
         end
         Icons.Pending = alive
-        warn("[EcoHub] could not load icons: " .. failure)
+        Report("Icons failed", failure)
         if Icons.Retries <= 5 then
             task.delay(10 * Icons.Retries, function()
                 if not Icons.Assets and not Icons.Loading then
@@ -499,7 +1020,7 @@ function ElementRegistry:_Register(name, builder, meta)
             task.spawn(function()
                 local ok, failure = pcall(element.Build, element, entry, job.Options)
                 if not ok then
-                    warn("[EcoHub] element '" .. tostring(element.Type) .. "' failed: " .. tostring(failure))
+                    Report("Element failed", tostring(element.Type) .. ": " .. tostring(failure))
                 end
             end)
         end
@@ -560,14 +1081,14 @@ function ElementRegistry:_LoadFile(file, optional)
     local source, failure, missing = Http.Try(urls, 2)
     if not source then
         if not optional then
-            warn("[EcoHub] could not load element '" .. file .. "': " .. tostring(failure))
+            Report("Element load failed", file .. ": " .. tostring(failure))
         end
         return false, missing, false
     end
 
     local ran, result = pcall(self._RunChunk, self, source)
     if not ran then
-        warn("[EcoHub] could not load element '" .. file .. "': " .. tostring(result))
+        Report("Element load failed", file .. ": " .. tostring(result))
         return false, false, true
     end
     return true, false, false
@@ -663,48 +1184,7 @@ function ElementRegistry:_ParseCdn(body)
     return files
 end
 
-function ElementRegistry._ReadCache()
-    local cached = env.EcoHubElementCache
-    if type(cached) == "table" and #cached > 0 then
-        return cached
-    end
-    if type(isfile) ~= "function" or type(readfile) ~= "function" then
-        return nil
-    end
-    local ok, body = pcall(function()
-        if isfile(Config.ElementsCache) then
-            return readfile(Config.ElementsCache)
-        end
-        return nil
-    end)
-    if not ok or type(body) ~= "string" or body == "" then
-        return nil
-    end
-    local parsed, list = pcall(HttpService.JSONDecode, HttpService, body)
-    if parsed and type(list) == "table" and #list > 0 then
-        env.EcoHubElementCache = list
-        return list
-    end
-    return nil
-end
-
-function ElementRegistry._WriteCache(files)
-    if Util.DeepEqual(env.EcoHubElementCache, files) then
-        return
-    end
-    env.EcoHubElementCache = files
-    if type(writefile) ~= "function" then
-        return
-    end
-    pcall(function()
-        if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder(Config.SaveFolder) then
-            makefolder(Config.SaveFolder)
-        end
-        writefile(Config.ElementsCache, HttpService:JSONEncode(files))
-    end)
-end
-
-function ElementRegistry:_ListFiles(names, quiet)
+function ElementRegistry:_ListFiles(names)
     if type(names) == "table" then
         local files = {}
         for _, name in ipairs(names) do
@@ -722,17 +1202,14 @@ function ElementRegistry:_ListFiles(names, quiet)
         if ok then
             local files = source[2](self, body)
             if #files > 0 then
-                ElementRegistry._WriteCache(files)
+                Save.SetElements(files)
                 return files, false
             end
         end
     end
 
-    local saved = ElementRegistry._ReadCache()
+    local saved = Save.GetElements()
     if saved then
-        if not quiet then
-            warn("[EcoHub] could not list elements from the repository, using the saved list")
-        end
         local files = {}
         for _, name in ipairs(saved) do
             files[#files + 1] = name
@@ -740,9 +1217,6 @@ function ElementRegistry:_ListFiles(names, quiet)
         return files, true
     end
 
-    if not quiet then
-        warn("[EcoHub] could not list elements from the repository, using the default list")
-    end
     local files = {}
     for _, name in ipairs(ELEMENT_DEFAULTS) do
         files[#files + 1] = name
@@ -758,7 +1232,7 @@ function ElementRegistry:_WarnPending()
                 alive[#alive + 1] = job
                 if not job.Warned then
                     job.Warned = true
-                    warn("[EcoHub] element type '" .. job.Element.Type .. "' was not found in " .. Config.ElementsPath)
+                    Report("Element missing", job.Element.Type .. " was not found in " .. Config.ElementsPath)
                 end
             end
         end
@@ -822,7 +1296,7 @@ function ElementRegistry:_Load(names, force, quiet)
     task.spawn(function()
         local queued = 0
         local loaded = 0
-        local files, optional = self:_ListFiles(names, quiet)
+        local files, optional = self:_ListFiles(names)
 
         for round = 1, Config.LoadRounds do
             if self.Destroyed then
@@ -839,7 +1313,7 @@ function ElementRegistry:_Load(names, force, quiet)
 
             task.wait(Config.RetryDelay * round)
             if optional and not self.Destroyed then
-                files, optional = self:_ListFiles(names, true)
+                files, optional = self:_ListFiles(names)
             end
         end
 
@@ -848,7 +1322,7 @@ function ElementRegistry:_Load(names, force, quiet)
             return
         end
         if queued > 0 and loaded == 0 and not quiet then
-            warn("[EcoHub] no elements could be loaded, check your connection or the repository")
+            Report("Elements failed", "no elements could be loaded, check your connection or the repository")
         end
         if self.Active == 0 then
             if not quiet then
@@ -881,10 +1355,10 @@ function Element.new(contentSection, elementType, options)
         Visible = false
     }, contentSection.Holder)
     Util.Corner(container, 8)
-    Util.Create("UISizeConstraint", {MinSize = Vector2.new(0, 36)}, container)
+    Util.Create("UISizeConstraint", {MinSize = Vector2.new(0, 38)}, container)
     Util.Create("UIGradient", {
         Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(42, 42, 42)),
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(44, 44, 44)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 28, 28))
         }),
         Rotation = 90
@@ -893,6 +1367,39 @@ function Element.new(contentSection, elementType, options)
     local border = Util.Create("UIStroke", {Name = "Border", Color = Theme.Border, Thickness = 1}, container)
     local flash = Util.Create("UIStroke", {Name = "Flash", Color = Theme.Active, Thickness = 1.5, Transparency = 1}, container)
     local inset = Util.Create("UIPadding", {Name = "Inset"}, container)
+
+    local deco = Util.Create("Frame", {
+        Name = "Hover",
+        BackgroundColor3 = Theme.Active,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.fromScale(1, 1),
+        Visible = false
+    }, container)
+    Util.Corner(deco, 8)
+    local bar = Util.Create("Frame", {
+        Name = "Bar",
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 5, 0.5, 0),
+        Size = UDim2.new(0, 3, 0.3, 0),
+        BackgroundColor3 = Theme.Active,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0
+    }, deco)
+    Util.Corner(bar, 2)
+
+    if not isTouch then
+        container.MouseEnter:Connect(function()
+            Util.Tween(deco, Config.TweenInfo, {BackgroundTransparency = 0.94})
+            Util.Tween(bar, Config.TweenInfo, {BackgroundTransparency = 0.2, Size = UDim2.new(0, 3, 0.6, 0)})
+            Util.Tween(border, Config.TweenInfo, {Color = Theme.BorderHover})
+        end)
+        container.MouseLeave:Connect(function()
+            Util.Tween(deco, Config.TweenInfo, {BackgroundTransparency = 1})
+            Util.Tween(bar, Config.TweenInfo, {BackgroundTransparency = 1, Size = UDim2.new(0, 3, 0.3, 0)})
+            Util.Tween(border, Config.TweenInfo, {Color = Theme.Border})
+        end)
+    end
 
     local name = Element.NameOf(elementType, options)
     local description = tostring(options.description or options.Description or "")
@@ -910,6 +1417,7 @@ function Element.new(contentSection, elementType, options)
     self.Border = border
     self.Flash = flash
     self.Inset = inset
+    self.Deco = deco
     self.Calls = {}
     self.Built = false
     self.Building = false
@@ -930,6 +1438,9 @@ function Element:ApplyFrame(frameless)
     self.Inset.PaddingBottom = UDim.new(0, pad)
     self.Inset.PaddingLeft = UDim.new(0, side)
     self.Inset.PaddingRight = UDim.new(0, side)
+    self.Deco.Position = UDim2.fromOffset(-side, -pad)
+    self.Deco.Size = UDim2.new(1, side * 2, 1, pad * 2)
+    self.Deco.Visible = not frameless
 end
 
 function Element:Attach(options)
@@ -978,7 +1489,7 @@ function Element:Build(entry, options, attempt)
             end
         end
         if attempt == Config.BuildRetries then
-            warn("[EcoHub] element '" .. self.Type .. "' failed, retrying later: " .. tostring(result))
+            Report("Element failed", self.Type .. " failed, retrying later: " .. tostring(result))
         end
         if attempt < Config.BuildRetries + Config.BuildLateRetries then
             local delay = attempt < Config.BuildRetries and 0.5 * attempt or Config.BuildLateDelay
@@ -990,7 +1501,7 @@ function Element:Build(entry, options, attempt)
             end)
             return
         end
-        warn("[EcoHub] element '" .. self.Type .. "' could not be built: " .. tostring(result))
+        Report("Element failed", self.Type .. " could not be built: " .. tostring(result))
         return
     end
 
@@ -2025,7 +2536,7 @@ function Features:_LoadIndex(force)
         self.IndexFailed = 0
     else
         if not ok then
-            warn("[EcoHub] could not build the feature index: " .. tostring(index))
+            Report("Feature index failed", index)
         end
         self.IndexFailed = os.clock()
     end
@@ -2192,7 +2703,7 @@ function Features:_Run(job, body)
         result = value
         finished = true
         if late and not success then
-            warn("[EcoHub] feature '" .. job.Name .. "' failed: " .. tostring(value))
+            Report("Feature failed", job.Name .. ": " .. tostring(value))
         end
     end)
 
@@ -2299,17 +2810,17 @@ function Features:_LoadJobs(jobs, options)
                     outcomes[i].Success = true
                 else
                     outcomes[i].Error = tostring(result)
-                    warn("[EcoHub] feature '" .. job.Name .. "' failed: " .. tostring(result))
+                    Report("Feature failed", job.Name .. ": " .. tostring(result))
                 end
             else
                 outcomes[i].Error = failures[position] or "download timed out"
-                warn("[EcoHub] could not load feature '" .. job.Name .. "': " .. tostring(outcomes[i].Error))
+                Report("Feature failed", job.Name .. ": " .. tostring(outcomes[i].Error))
             end
         end)
         self.Loading[job.Key] = nil
         if not handled then
             outcomes[i].Error = tostring(failure)
-            warn("[EcoHub] feature '" .. job.Name .. "' failed: " .. tostring(failure))
+            Report("Feature failed", job.Name .. ": " .. tostring(failure))
         end
     end
 
@@ -2326,7 +2837,7 @@ function Features:Load(name, options)
     end
     local jobs, reason = self:_Resolve(name)
     if not jobs or #jobs == 0 then
-        warn("[EcoHub] could not load feature '" .. tostring(name) .. "': " .. tostring(reason or "no files found"))
+        Report("Feature failed", tostring(name) .. ": " .. tostring(reason or "no files found"))
         return false
     end
     local outcomes = self:_LoadJobs(jobs, options)
@@ -2350,7 +2861,7 @@ function Features:LoadMany(list, options)
         local label = tostring(name)
         local resolved, reason = self:_Resolve(name)
         if not resolved or #resolved == 0 then
-            warn("[EcoHub] could not load feature '" .. label .. "': " .. tostring(reason or "no files found"))
+            Report("Feature failed", label .. ": " .. tostring(reason or "no files found"))
             results[label] = false
         else
             if results[label] == nil then
@@ -2379,7 +2890,7 @@ function Features:LoadAll(options)
     end
     local index = self:_LoadIndex()
     if not index then
-        warn("[EcoHub] LoadAllFeatures needs the GitHub index, which could not be loaded")
+        Report("Feature index failed", "LoadAllFeatures needs the GitHub index, which could not be loaded")
         return results
     end
 
@@ -2410,7 +2921,7 @@ function Features:Unload(name)
     if type(callback) == "function" then
         local ok, failure = pcall(callback)
         if not ok then
-            warn("[EcoHub] unload of feature '" .. entry.Name .. "' failed: " .. tostring(failure))
+            Report("Feature failed", "unload of " .. entry.Name .. ": " .. tostring(failure))
         end
     end
     return true
@@ -2445,7 +2956,7 @@ function Features:List()
     local names = {}
     local index = self:_LoadIndex()
     if not index then
-        warn("[EcoHub] the feature index could not be loaded")
+        Report("Feature index failed", "the feature index could not be loaded")
         return names
     end
     for _, rel in ipairs(index.Files) do
@@ -2461,7 +2972,7 @@ end
 function Features:SetSource(url)
     local source = Source.Parse(url)
     if not source then
-        warn("[EcoHub] invalid features source: " .. tostring(url))
+        Report("Invalid source", "features source: " .. tostring(url))
         return false
     end
     self.Source = source
@@ -2490,6 +3001,7 @@ function Window.new(config)
     self.FeatureConfig = self.Features.Config
     self.Locale = Locale
 
+    Save.Init()
     self:_BuildMain()
     self:_BuildPanel()
     self.Palette = Palette.new(self)
@@ -2502,6 +3014,7 @@ function Window.new(config)
     self:_BindResize()
     self:_BindToggleDrag()
     self:Configure(config)
+    self:_RestoreSize()
     return self
 end
 
@@ -2669,14 +3182,112 @@ function Window:_BuildMain()
         TextTruncate = Enum.TextTruncate.AtEnd
     }, searchFrame)
 
-    local resizeButton = Util.Create("TextButton", {
-        Name = "ResizeButton",
-        Size = UDim2.new(0, isTouch and 24 or 16, 0, isTouch and 24 or 16),
-        Position = UDim2.new(1, isTouch and -24 or -16, 1, isTouch and -24 or -16),
+    local edge = isTouch and 14 or 8
+    local corner = isTouch and 30 or 22
+    local handles = {}
+
+    local rightButton = Util.Create("TextButton", {
+        Name = "ResizeRight",
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.new(0, edge, 1, -corner),
         BackgroundTransparency = 1,
+        AutoButtonColor = false,
         Text = "",
         ZIndex = 10
     }, main)
+    local rightPill = Util.Create("Frame", {
+        Name = "Pill",
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -3, 0.5, 0),
+        Size = UDim2.fromOffset(3, 28),
+        BackgroundColor3 = Theme.Dim,
+        BorderSizePixel = 0
+    }, rightButton)
+    Util.Corner(rightPill, 2)
+    handles[#handles + 1] = {
+        Button = rightButton,
+        X = true,
+        Y = false,
+        Paint = function(lit)
+            Util.Tween(rightPill, Config.TweenInfo, {
+                BackgroundColor3 = lit and Theme.Active or Theme.Dim,
+                Size = lit and UDim2.fromOffset(4, 44) or UDim2.fromOffset(3, 28)
+            })
+        end
+    }
+
+    local bottomButton = Util.Create("TextButton", {
+        Name = "ResizeBottom",
+        AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.new(0, 0, 1, 0),
+        Size = UDim2.new(1, -corner, 0, edge),
+        BackgroundTransparency = 1,
+        AutoButtonColor = false,
+        Text = "",
+        ZIndex = 10
+    }, main)
+    local bottomPill = Util.Create("Frame", {
+        Name = "Pill",
+        AnchorPoint = Vector2.new(0.5, 1),
+        Position = UDim2.new(0.5, 0, 1, -3),
+        Size = UDim2.fromOffset(28, 3),
+        BackgroundColor3 = Theme.Dim,
+        BorderSizePixel = 0
+    }, bottomButton)
+    Util.Corner(bottomPill, 2)
+    handles[#handles + 1] = {
+        Button = bottomButton,
+        X = false,
+        Y = true,
+        Paint = function(lit)
+            Util.Tween(bottomPill, Config.TweenInfo, {
+                BackgroundColor3 = lit and Theme.Active or Theme.Dim,
+                Size = lit and UDim2.fromOffset(44, 4) or UDim2.fromOffset(28, 3)
+            })
+        end
+    }
+
+    local gripButton = Util.Create("TextButton", {
+        Name = "ResizeButton",
+        AnchorPoint = Vector2.new(1, 1),
+        Position = UDim2.new(1, 0, 1, 0),
+        Size = UDim2.fromOffset(corner, corner),
+        BackgroundTransparency = 1,
+        AutoButtonColor = false,
+        Text = "",
+        ZIndex = 11
+    }, main)
+    local dots = {}
+    local step = isTouch and 7 or 5
+    local dotSize = isTouch and 3 or 2
+    local margin = isTouch and 9 or 6
+    for row = 0, 2 do
+        for column = 0, 2 do
+            if row + column >= 2 then
+                local dot = Util.Create("Frame", {
+                    Name = "Dot",
+                    AnchorPoint = Vector2.new(1, 1),
+                    Position = UDim2.new(1, -(margin + (2 - column) * step), 1, -(margin + (2 - row) * step)),
+                    Size = UDim2.fromOffset(dotSize, dotSize),
+                    BackgroundColor3 = Theme.Dim,
+                    BorderSizePixel = 0
+                }, gripButton)
+                Util.Corner(dot, 1)
+                dots[#dots + 1] = dot
+            end
+        end
+    end
+    handles[#handles + 1] = {
+        Button = gripButton,
+        X = true,
+        Y = true,
+        Paint = function(lit)
+            for _, dot in ipairs(dots) do
+                Util.Tween(dot, Config.TweenInfo, {BackgroundColor3 = lit and Theme.Active or Theme.Dim})
+            end
+        end
+    }
 
     self.Gui = gui
     self.Main = main
@@ -2690,7 +3301,7 @@ function Window:_BuildMain()
     self.PageHolder = pageHolder
     self.Breadcrumb = breadcrumb
     self.SearchButton = searchButton
-    self.ResizeButton = resizeButton
+    self.ResizeHandles = handles
 
     self:_ApplySize(Config.DefaultSize)
 
@@ -2708,6 +3319,13 @@ function Window:_BuildPanel()
             return second
         end
         return first
+    end
+
+    local function unwrap(owner, first, second, third)
+        if rawequal(first, owner) then
+            return second, third
+        end
+        return first, second
     end
 
     Panel.Header = self.Header
@@ -2731,6 +3349,25 @@ function Window:_BuildPanel()
     function Panel.CloseSearch()
         window:CloseSearch()
     end
+    function Panel.Error(first, second, third)
+        local title, detail = unwrap(Panel, first, second, third)
+        Report(tostring(title or "Error"), tostring(detail or ""))
+    end
+
+    local SaveApi = {}
+    function SaveApi.Get(first, second, third)
+        local key, default = unwrap(SaveApi, first, second, third)
+        return Save.Get(key, default)
+    end
+    function SaveApi.Set(first, second, third)
+        local key, value = unwrap(SaveApi, first, second, third)
+        Save.Set(key, value)
+    end
+    function SaveApi.Delete(first, second)
+        local key = unwrap(SaveApi, first, second)
+        Save.Delete(key)
+    end
+    Panel.Save = SaveApi
 
     local registry = ElementRegistry.new()
     registry.Panel = Panel
@@ -2901,26 +3538,50 @@ function Window:_MakeDraggable(handle, target)
 end
 
 function Window:_BindResize()
-    local resizing = false
+    local active = nil
+    local hovered = {}
     local startSize = Vector2.zero
     local startMouse = Vector3.zero
 
-    self.ResizeButton.InputBegan:Connect(function(input)
-        if self.Gui.Enabled and Util.IsPress(input) then
-            resizing = true
-            startSize = self.Main.AbsoluteSize
-            startMouse = input.Position
+    for _, handle in ipairs(self.ResizeHandles) do
+        handle.Button.InputBegan:Connect(function(input)
+            if active == nil and self.Gui.Enabled and Util.IsPress(input) then
+                active = handle
+                startSize = self.Main.AbsoluteSize
+                startMouse = input.Position
+                handle.Paint(true)
+            end
+        end)
+        if not isTouch then
+            handle.Button.MouseEnter:Connect(function()
+                hovered[handle] = true
+                if active == nil then
+                    handle.Paint(true)
+                end
+            end)
+            handle.Button.MouseLeave:Connect(function()
+                hovered[handle] = nil
+                if active ~= handle then
+                    handle.Paint(false)
+                end
+            end)
         end
-    end)
+    end
 
     self.Maid:Connect(UserInputService.InputEnded, function(input)
-        if Util.IsPress(input) then
-            resizing = false
+        if active and Util.IsPress(input) then
+            local finished = active
+            active = nil
+            finished.Paint(hovered[finished] == true)
+            local size = self.Main.AbsoluteSize
+            if size ~= startSize then
+                Save.Set("WindowSize", {Width = math.floor(size.X), Height = math.floor(size.Y)})
+            end
         end
     end)
 
     self.Maid:Connect(UserInputService.InputChanged, function(input)
-        if not resizing or not Util.IsMove(input) then
+        if not active or not Util.IsMove(input) then
             return
         end
         local delta = input.Position - startMouse
@@ -2928,8 +3589,15 @@ function Window:_BindResize()
         local maxWidth = math.max(320, math.min(900, viewport.X - 16))
         local maxHeight = math.max(240, math.min(700, viewport.Y - 16))
         local minWidth = math.min(self.SidebarWidth + 300, maxWidth)
-        local newWidth = math.clamp(startSize.X + delta.X, minWidth, maxWidth)
-        local newHeight = math.clamp(startSize.Y + delta.Y, math.min(300, maxHeight), maxHeight)
+        local minHeight = math.min(300, maxHeight)
+        local newWidth = startSize.X
+        local newHeight = startSize.Y
+        if active.X then
+            newWidth = math.clamp(startSize.X + delta.X, minWidth, maxWidth)
+        end
+        if active.Y then
+            newHeight = math.clamp(startSize.Y + delta.Y, minHeight, maxHeight)
+        end
         self.Main.Size = UDim2.new(0, newWidth, 0, newHeight)
     end)
 end
@@ -2940,6 +3608,13 @@ function Window:_ApplySize(size)
     local height = math.clamp(size.Y.Offset + size.Y.Scale * viewport.Y, 240, math.max(240, viewport.Y - 16))
     self.Main.Size = UDim2.fromOffset(width, height)
     self.Main.Position = UDim2.new(0.5, -width / 2, 0.5, -height / 2)
+end
+
+function Window:_RestoreSize()
+    local saved = Save.Get("WindowSize")
+    if type(saved) == "table" and tonumber(saved.Width) and tonumber(saved.Height) then
+        self:_ApplySize(UDim2.fromOffset(tonumber(saved.Width), tonumber(saved.Height)))
+    end
 end
 
 function Window:_SetBreadcrumb(items)
@@ -3121,6 +3796,10 @@ function Window:SetMinimizeKey(keyCode)
     end
 end
 
+function Window:Error(title, detail)
+    Report(tostring(title or "Error"), tostring(detail or ""))
+end
+
 function Window:LoadFeature(name, options)
     return self.Features:Load(name, options)
 end
@@ -3164,7 +3843,7 @@ end
 function Window:SetElementsSource(url)
     local source = Source.Parse(url)
     if not source then
-        warn("[EcoHub] invalid elements source: " .. tostring(url))
+        Report("Invalid source", "elements source: " .. tostring(url))
         return false
     end
     Config.ElementsPath = source.Path
@@ -3190,6 +3869,8 @@ function Window:Destroy()
     self.Destroyed = true
     self.Features:UnloadAll()
     self.Elements.Destroyed = true
+    Save.Flush()
+    Notify.Destroy()
     self.Maid:Destroy()
     self.Gui:Destroy()
     self.ToggleGui:Destroy()
@@ -3264,7 +3945,7 @@ for _, method in ipairs(FEATURE_METHODS) do
     Library[method] = function(_, ...)
         local window = Library.Window
         if not window or window.Destroyed then
-            warn("[EcoHub] " .. method .. " needs a window, call CreateWindow first")
+            Report("Window missing", method .. " needs a window, call CreateWindow first")
             return nil
         end
         return window[method](window, ...)
@@ -3275,7 +3956,7 @@ end
 if type(env.EcoHubDestroy) == "function" then
     pcall(env.EcoHubDestroy)
 end
-for _, name in ipairs({"EcoHub", "EcoHubToggle"}) do
+for _, name in ipairs({"EcoHub", "EcoHubToggle", "EcoHubNotification"}) do
     local old = PlayerGui:FindFirstChild(name)
     if old then
         old:Destroy()
