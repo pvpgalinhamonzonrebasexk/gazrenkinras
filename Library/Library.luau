@@ -54,12 +54,16 @@ local Config = {
     TabPress = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     TabRelease = TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
     TabPop = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-    SaveFolder = "Ecohub",
-    SaveDelay = 1
+    ScrollTween = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    ScrollHold = 0.9,
+    ScrollWidth = 6,
+    SaveFile = "Ecohub.json",
+    SaveDelay = 1,
+    LegacyFolder = "Ecohub",
+    LegacySaveFile = "Ecohub/Save.json",
+    LegacyElementsFile = "Ecohub/Elements.json"
 }
 
-Config.SaveFile = Config.SaveFolder .. "/Save.json"
-Config.LegacyElementsFile = Config.SaveFolder .. "/Elements.json"
 Config.ElementsApi = "https://api.github.com/repos/" .. Config.Repo .. "/contents/" .. Config.ElementsPath .. "?ref=" .. Config.Branch
 Config.ElementsRaw = "https://raw.githubusercontent.com/" .. Config.Repo .. "/refs/heads/" .. Config.Branch .. "/" .. Config.ElementsPath .. "/"
 Config.ElementsCdn = "https://cdn.jsdelivr.net/gh/" .. Config.Repo .. "@" .. Config.Branch .. "/" .. Config.ElementsPath .. "/"
@@ -178,6 +182,190 @@ function Util.DeepEqual(a, b)
         if a[key] == nil then return false end
     end
     return true
+end
+
+-- // ScrollArea
+function Util.ScrollArea(scroll)
+    scroll.ScrollBarThickness = 0
+    scroll.ScrollBarImageTransparency = 1
+
+    local parent = scroll.Parent
+    local width = Config.ScrollWidth
+
+    local bar = Util.Create("Frame", {
+        Name = "ScrollArea",
+        AnchorPoint = scroll.AnchorPoint,
+        Position = scroll.Position,
+        Size = scroll.Size,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = scroll.ZIndex + 5
+    }, parent)
+
+    local track = Util.Create("Frame", {
+        Name = "Track",
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -2, 0, 2),
+        Size = UDim2.new(0, width + 2, 1, -4),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0
+    }, bar)
+
+    local thumb = Util.Create("Frame", {
+        Name = "Thumb",
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -1, 0, 0),
+        Size = UDim2.fromOffset(width, 24),
+        BackgroundColor3 = Theme.Inactive,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Active = false,
+        Visible = false
+    }, track)
+    Util.Corner(thumb, width / 2)
+
+    local shown = false
+    local overScroll = false
+    local overThumb = false
+    local dragging = false
+    local last = 0
+
+    local function paint()
+        local target = 1
+        if shown then
+            target = (overThumb or dragging) and 0.2 or 0.55
+        end
+        Util.Tween(thumb, Config.ScrollTween, {BackgroundTransparency = target})
+    end
+
+    local function reveal()
+        last = os.clock()
+        if shown then
+            return
+        end
+        shown = true
+        thumb.Active = true
+        paint()
+        task.spawn(function()
+            while shown and thumb.Parent do
+                task.wait(0.15)
+                if not (overScroll or overThumb or dragging) and os.clock() - last > Config.ScrollHold then
+                    shown = false
+                    thumb.Active = false
+                    paint()
+                end
+            end
+        end)
+    end
+
+    local function update()
+        local view = scroll.AbsoluteSize.Y
+        local canvas = scroll.AbsoluteCanvasSize.Y
+        local room = track.AbsoluteSize.Y
+        local range = canvas - view
+        if range <= 1 or view <= 0 or room <= 0 then
+            thumb.Visible = false
+            return
+        end
+        local height = math.clamp(room * view / canvas, 24, room)
+        local alpha = math.clamp(scroll.CanvasPosition.Y / range, 0, 1)
+        thumb.Size = UDim2.fromOffset(width, height)
+        thumb.Position = UDim2.new(1, -1, 0, alpha * (room - height))
+        thumb.Visible = true
+    end
+
+    local function mirror()
+        bar.AnchorPoint = scroll.AnchorPoint
+        bar.Position = scroll.Position
+        bar.Size = scroll.Size
+        update()
+    end
+
+    for _, property in ipairs({"AnchorPoint", "Position", "Size"}) do
+        scroll:GetPropertyChangedSignal(property):Connect(mirror)
+    end
+    scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(update)
+    scroll:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(update)
+    track:GetPropertyChangedSignal("AbsoluteSize"):Connect(update)
+    scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+        update()
+        reveal()
+    end)
+    if parent:IsA("GuiObject") then
+        parent:GetPropertyChangedSignal("Visible"):Connect(update)
+    end
+
+    scroll.MouseEnter:Connect(function()
+        overScroll = true
+        reveal()
+    end)
+    scroll.MouseLeave:Connect(function()
+        overScroll = false
+        last = os.clock()
+    end)
+    scroll.MouseMoved:Connect(function()
+        if shown then
+            last = os.clock()
+        else
+            reveal()
+        end
+    end)
+
+    thumb.MouseEnter:Connect(function()
+        overThumb = true
+        paint()
+    end)
+    thumb.MouseLeave:Connect(function()
+        overThumb = false
+        last = os.clock()
+        paint()
+    end)
+
+    thumb.InputBegan:Connect(function(input)
+        if not shown or not Util.IsPress(input) then
+            return
+        end
+        dragging = true
+        paint()
+        local startY = input.Position.Y
+        local startCanvas = scroll.CanvasPosition.Y
+        local moveConnection, endConnection
+
+        local function finish()
+            dragging = false
+            last = os.clock()
+            if moveConnection then
+                moveConnection:Disconnect()
+            end
+            if endConnection then
+                endConnection:Disconnect()
+            end
+            paint()
+        end
+
+        moveConnection = UserInputService.InputChanged:Connect(function(move)
+            if not Util.IsMove(move) then
+                return
+            end
+            local room = track.AbsoluteSize.Y
+            local travel = room - thumb.AbsoluteSize.Y
+            local range = scroll.AbsoluteCanvasSize.Y - scroll.AbsoluteSize.Y
+            if travel <= 0 or range <= 0 then
+                return
+            end
+            local delta = move.Position.Y - startY
+            scroll.CanvasPosition = Vector2.new(scroll.CanvasPosition.X, math.clamp(startCanvas + delta * range / travel, 0, range))
+        end)
+
+        endConnection = UserInputService.InputEnded:Connect(function(ended)
+            if Util.IsPress(ended) then
+                finish()
+            end
+        end)
+    end)
+
+    task.defer(update)
+    return bar
 end
 
 -- // Notificação
@@ -517,7 +705,7 @@ local function Report(title, detail)
 end
 
 -- // Salvamento
-local Save = {Data = nil, Entry = nil, Key = nil, Name = nil, Dirty = false, Token = 0, Started = false}
+local Save = {Data = nil, Entry = nil, Key = nil, Name = nil, Dirty = false, Token = 0, Started = false, Cleanup = false}
 
 function Save.Read()
     if Save.Data then
@@ -539,6 +727,9 @@ function Save.Read()
         end
     end
     data = data or {}
+    if type(data.Player) ~= "table" then
+        data.Player = {}
+    end
     if type(data.Elements) ~= "table" then
         data.Elements = {}
     end
@@ -546,29 +737,99 @@ function Save.Read()
         data.Games = {}
     end
     Save.Data = data
+    Save.Identify()
     Save.Migrate()
     return data
 end
 
+function Save.Identify()
+    local player = Save.Data.Player
+    local info = {
+        Name = LocalPlayer.Name,
+        DisplayName = LocalPlayer.DisplayName,
+        UserId = LocalPlayer.UserId
+    }
+    local changed = false
+    for key, value in pairs(info) do
+        if player[key] ~= value then
+            player[key] = value
+            changed = true
+        end
+    end
+    if changed then
+        Save.Touch()
+    end
+end
+
 function Save.Migrate()
-    if type(isfile) ~= "function" or type(delfile) ~= "function" then
+    if type(isfile) ~= "function" or type(readfile) ~= "function" then
         return
     end
-    pcall(function()
-        if not isfile(Config.LegacyElementsFile) then
-            return
+    local data = Save.Data
+
+    local function load(path)
+        local ok, decoded = pcall(function()
+            if isfile(path) then
+                return HttpService:JSONDecode(readfile(path))
+            end
+            return nil
+        end)
+        if ok and type(decoded) == "table" then
+            return decoded
         end
-        local data = Save.Data
-        if type(data.Elements.Files) ~= "table" or #data.Elements.Files == 0 then
-            local parsed, list = pcall(function()
-                return HttpService:JSONDecode(readfile(Config.LegacyElementsFile))
-            end)
-            if parsed and type(list) == "table" and #list > 0 then
-                data.Elements.Files = list
-                Save.Touch()
+        return nil
+    end
+
+    local function empty()
+        return type(data.Elements.Files) ~= "table" or #data.Elements.Files == 0
+    end
+
+    local found = false
+
+    local legacy = load(Config.LegacySaveFile)
+    if legacy then
+        found = true
+        if type(legacy.Games) == "table" then
+            for name, entry in pairs(legacy.Games) do
+                if data.Games[name] == nil then
+                    data.Games[name] = entry
+                end
             end
         end
-        delfile(Config.LegacyElementsFile)
+        if type(legacy.Elements) == "table" and type(legacy.Elements.Files) == "table" and #legacy.Elements.Files > 0 and empty() then
+            data.Elements.Files = legacy.Elements.Files
+        end
+    end
+
+    local list = load(Config.LegacyElementsFile)
+    if list then
+        found = true
+        if #list > 0 and empty() then
+            data.Elements.Files = list
+        end
+    end
+
+    if found then
+        Save.Cleanup = true
+        Save.Touch()
+    end
+end
+
+function Save.Purge()
+    Save.Cleanup = false
+    pcall(function()
+        if type(isfile) == "function" and type(delfile) == "function" then
+            for _, path in ipairs({Config.LegacySaveFile, Config.LegacyElementsFile}) do
+                if isfile(path) then
+                    delfile(path)
+                end
+            end
+        end
+        if type(isfolder) == "function" and type(delfolder) == "function" and type(listfiles) == "function" then
+            if isfolder(Config.LegacyFolder) and #listfiles(Config.LegacyFolder) == 0 then
+                delfolder(Config.LegacyFolder)
+            end
+        end
     end)
 end
 
@@ -600,8 +861,11 @@ function Save.Class()
     if type(entry.AutoSave) ~= "table" then
         entry.AutoSave = {}
     end
+    entry.GameId = game.GameId
+    entry.LastPlayed = os.time()
     Save.Key = name
     Save.Entry = entry
+    Save.Touch()
     return entry
 end
 
@@ -661,13 +925,14 @@ function Save.Flush()
         return
     end
     local ok, failure = pcall(function()
-        if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder(Config.SaveFolder) then
-            makefolder(Config.SaveFolder)
-        end
         writefile(Config.SaveFile, HttpService:JSONEncode(Save.Data))
     end)
     if not ok then
         Report("Save failed", failure)
+        return
+    end
+    if Save.Cleanup then
+        Save.Purge()
     end
 end
 
@@ -1355,7 +1620,7 @@ function Element.new(contentSection, elementType, options)
         Visible = false
     }, contentSection.Holder)
     Util.Corner(container, 8)
-    Util.Create("UISizeConstraint", {MinSize = Vector2.new(0, 38)}, container)
+    local constraint = Util.Create("UISizeConstraint", {MinSize = Vector2.new(0, 38)}, container)
     Util.Create("UIGradient", {
         Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(44, 44, 44)),
@@ -1377,26 +1642,14 @@ function Element.new(contentSection, elementType, options)
         Visible = false
     }, container)
     Util.Corner(deco, 8)
-    local bar = Util.Create("Frame", {
-        Name = "Bar",
-        AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 5, 0.5, 0),
-        Size = UDim2.new(0, 3, 0.3, 0),
-        BackgroundColor3 = Theme.Active,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0
-    }, deco)
-    Util.Corner(bar, 2)
 
     if not isTouch then
         container.MouseEnter:Connect(function()
             Util.Tween(deco, Config.TweenInfo, {BackgroundTransparency = 0.94})
-            Util.Tween(bar, Config.TweenInfo, {BackgroundTransparency = 0.2, Size = UDim2.new(0, 3, 0.6, 0)})
             Util.Tween(border, Config.TweenInfo, {Color = Theme.BorderHover})
         end)
         container.MouseLeave:Connect(function()
             Util.Tween(deco, Config.TweenInfo, {BackgroundTransparency = 1})
-            Util.Tween(bar, Config.TweenInfo, {BackgroundTransparency = 1, Size = UDim2.new(0, 3, 0.3, 0)})
             Util.Tween(border, Config.TweenInfo, {Color = Theme.Border})
         end)
     end
@@ -1414,6 +1667,7 @@ function Element.new(contentSection, elementType, options)
     self.Tab = tab
     self.Section = contentSection
     self.Container = container
+    self.Constraint = constraint
     self.Border = border
     self.Flash = flash
     self.Inset = inset
@@ -1433,6 +1687,7 @@ function Element:ApplyFrame(frameless)
     local pad = frameless and 0 or 5
     local side = frameless and 0 or 12
     self.Container.BackgroundTransparency = frameless and 1 or 0
+    self.Constraint.MinSize = Vector2.new(0, frameless and 0 or 38)
     self.Border.Enabled = not frameless
     self.Inset.PaddingTop = UDim.new(0, pad)
     self.Inset.PaddingBottom = UDim.new(0, pad)
@@ -1722,14 +1977,14 @@ function Tab.new(window, sideSection, name, iconName)
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ScrollBarThickness = isTouch and 3 or 2,
-        ScrollBarImageColor3 = Theme.Border,
+        ScrollBarThickness = 0,
         CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         ScrollingDirection = Enum.ScrollingDirection.Y
     }, page)
     Util.Padding(scroll, 4, 12, 12, 12)
     Util.List(scroll, 14)
+    Util.ScrollArea(scroll)
 
     self.Button = button
     self.Icon = icon
@@ -2035,8 +2290,7 @@ function Palette:_Build()
         Position = UDim2.new(0, 0, 0, 41),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ScrollBarThickness = isTouch and 3 or 2,
-        ScrollBarImageColor3 = Theme.Border,
+        ScrollBarThickness = 0,
         CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -2044,6 +2298,7 @@ function Palette:_Build()
     }, frame)
     Util.Padding(list, 4, 4, 4, 4)
     local layout = Util.List(list, 2)
+    Util.ScrollArea(list)
 
     self.Overlay = overlay
     self.Frame = frame
@@ -3119,6 +3374,7 @@ function Window:_BuildMain()
     }, sidebar)
     Util.Padding(tabList, 2, 8, 10, 10)
     Util.List(tabList, 8)
+    Util.ScrollArea(tabList)
 
     local contentArea = Util.Create("Frame", {
         Name = "ContentArea",
@@ -3182,71 +3438,8 @@ function Window:_BuildMain()
         TextTruncate = Enum.TextTruncate.AtEnd
     }, searchFrame)
 
-    local edge = isTouch and 14 or 8
     local corner = isTouch and 30 or 22
     local handles = {}
-
-    local rightButton = Util.Create("TextButton", {
-        Name = "ResizeRight",
-        AnchorPoint = Vector2.new(1, 0),
-        Position = UDim2.new(1, 0, 0, 0),
-        Size = UDim2.new(0, edge, 1, -corner),
-        BackgroundTransparency = 1,
-        AutoButtonColor = false,
-        Text = "",
-        ZIndex = 10
-    }, main)
-    local rightPill = Util.Create("Frame", {
-        Name = "Pill",
-        AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -3, 0.5, 0),
-        Size = UDim2.fromOffset(3, 28),
-        BackgroundColor3 = Theme.Dim,
-        BorderSizePixel = 0
-    }, rightButton)
-    Util.Corner(rightPill, 2)
-    handles[#handles + 1] = {
-        Button = rightButton,
-        X = true,
-        Y = false,
-        Paint = function(lit)
-            Util.Tween(rightPill, Config.TweenInfo, {
-                BackgroundColor3 = lit and Theme.Active or Theme.Dim,
-                Size = lit and UDim2.fromOffset(4, 44) or UDim2.fromOffset(3, 28)
-            })
-        end
-    }
-
-    local bottomButton = Util.Create("TextButton", {
-        Name = "ResizeBottom",
-        AnchorPoint = Vector2.new(0, 1),
-        Position = UDim2.new(0, 0, 1, 0),
-        Size = UDim2.new(1, -corner, 0, edge),
-        BackgroundTransparency = 1,
-        AutoButtonColor = false,
-        Text = "",
-        ZIndex = 10
-    }, main)
-    local bottomPill = Util.Create("Frame", {
-        Name = "Pill",
-        AnchorPoint = Vector2.new(0.5, 1),
-        Position = UDim2.new(0.5, 0, 1, -3),
-        Size = UDim2.fromOffset(28, 3),
-        BackgroundColor3 = Theme.Dim,
-        BorderSizePixel = 0
-    }, bottomButton)
-    Util.Corner(bottomPill, 2)
-    handles[#handles + 1] = {
-        Button = bottomButton,
-        X = false,
-        Y = true,
-        Paint = function(lit)
-            Util.Tween(bottomPill, Config.TweenInfo, {
-                BackgroundColor3 = lit and Theme.Active or Theme.Dim,
-                Size = lit and UDim2.fromOffset(44, 4) or UDim2.fromOffset(28, 3)
-            })
-        end
-    }
 
     local gripButton = Util.Create("TextButton", {
         Name = "ResizeButton",
