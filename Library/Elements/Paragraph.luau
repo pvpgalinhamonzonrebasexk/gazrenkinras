@@ -1,22 +1,25 @@
--- // Paragraph
+-- // Paragraph v2
 Elements.Register("Paragraph", function(section, options)
     options = type(options) == "table" and options or {}
 
+    local accentOption = options.accent or options.Accent
+
     local C = {
+        Accent = typeof(accentOption) == "Color3" and accentOption or Color3.fromRGB(74, 222, 128),
+        Card = Color3.fromRGB(17, 17, 19),
+        CardStroke = Color3.fromRGB(42, 42, 46),
+        Row = Color3.fromRGB(25, 25, 28),
+        RowStroke = Color3.fromRGB(42, 42, 46),
+        HoloBg = Color3.fromRGB(10, 10, 12),
         TextActive = Color3.fromRGB(250, 250, 250),
         TextDisabled = Color3.fromRGB(82, 82, 91),
-        DescText = Color3.fromRGB(113, 113, 122),
-        DescDisabled = Color3.fromRGB(70, 70, 78),
-        Line = Color3.fromRGB(39, 39, 42),
+        DescText = Color3.fromRGB(170, 170, 178),
+        DescDisabled = Color3.fromRGB(82, 82, 91),
+        Muted = Color3.fromRGB(113, 113, 122),
         ThumbBg = Color3.fromRGB(24, 24, 27),
-        CardBg = Color3.fromRGB(16, 16, 16),
-        StatusBg = Color3.fromRGB(18, 18, 18),
         Grid = Color3.fromRGB(255, 255, 255),
-        Icon = Color3.fromRGB(161, 161, 170),
-        CornerText = Color3.fromRGB(212, 212, 216),
-        DotActive = Color3.fromRGB(250, 250, 250),
-        DotInactive = Color3.fromRGB(82, 82, 91),
-        ScrollBar = Color3.fromRGB(82, 82, 91),
+        CornerText = Color3.fromRGB(228, 228, 231),
+        Bar = Color3.fromRGB(42, 42, 46),
     }
 
     local REMOVABLE = {
@@ -53,105 +56,85 @@ Elements.Register("Paragraph", function(section, options)
         insert = game:GetService("InsertService"),
     }
 
-    local fontBold = FONT_BOLD or Enum.Font.SourceSansBold
-    local fontRegular = FONT or Enum.Font.SourceSans
-    local ICON_RIGHT = (ICONS and ICONS.assets and ICONS.assets["lucide-chevron-right"]) or "rbxassetid://10709791437"
-    local ICON_LEFT = (ICONS and ICONS.assets and ICONS.assets["lucide-chevron-left"]) or "rbxassetid://10709791281"
+    local fontBold = FONT_BOLD or Enum.Font.GothamBold
+    local fontRegular = FONT or Enum.Font.Gotham
 
     local MOBILE = Svc.input.TouchEnabled and not Svc.input.KeyboardEnabled
-    local LOW_END = MOBILE
-
-    pcall(function()
-        local level = settings().Rendering.QualityLevel.Value
-        if level > 0 and level <= 5 then
-            LOW_END = true
-        end
-    end)
-
-    pcall(function()
-        local saved = UserSettings():GetService("UserGameSettings").SavedQualityLevel.Value
-        if saved > 0 and saved <= 5 then
-            LOW_END = true
-        end
-    end)
-
     local sizeOption = tonumber(options.size or options.Size)
 
     local K = {
+        -- textos (legiveis, mas sem exagero)
+        TAG = MOBILE and 12 or 11,
+        TITLE = MOBILE and 19 or 17,
+        DESC = MOBILE and 14 or 13,
+        STAT = MOBILE and 14 or 13,
+        HEAD = MOBILE and 13 or 12,
+        CORNER = MOBILE and 12 or 11,
+
+        -- layout
+        CARD_H = math.clamp(sizeOption or (MOBILE and 190 or 170), 120, 420),
+        MIN_H = 40,
+        PAD = 10,
+        GAP = 8,
+        INFO_SCALE = 0.56,
+        THUMB = MOBILE and 46 or 42,
+        THUMB_GAP = 10,
+        STAT_H = MOBILE and 32 or 30,
+        EDGE = 8,
         GRID_TILE = MOBILE and 28 or 32,
         GRID_ALPHA = 0.94,
-        TITLE = MOBILE and 13 or 12,
-        DESC = MOBILE and 11 or 10,
-        CORNER = MOBILE and 11 or 10,
-        THUMB = MOBILE and 40 or 36,
-        CARD_H = math.clamp(sizeOption or (MOBILE and 156 or 140), 100, 320),
-        ARROW = MOBILE and 38 or 28,
-        ICON = MOBILE and 20 or 16,
-        ARROW_PAD = 6,
-        EDGE = 10,
-        STATUS_LEFT = 14,
-        STATUS_RIGHT = 14,
-        STAT_H = MOBILE and 20 or 18,
-        LIFT = MOBILE and 12 or 10,
-        MARGIN = 1.08,
-        STEP = 1 / (LOW_END and 20 or 30),
-        STEP_SLOW = 1 / 8,
-        STEP_HIDDEN = 0.5,
-        BUDGET = LOW_END and 0.002 or 0.004,
-        HIDDEN_ALPHA = 0.99,
-        CACHE_MAX = LOW_END and 1 or 3,
-        MAX_PARTS = LOW_END and 160 or 360,
-        MAX_DESC = LOW_END and 2500 or 5000,
-        ATTEMPTS = LOW_END and 2 or 3,
-        RETRY = 0.8,
-        PRELOAD = LOW_END and 5 or 8,
-        IMAGE_ALT = 3,
-        STABLE = LOW_END and 2 or 3,
-        STREAM = 2,
-        PITCH_ITEM = 16,
-        PITCH_CHAR = 6,
-        IMAGE_ALPHA = 0.1,
-        PAD_Y = 10,
-        THUMB_GAP = 10,
-        MIN_H = 40,
-        UPDATE = MOBILE and 5 or 3,
-        WORD_MAX = 30,
+        IMAGE_ALPHA = 0.05,
+
+        -- holograma
         FOV = 40,
         SPEED = 40,
-    }
+        MARGIN = 1.1,
+        PITCH_ITEM = 16,
+        PITCH_CHAR = 6,
+        LIFT = 8,
+        BOB = 3,
+        DRAG = 0.5,
+        TILT_MIN = -20,
+        TILT_MAX = 35,
+        RESUME = 1.5,
 
-    K.STATUS_LEFT_BACK = K.ARROW + K.ARROW_PAD + 4
+        -- carregamento
+        ATTEMPTS = 3,
+        RETRY = 0.8,
+        PRELOAD = 10,
+        IMAGE_ALT = 3,
+        STABLE = 3,
+        STREAM = 2,
+        UPDATE = 3,
+        WORD_MAX = 30,
+        HIDDEN_ALPHA = 0.99,
+    }
 
     local TI = {
         PAGE = TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        FAST = TweenInfo.new(0.12),
+        FAST = TweenInfo.new(0.15),
         FADE = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     }
 
     local S = {
         connections = {},
         watch = {},
-        cache = {},
         tweens = setmetatable({}, { __mode = "k" }),
         destroyed = false,
         liveToken = 0,
         holoToken = 0,
         loopToken = 0,
-        hideToken = 0,
         busy = nil,
         page = "hologram",
-        layoutKey = nil,
         model = nil,
-        cached = false,
         size = nil,
         pitch = K.PITCH_ITEM,
+        tilt = 0,
         angle = 0,
         lastAngle = nil,
         distance = 0,
         light = Vector3.new(0.3, -0.5, 1),
         signature = nil,
-        rotateConn = nil,
-        rotating = false,
         images = {},
         version = 0,
         reloadPending = false,
@@ -160,6 +143,12 @@ Elements.Register("Paragraph", function(section, options)
         rich = options.richText ~= false,
         statusTitle = tostring(options.statusTitle or options.StatusTitle or "Status"),
         callback = options.callback or options.Callback,
+        dragging = false,
+        dragInput = nil,
+        velocity = 0,
+        lastDrag = 0,
+        time = 0,
+        scanTween = nil,
     }
 
     if type(S.callback) ~= "function" then
@@ -169,6 +158,9 @@ Elements.Register("Paragraph", function(section, options)
     local H = {}
     local U = {}
 
+    ------------------------------------------------------------------
+    -- Helpers
+    ------------------------------------------------------------------
     function H.new(class, props, parent)
         local instance = Instance.new(class)
         for key, value in pairs(props) do
@@ -182,6 +174,15 @@ Elements.Register("Paragraph", function(section, options)
 
     function H.corner(instance, radius)
         return H.new("UICorner", { CornerRadius = UDim.new(0, radius) }, instance)
+    end
+
+    function H.stroke(instance, color, thickness, transparency)
+        return H.new("UIStroke", {
+            Color = color,
+            Thickness = thickness or 1,
+            Transparency = transparency or 0,
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+        }, instance)
     end
 
     function H.connect(signal, fn)
@@ -360,6 +361,7 @@ Elements.Register("Paragraph", function(section, options)
         disabled = options.disabled == true or options.Disabled == true,
         title = tostring(options.title or options.Name or ""),
         description = tostring(options.description or options.Description or ""),
+        tag = tostring(options.tag or options.Tag or ""),
         thumbnail = options.thumbnail or options.Thumbnail,
         hologram = H.hologram(options.hologram or options.Hologram),
     }
@@ -370,30 +372,65 @@ Elements.Register("Paragraph", function(section, options)
 
     S.status = H.statusList(options.status or options.Status)
 
+    ------------------------------------------------------------------
+    -- UI: card principal
+    ------------------------------------------------------------------
     U.container = H.new("Frame", {
         Name = (data.title ~= "" and data.title or "Paragraph") .. "_Paragraph",
-        Size = UDim2.new(1, 0, 0, K.MIN_H),
-        BackgroundTransparency = 1,
-        ClipsDescendants = false,
-        AutomaticSize = Enum.AutomaticSize.Y,
+        Size = UDim2.new(1, 0, 0, K.CARD_H),
+        BackgroundColor3 = C.Card,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
     }, section.frame)
+    H.corner(U.container, 8)
+    H.stroke(U.container, C.CardStroke, 1)
 
-    H.new("UISizeConstraint", { MinSize = Vector2.new(0, K.MIN_H) }, U.container)
-    H.new("UIPadding", { PaddingTop = UDim.new(0, K.PAD_Y), PaddingBottom = UDim.new(0, K.PAD_Y) }, U.container)
-    H.new("UIListLayout", {
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 10),
+    U.content = H.new("Frame", {
+        Name = "Content",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
     }, U.container)
 
-    U.row = H.new("Frame", {
-        Name = "Row",
+    H.new("UIPadding", {
+        PaddingTop = UDim.new(0, K.PAD),
+        PaddingBottom = UDim.new(0, K.PAD),
+        PaddingLeft = UDim.new(0, K.PAD),
+        PaddingRight = UDim.new(0, K.PAD),
+    }, U.content)
+
+    ------------------------------------------------------------------
+    -- UI: coluna de informacoes (scroll para tudo)
+    ------------------------------------------------------------------
+    U.info = H.new("ScrollingFrame", {
+        Name = "Info",
+        Size = UDim2.new(K.INFO_SCALE, -K.GAP, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
         BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 0,
+        ScrollBarImageColor3 = C.Muted,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        ElasticBehavior = Enum.ElasticBehavior.Never,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ClipsDescendants = true,
+    }, U.content)
+
+    U.infoLayout = H.new("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, K.GAP),
+    }, U.info)
+    H.new("UIPadding", { PaddingRight = UDim.new(0, 8) }, U.info)
+
+    -- cabecalho (thumb + tag + titulo + descricao)
+    U.header = H.new("Frame", {
+        Name = "Header",
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
         LayoutOrder = 1,
-    }, U.container)
-
-    U.rowConstraint = H.new("UISizeConstraint", { MinSize = Vector2.new(0, 0) }, U.row)
+    }, U.info)
+    U.headerConstraint = H.new("UISizeConstraint", { MinSize = Vector2.new(0, 0) }, U.header)
 
     U.thumbFrame = H.new("Frame", {
         Name = "Thumbnail",
@@ -401,8 +438,9 @@ Elements.Register("Paragraph", function(section, options)
         BackgroundColor3 = C.ThumbBg,
         BorderSizePixel = 0,
         Visible = false,
-    }, U.row)
-    H.corner(U.thumbFrame, 6)
+    }, U.header)
+    H.corner(U.thumbFrame, 8)
+    H.stroke(U.thumbFrame, C.CardStroke, 1)
 
     U.thumbImage = H.new("ImageLabel", {
         Name = "Image",
@@ -412,7 +450,7 @@ Elements.Register("Paragraph", function(section, options)
         ScaleType = Enum.ScaleType.Crop,
         ZIndex = 2,
     }, U.thumbFrame)
-    H.corner(U.thumbImage, 6)
+    H.corner(U.thumbImage, 8)
 
     U.textFrame = H.new("Frame", {
         Name = "TextBlock",
@@ -420,9 +458,25 @@ Elements.Register("Paragraph", function(section, options)
         Position = UDim2.new(0, 0, 0, 0),
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
-    }, U.row)
+    }, U.header)
+    H.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 3) }, U.textFrame)
 
-    H.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4) }, U.textFrame)
+    U.tag = H.new("TextLabel", {
+        Name = "Tag",
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Text = H.text(data.tag),
+        TextColor3 = C.Accent,
+        TextSize = K.TAG,
+        Font = fontBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        TextWrapped = true,
+        RichText = S.rich,
+        LayoutOrder = 1,
+        Visible = data.tag ~= "",
+    }, U.textFrame)
 
     U.title = H.new("TextLabel", {
         Name = "Title",
@@ -437,7 +491,7 @@ Elements.Register("Paragraph", function(section, options)
         TextYAlignment = Enum.TextYAlignment.Top,
         TextWrapped = true,
         RichText = S.rich,
-        LayoutOrder = 1,
+        LayoutOrder = 2,
         Visible = data.title ~= "",
     }, U.textFrame)
 
@@ -453,39 +507,55 @@ Elements.Register("Paragraph", function(section, options)
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Top,
         TextWrapped = true,
-        LineHeight = 1.2,
+        LineHeight = 1.15,
         RichText = S.rich,
-        LayoutOrder = 2,
+        LayoutOrder = 3,
         Visible = data.description ~= "",
     }, U.textFrame)
 
-    U.card = H.new("Frame", {
-        Name = "Card",
-        Size = UDim2.new(1, 0, 0, K.CARD_H),
-        BackgroundColor3 = C.CardBg,
-        BorderSizePixel = 0,
-        ClipsDescendants = true,
+    -- status (lista com barras)
+    U.stats = H.new("Frame", {
+        Name = "Stats",
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
         LayoutOrder = 2,
         Visible = false,
-    }, U.container)
-    H.corner(U.card, 8)
+    }, U.info)
+    H.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }, U.stats)
 
-    U.pages = H.new("Frame", {
-        Name = "Pages",
-        Size = UDim2.new(1, 0, 1, 0),
+    U.statusHeader = H.new("TextLabel", {
+        Name = "Header",
+        Size = UDim2.new(1, 0, 0, 18),
         BackgroundTransparency = 1,
-        ZIndex = 1,
-    }, U.card)
+        Text = S.statusTitle,
+        TextColor3 = C.Accent,
+        TextSize = K.HEAD,
+        Font = fontBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        LayoutOrder = 0,
+    }, U.stats)
 
-    U.holoPage = H.new("Frame", {
+    ------------------------------------------------------------------
+    -- UI: painel do holograma (lado direito)
+    ------------------------------------------------------------------
+    U.holo = H.new("Frame", {
         Name = "Hologram",
-        Size = UDim2.new(1, 0, 1, 0),
-        Position = UDim2.new(0, 0, 0, 0),
-        BackgroundColor3 = C.CardBg,
+        Size = UDim2.new(1 - K.INFO_SCALE, 0, 1, 0),
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, 0, 0, 0),
+        BackgroundColor3 = Color3.new(1, 1, 1),
         BorderSizePixel = 0,
         ClipsDescendants = true,
-    }, U.pages)
-    H.corner(U.holoPage, 8)
+        Visible = false,
+    }, U.content)
+    H.corner(U.holo, 8)
+    H.stroke(U.holo, C.CardStroke, 1)
+    H.new("UIGradient", {
+        Rotation = 90,
+        Color = ColorSequence.new(C.HoloBg, C.HoloBg:Lerp(C.Accent, 0.16)),
+    }, U.holo)
 
     U.grid = H.new("ImageLabel", {
         Name = "Grid",
@@ -497,7 +567,32 @@ Elements.Register("Paragraph", function(section, options)
         ScaleType = Enum.ScaleType.Tile,
         TileSize = UDim2.fromOffset(K.GRID_TILE, K.GRID_TILE),
         ZIndex = 1,
-    }, U.holoPage)
+    }, U.holo)
+
+    U.platformRing = H.new("Frame", {
+        Name = "PlatformRing",
+        Size = UDim2.new(0.8, 0, 0, 18),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.88, 0),
+        BackgroundColor3 = C.Accent,
+        BackgroundTransparency = 0.94,
+        BorderSizePixel = 0,
+        ZIndex = 2,
+    }, U.holo)
+    H.corner(U.platformRing, 99)
+
+    U.platform = H.new("Frame", {
+        Name = "Platform",
+        Size = UDim2.new(0.56, 0, 0, 10),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.88, 0),
+        BackgroundColor3 = C.Accent,
+        BackgroundTransparency = 0.8,
+        BorderSizePixel = 0,
+        ZIndex = 2,
+    }, U.holo)
+    H.corner(U.platform, 99)
+    H.stroke(U.platform, C.Accent, 1, 0.45)
 
     U.viewport = H.new("ViewportFrame", {
         Name = "Viewport",
@@ -505,18 +600,18 @@ Elements.Register("Paragraph", function(section, options)
         Position = UDim2.new(0, 0, 0, -K.LIFT),
         BackgroundTransparency = 1,
         ImageTransparency = 0,
-        Ambient = Color3.fromRGB(190, 190, 200),
+        Ambient = Color3.fromRGB(200, 200, 210),
         LightColor = Color3.fromRGB(255, 255, 255),
         LightDirection = S.light,
         ZIndex = 3,
-    }, U.holoPage)
+    }, U.holo)
 
     U.camera = H.new("Camera", { FieldOfView = K.FOV }, U.viewport)
     U.viewport.CurrentCamera = U.camera
 
     U.fallback = H.new("ImageLabel", {
         Name = "Fallback",
-        Size = UDim2.fromOffset(K.CARD_H - 44, K.CARD_H - 44),
+        Size = UDim2.new(0.8, 0, 0.8, 0),
         Position = UDim2.new(0.5, 0, 0.5, -K.LIFT),
         AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundTransparency = 1,
@@ -525,12 +620,47 @@ Elements.Register("Paragraph", function(section, options)
         ScaleType = Enum.ScaleType.Fit,
         Visible = false,
         ZIndex = 3,
-    }, U.holoPage)
+    }, U.holo)
+    H.new("UIAspectRatioConstraint", {
+        AspectRatio = 1,
+        AspectType = Enum.AspectType.FitWithinMaxSize,
+    }, U.fallback)
+
+    U.scan = H.new("Frame", {
+        Name = "Scan",
+        Size = UDim2.new(1, 0, 0, 2),
+        Position = UDim2.new(0, 0, 0.08, 0),
+        BackgroundColor3 = C.Accent,
+        BackgroundTransparency = 0.45,
+        BorderSizePixel = 0,
+        ZIndex = 4,
+    }, U.holo)
+    H.new("UIGradient", {
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.5, 0),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+    }, U.scan)
+
+    do
+        local ok, tween = pcall(
+            Svc.tween.Create,
+            Svc.tween,
+            U.scan,
+            TweenInfo.new(2.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+            { Position = UDim2.new(0, 0, 0.92, 0) }
+        )
+        if ok and tween then
+            S.scanTween = tween
+            tween:Play()
+        end
+    end
 
     function H.cornerLabel(name, position, anchor, alignX, alignY, font, color)
         return H.new("TextLabel", {
             Name = name,
-            Size = UDim2.new(0.5, -(K.EDGE + 8), 0, 16),
+            Size = UDim2.new(0.5, -(K.EDGE + 4), 0, 16),
             AnchorPoint = anchor,
             Position = position,
             BackgroundTransparency = 1,
@@ -541,182 +671,45 @@ Elements.Register("Paragraph", function(section, options)
             TextXAlignment = alignX,
             TextYAlignment = alignY,
             TextTruncate = Enum.TextTruncate.AtEnd,
-            TextStrokeTransparency = 0.75,
+            TextStrokeTransparency = 0.6,
+            TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
             RichText = S.rich,
             Visible = false,
             ZIndex = 5,
-        }, U.holoPage)
+        }, U.holo)
     end
 
     U.corners = {
         topLeft = H.cornerLabel("TopLeft", UDim2.new(0, K.EDGE, 0, K.EDGE), Vector2.new(0, 0), Enum.TextXAlignment.Left, Enum.TextYAlignment.Top, fontBold, C.TextActive),
-        topRight = H.cornerLabel("TopRight", UDim2.new(1, -K.EDGE, 0, K.EDGE), Vector2.new(1, 0), Enum.TextXAlignment.Right, Enum.TextYAlignment.Top, fontRegular, C.DescText),
+        topRight = H.cornerLabel("TopRight", UDim2.new(1, -K.EDGE, 0, K.EDGE), Vector2.new(1, 0), Enum.TextXAlignment.Right, Enum.TextYAlignment.Top, fontBold, C.Accent),
         bottomLeft = H.cornerLabel("BottomLeft", UDim2.new(0, K.EDGE, 1, -K.EDGE), Vector2.new(0, 1), Enum.TextXAlignment.Left, Enum.TextYAlignment.Bottom, fontRegular, C.CornerText),
         bottomRight = H.cornerLabel("BottomRight", UDim2.new(1, -K.EDGE, 1, -K.EDGE), Vector2.new(1, 1), Enum.TextXAlignment.Right, Enum.TextYAlignment.Bottom, fontRegular, C.DescText),
     }
 
-    U.statusPage = H.new("Frame", {
-        Name = "Status",
-        Size = UDim2.new(1, 0, 1, 0),
-        Position = UDim2.new(1, 0, 0, 0),
-        BackgroundColor3 = C.StatusBg,
-        BorderSizePixel = 0,
-        ClipsDescendants = true,
-    }, U.pages)
-    H.corner(U.statusPage, 8)
-
-    U.statusHeader = H.new("TextLabel", {
-        Name = "Header",
-        Size = UDim2.new(1, -(K.STATUS_LEFT + K.STATUS_RIGHT), 0, 16),
-        Position = UDim2.new(0, K.STATUS_LEFT, 0, 10),
+    U.loading = H.new("TextLabel", {
+        Name = "Loading",
+        Size = UDim2.new(1, 0, 0, 16),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
         BackgroundTransparency = 1,
-        Text = S.statusTitle,
-        TextColor3 = C.TextActive,
-        TextSize = K.TITLE,
-        Font = fontBold,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd,
-    }, U.statusPage)
-
-    U.statusLine = H.new("Frame", {
-        Name = "Line",
-        Size = UDim2.new(1, -(K.STATUS_LEFT + K.STATUS_RIGHT), 0, 1),
-        Position = UDim2.new(0, K.STATUS_LEFT, 0, 30),
-        BackgroundColor3 = C.Line,
-        BorderSizePixel = 0,
-    }, U.statusPage)
-
-    U.statusScroll = H.new("ScrollingFrame", {
-        Name = "List",
-        Size = UDim2.new(1, -(K.STATUS_LEFT + K.STATUS_RIGHT), 1, -46),
-        Position = UDim2.new(0, K.STATUS_LEFT, 0, 38),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ScrollBarThickness = 0,
-        ScrollBarImageColor3 = C.ScrollBar,
-        ScrollingDirection = Enum.ScrollingDirection.Y,
-        ScrollingEnabled = false,
-        ElasticBehavior = Enum.ElasticBehavior.Never,
-        CanvasSize = UDim2.new(0, 0, 0, 0),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
-    }, U.statusPage)
-
-    H.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 7) }, U.statusScroll)
-    H.new("UIPadding", { PaddingRight = UDim.new(0, 6) }, U.statusScroll)
-
-    function H.updateScroll()
-        local overflow = U.statusScroll.AbsoluteCanvasSize.Y > U.statusScroll.AbsoluteSize.Y + 1
-        if U.statusScroll.ScrollingEnabled ~= overflow then
-            U.statusScroll.ScrollingEnabled = overflow
-        end
-        local thickness = overflow and (MOBILE and 3 or 2) or 0
-        if U.statusScroll.ScrollBarThickness ~= thickness then
-            U.statusScroll.ScrollBarThickness = thickness
-        end
-    end
-
-    H.connect(U.statusScroll:GetPropertyChangedSignal("AbsoluteCanvasSize"), H.updateScroll)
-    H.connect(U.statusScroll:GetPropertyChangedSignal("AbsoluteSize"), H.updateScroll)
-
-    function H.layoutStatus(hasBack)
-        local left = hasBack and K.STATUS_LEFT_BACK or K.STATUS_LEFT
-        local width = -(left + K.STATUS_RIGHT)
-        U.statusHeader.Position = UDim2.new(0, left, 0, 10)
-        U.statusHeader.Size = UDim2.new(1, width, 0, 16)
-        U.statusLine.Position = UDim2.new(0, left, 0, 30)
-        U.statusLine.Size = UDim2.new(1, width, 0, 1)
-        U.statusScroll.Position = UDim2.new(0, left, 0, 38)
-        U.statusScroll.Size = UDim2.new(1, width, 1, -46)
-    end
-
-    function H.arrow(name, image, anchor, position)
-        local button = H.new("ImageButton", {
-            Name = name,
-            Size = UDim2.fromOffset(K.ARROW, K.ARROW),
-            AnchorPoint = anchor,
-            Position = position,
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            AutoButtonColor = false,
-            Selectable = false,
-            Image = "",
-            Visible = false,
-            ZIndex = 8,
-        }, U.card)
-
-        local icon = H.new("ImageLabel", {
-            Name = "Icon",
-            Size = UDim2.fromOffset(K.ICON, K.ICON),
-            Position = UDim2.new(0.5, 0, 0.5, 0),
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            BackgroundTransparency = 1,
-            Image = image,
-            ImageColor3 = C.Icon,
-            ZIndex = 9,
-        }, button)
-
-        local function isPointer(input)
-            return input.UserInputType == Enum.UserInputType.Touch
-                or input.UserInputType == Enum.UserInputType.MouseButton1
-        end
-
-        H.connect(button.MouseEnter, function()
-            if Svc.input:GetLastInputType() == Enum.UserInputType.Touch then return end
-            H.tween(icon, TI.FAST, { ImageColor3 = C.TextActive })
-        end)
-        H.connect(button.MouseLeave, function()
-            H.tween(icon, TI.FAST, { ImageColor3 = C.Icon })
-        end)
-        H.connect(button.InputBegan, function(input)
-            if isPointer(input) then
-                H.tween(icon, TI.FAST, { ImageColor3 = C.TextActive })
-            end
-        end)
-        H.connect(button.InputEnded, function(input)
-            if isPointer(input) then
-                H.tween(icon, TI.FAST, { ImageColor3 = C.Icon })
-            end
-        end)
-
-        return button
-    end
-
-    U.nextButton = H.arrow("Next", ICON_RIGHT, Vector2.new(1, 0.5), UDim2.new(1, -K.ARROW_PAD, 0.5, 0))
-    U.backButton = H.arrow("Back", ICON_LEFT, Vector2.new(0, 0.5), UDim2.new(0, K.ARROW_PAD, 0.5, 0))
-
-    U.dots = H.new("Frame", {
-        Name = "Dots",
-        Size = UDim2.new(0, 40, 0, 6),
-        AnchorPoint = Vector2.new(0.5, 1),
-        Position = UDim2.new(0.5, 0, 1, -8),
-        BackgroundTransparency = 1,
+        Text = "Loading...",
+        TextColor3 = C.Muted,
+        TextSize = K.CORNER,
+        Font = fontRegular,
         Visible = false,
-        ZIndex = 8,
-    }, U.card)
+        ZIndex = 4,
+    }, U.holo)
 
-    H.new("UIListLayout", {
-        FillDirection = Enum.FillDirection.Horizontal,
-        HorizontalAlignment = Enum.HorizontalAlignment.Center,
-        VerticalAlignment = Enum.VerticalAlignment.Center,
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 6),
-    }, U.dots)
-
-    function H.dot(name, order, active)
-        local dot = H.new("Frame", {
-            Name = name,
-            Size = UDim2.fromOffset(active and 14 or 6, 6),
-            BackgroundColor3 = active and C.DotActive or C.DotInactive,
-            BorderSizePixel = 0,
-            LayoutOrder = order,
-            ZIndex = 8,
-        }, U.dots)
-        H.corner(dot, 99)
-        return dot
-    end
-
-    U.dotHolo = H.dot("DotHologram", 1, true)
-    U.dotStatus = H.dot("DotStatus", 2, false)
+    -- area de arrastar (gira o holograma com mouse/toque)
+    U.drag = H.new("TextButton", {
+        Name = "Drag",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+        Selectable = false,
+        ZIndex = 7,
+    }, U.holo)
 
     U.veil = H.new("Frame", {
         Name = "Veil",
@@ -727,30 +720,64 @@ Elements.Register("Paragraph", function(section, options)
         Active = true,
         Visible = false,
         ZIndex = 20,
-    }, U.card)
+    }, U.container)
     H.corner(U.veil, 8)
 
-    function H.isShown()
-        local node = U.container
-        while node do
-            if node:IsA("LayerCollector") then
-                return node.Enabled
-            end
-            if node:IsA("GuiObject") and not node.Visible then
-                return false
-            end
-            node = node.Parent
+    ------------------------------------------------------------------
+    -- Layout / scroll
+    ------------------------------------------------------------------
+    function H.hasHologram()
+        return data.hologram ~= nil
+    end
+
+    function H.hasStatus()
+        return #S.status > 0
+    end
+
+    function H.hasHeader()
+        return U.title.Visible or U.desc.Visible or U.tag.Visible or U.thumbFrame.Visible
+    end
+
+    function H.updateScroll()
+        local overflow = U.info.AbsoluteCanvasSize.Y > U.info.AbsoluteSize.Y + 1
+        local thickness = overflow and (MOBILE and 4 or 3) or 0
+        if U.info.ScrollBarThickness ~= thickness then
+            U.info.ScrollBarThickness = thickness
         end
-        return false
     end
 
-    function H.visible()
-        return U.card.Visible and U.viewport.Visible and S.page == "hologram" and H.isShown()
+    function H.resize()
+        if S.destroyed then return end
+        local height
+        if H.hasHologram() then
+            height = K.CARD_H
+        else
+            height = math.clamp(U.infoLayout.AbsoluteContentSize.Y + K.PAD * 2, K.MIN_H, K.CARD_H)
+        end
+        if U.container.Size.Y.Offset ~= height then
+            U.container.Size = UDim2.new(1, 0, 0, height)
+        end
     end
 
-    function H.updateRow()
-        U.row.Visible = data.title ~= "" or data.description ~= "" or (data.thumbnail ~= nil and data.thumbnail ~= "")
+    function H.layout()
+        local hasHolo = H.hasHologram()
+        local hasInfo = H.hasHeader() or H.hasStatus()
+
+        U.header.Visible = H.hasHeader()
+        U.stats.Visible = H.hasStatus()
+        U.info.Visible = hasInfo
+        U.holo.Visible = hasHolo
+
+        U.info.Size = hasHolo and UDim2.new(K.INFO_SCALE, -K.GAP, 1, 0) or UDim2.new(1, 0, 1, 0)
+        U.holo.Size = hasInfo and UDim2.new(1 - K.INFO_SCALE, 0, 1, 0) or UDim2.new(1, 0, 1, 0)
+
+        H.resize()
+        H.updateScroll()
     end
+
+    H.connect(U.info:GetPropertyChangedSignal("AbsoluteCanvasSize"), H.updateScroll)
+    H.connect(U.info:GetPropertyChangedSignal("AbsoluteSize"), H.updateScroll)
+    H.connect(U.infoLayout:GetPropertyChangedSignal("AbsoluteContentSize"), H.resize)
 
     function H.applyDisabled()
         U.title.TextColor3 = data.disabled and C.TextDisabled or C.TextActive
@@ -763,8 +790,20 @@ Elements.Register("Paragraph", function(section, options)
         task.spawn(pcall, S.callback, page, data)
     end
 
+    function H.setBusy(value)
+        S.busy = value
+        H.refreshLoading()
+    end
+
+    function H.refreshLoading()
+        U.loading.Visible = S.busy ~= nil and S.model == nil and not U.fallback.Visible
+    end
+
+    ------------------------------------------------------------------
+    -- Thumbnail
+    ------------------------------------------------------------------
     function H.layoutThumb(hasThumb)
-        U.rowConstraint.MinSize = Vector2.new(0, hasThumb and K.THUMB or 0)
+        U.headerConstraint.MinSize = Vector2.new(0, hasThumb and K.THUMB or 0)
         if hasThumb then
             local offset = K.THUMB + K.THUMB_GAP
             U.thumbFrame.Visible = true
@@ -838,7 +877,7 @@ Elements.Register("Paragraph", function(section, options)
 
         if resolved == nil or resolved == "" then
             H.layoutThumb(false)
-            H.updateRow()
+            H.layout()
             return
         end
 
@@ -851,93 +890,12 @@ Elements.Register("Paragraph", function(section, options)
             U.thumbImage.Image = H.normalizeImage(resolved)
         end
 
-        H.updateRow()
+        H.layout()
     end
 
-    function H.hasHologram()
-        return data.hologram ~= nil
-    end
-
-    function H.hasStatus()
-        return #S.status > 0
-    end
-
-    function H.pageKey()
-        return S.page .. (H.hasHologram() and "1" or "0") .. (H.hasStatus() and "1" or "0")
-    end
-
-    function H.applyPage(animate)
-        S.layoutKey = H.pageKey()
-
-        local onHolo = S.page == "hologram"
-        local holoPosition = onHolo and UDim2.new(0, 0, 0, 0) or UDim2.new(-1, 0, 0, 0)
-        local statusPosition = onHolo and UDim2.new(1, 0, 0, 0) or UDim2.new(0, 0, 0, 0)
-
-        S.hideToken = S.hideToken + 1
-        local hideToken = S.hideToken
-
-        if onHolo then
-            U.viewport.Visible = true
-        elseif animate then
-            task.delay(TI.PAGE.Time + 0.05, function()
-                if not S.destroyed and S.hideToken == hideToken then
-                    U.viewport.Visible = false
-                end
-            end)
-        else
-            U.viewport.Visible = false
-        end
-
-        if animate then
-            H.tween(U.holoPage, TI.PAGE, { Position = holoPosition })
-            H.tween(U.statusPage, TI.PAGE, { Position = statusPosition })
-        else
-            H.stopTween(U.holoPage)
-            H.stopTween(U.statusPage)
-            U.holoPage.Position = holoPosition
-            U.statusPage.Position = statusPosition
-        end
-
-        local both = H.hasHologram() and H.hasStatus()
-        H.layoutStatus(both)
-        U.card.Visible = H.hasHologram() or H.hasStatus()
-        U.nextButton.Visible = both and onHolo
-        U.backButton.Visible = both and not onHolo
-        U.dots.Visible = both
-
-        H.tween(U.dotHolo, TI.FAST, {
-            Size = UDim2.fromOffset(onHolo and 14 or 6, 6),
-            BackgroundColor3 = onHolo and C.DotActive or C.DotInactive,
-        })
-        H.tween(U.dotStatus, TI.FAST, {
-            Size = UDim2.fromOffset(onHolo and 6 or 14, 6),
-            BackgroundColor3 = onHolo and C.DotInactive or C.DotActive,
-        })
-    end
-
-    function H.syncPage()
-        if S.page == "status" and not H.hasStatus() then
-            S.page = "hologram"
-        end
-        if S.page == "hologram" and not H.hasHologram() and H.hasStatus() then
-            S.page = "status"
-        end
-        if H.pageKey() == S.layoutKey then return end
-        H.applyPage(false)
-    end
-
-    function H.setPage(page, animate)
-        if page ~= "hologram" and page ~= "status" then return end
-        if page == "hologram" and not H.hasHologram() then return end
-        if page == "status" and not H.hasStatus() then return end
-        local changed = S.page ~= page
-        S.page = page
-        H.applyPage(animate)
-        if changed then
-            H.fire(page)
-        end
-    end
-
+    ------------------------------------------------------------------
+    -- Status
+    ------------------------------------------------------------------
     function H.formatStat(stat)
         if stat.max ~= nil and tonumber(stat.value) ~= nil then
             return H.number(stat.value) .. "/" .. H.number(stat.max)
@@ -948,48 +906,91 @@ Elements.Register("Paragraph", function(section, options)
         return tostring(stat.value)
     end
 
+    function H.ratio(stat)
+        local value = tonumber(stat.value)
+        local max = stat.max
+        if value and max and max > 0 then
+            return math.clamp(value / max, 0, 1)
+        end
+        return nil
+    end
+
     function H.createStatRow(stat, index)
-        local row = H.new("Frame", {
+        local ratio = H.ratio(stat)
+        local rowHeight = ratio and (K.STAT_H + 8) or K.STAT_H
+
+        local frame = H.new("Frame", {
             Name = "Stat_" .. index,
-            Size = UDim2.new(1, 0, 0, K.STAT_H),
-            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, rowHeight),
+            BackgroundColor3 = C.Row,
+            BorderSizePixel = 0,
             LayoutOrder = index,
-        }, U.statusScroll)
+        }, U.stats)
+        H.corner(frame, 6)
+        H.stroke(frame, C.RowStroke, 1)
 
         local nameLabel = H.new("TextLabel", {
             Name = "Name",
-            Size = UDim2.new(0.5, 0, 1, 0),
+            Size = UDim2.new(0.55, -10, 0, K.STAT_H),
+            Position = UDim2.new(0, 10, 0, 0),
             BackgroundTransparency = 1,
             Text = stat.name,
             TextColor3 = C.DescText,
-            TextSize = K.DESC + 1,
+            TextSize = K.STAT,
             Font = fontRegular,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextTruncate = Enum.TextTruncate.AtEnd,
             RichText = S.rich,
-        }, row)
+        }, frame)
 
         local valueLabel = H.new("TextLabel", {
             Name = "Value",
-            Size = UDim2.new(0.5, 0, 1, 0),
-            Position = UDim2.new(0.5, 0, 0, 0),
+            Size = UDim2.new(0.45, -10, 0, K.STAT_H),
+            Position = UDim2.new(0.55, 0, 0, 0),
             BackgroundTransparency = 1,
             Text = H.formatStat(stat),
             TextColor3 = C.TextActive,
-            TextSize = K.DESC + 1,
+            TextSize = K.STAT,
             Font = fontBold,
             TextXAlignment = Enum.TextXAlignment.Right,
             TextTruncate = Enum.TextTruncate.AtEnd,
             RichText = S.rich,
-        }, row)
+        }, frame)
 
-        return { frame = row, nameLabel = nameLabel, valueLabel = valueLabel }
+        local fill
+        if ratio then
+            local track = H.new("Frame", {
+                Name = "Track",
+                Size = UDim2.new(1, -20, 0, 4),
+                Position = UDim2.new(0, 10, 0, K.STAT_H - 1),
+                BackgroundColor3 = C.Bar,
+                BorderSizePixel = 0,
+            }, frame)
+            H.corner(track, 99)
+            fill = H.new("Frame", {
+                Name = "Fill",
+                Size = UDim2.new(ratio, 0, 1, 0),
+                BackgroundColor3 = C.Accent,
+                BorderSizePixel = 0,
+            }, track)
+            H.corner(fill, 99)
+        end
+
+        return { frame = frame, nameLabel = nameLabel, valueLabel = valueLabel, fill = fill, hasBar = ratio ~= nil }
     end
 
     function H.refreshStat(index)
         local stat = S.status[index]
         local row = S.rows[index]
         if not stat or not row then return end
+
+        local ratio = H.ratio(stat)
+        if (ratio ~= nil) ~= row.hasBar then
+            row.frame:Destroy()
+            S.rows[index] = H.createStatRow(stat, index)
+            return
+        end
+
         local text = H.formatStat(stat)
         if row.nameLabel.Text ~= stat.name then
             row.nameLabel.Text = stat.name
@@ -997,10 +998,13 @@ Elements.Register("Paragraph", function(section, options)
         if row.valueLabel.Text ~= text then
             row.valueLabel.Text = text
         end
+        if row.fill and ratio then
+            H.tween(row.fill, TI.FAST, { Size = UDim2.new(ratio, 0, 1, 0) })
+        end
     end
 
     function H.rebuildStatus()
-        local saved = U.statusScroll.CanvasPosition
+        local saved = U.info.CanvasPosition
         for index = #S.rows, #S.status + 1, -1 do
             S.rows[index].frame:Destroy()
             S.rows[index] = nil
@@ -1015,12 +1019,32 @@ Elements.Register("Paragraph", function(section, options)
                 S.rows[index] = H.createStatRow(stat, index)
             end
         end
-        H.syncPage()
+        H.layout()
         task.defer(function()
             if not S.destroyed then
-                U.statusScroll.CanvasPosition = saved
+                U.info.CanvasPosition = saved
             end
         end)
+    end
+
+    function H.scrollTo(y)
+        H.tween(U.info, TI.PAGE, { CanvasPosition = Vector2.new(0, math.max(y, 0)) })
+    end
+
+    function H.setPage(page)
+        if page ~= "hologram" and page ~= "status" then return end
+        if page == "status" and not H.hasStatus() then return end
+        local changed = S.page ~= page
+        S.page = page
+        if page == "status" then
+            local y = U.stats.AbsolutePosition.Y - U.info.AbsolutePosition.Y + U.info.CanvasPosition.Y
+            H.scrollTo(y)
+        else
+            H.scrollTo(0)
+        end
+        if changed then
+            H.fire(page)
+        end
     end
 
     function H.applyCorners()
@@ -1038,9 +1062,12 @@ Elements.Register("Paragraph", function(section, options)
         end
     end
 
+    ------------------------------------------------------------------
+    -- Camera / orbita
+    ------------------------------------------------------------------
     function H.applyOrbit()
         local rotation = CFrame.Angles(0, -math.rad(S.angle), 0)
-        local pitch = math.rad(S.pitch)
+        local pitch = math.rad(S.pitch + S.tilt)
         local offset = Vector3.new(0, math.sin(pitch) * S.distance, -math.cos(pitch) * S.distance)
         U.camera.CFrame = CFrame.lookAt(rotation * offset, Vector3.zero)
         if S.lastAngle ~= S.angle then
@@ -1055,7 +1082,7 @@ Elements.Register("Paragraph", function(section, options)
         local pitch = math.rad(S.pitch)
         local tanHalf = math.tan(math.rad(U.camera.FieldOfView * 0.5))
         local view = U.viewport.AbsoluteSize
-        local aspect = view.Y > 0 and view.X / view.Y or 2.5
+        local aspect = view.Y > 0 and view.X / view.Y or 1
         local radius = math.sqrt(size.X * size.X + size.Z * size.Z) * 0.5
         local extentY = size.Y * math.cos(pitch) + 2 * radius * math.sin(pitch)
         local fitY = extentY * 0.5 / tanHalf
@@ -1064,124 +1091,41 @@ Elements.Register("Paragraph", function(section, options)
         H.applyOrbit()
     end
 
-    function H.cacheFind(config)
-        for index, entry in ipairs(S.cache) do
-            if entry.target == config.target
-                and entry.kind == config.type
-                and entry.tint == config.tint
-                and entry.nonce == config.nonce
-                and entry.holder.Parent == nil then
-                table.remove(S.cache, index)
-                S.cache[#S.cache + 1] = entry
-                return entry
-            end
-        end
-        return nil
-    end
-
-    function H.cacheStore(config, holder, size, isCharacter)
-        local entry = {
-            target = config.target,
-            kind = config.type,
-            tint = config.tint,
-            nonce = config.nonce,
-            holder = holder,
-            size = size,
-            isCharacter = isCharacter,
-        }
-        S.cache[#S.cache + 1] = entry
-        while #S.cache > K.CACHE_MAX do
-            local old = table.remove(S.cache, 1)
-            if old.holder ~= holder then
-                old.holder:Destroy()
-            end
-        end
-        return entry
-    end
-
-    function H.cacheClear()
-        for _, entry in ipairs(S.cache) do
-            entry.holder:Destroy()
-        end
-        S.cache = {}
-    end
-
-    function H.stopRotate()
-        S.rotating = false
-        if S.rotateConn then
-            S.rotateConn:Disconnect()
-            S.rotateConn = nil
-        end
-    end
-
-    function H.startRotate()
-        if S.rotating or S.destroyed then return end
-        S.rotating = true
-        local accumulated = 0
-        local interval = K.STEP
-        local checkedAt = 0
-        local shown = H.visible()
-        S.rotateConn = Svc.run.Heartbeat:Connect(function(delta)
-            if S.destroyed then return end
-            accumulated = accumulated + delta
-            if accumulated < interval then return end
-            local elapsed = accumulated
-            accumulated = 0
-            local now = os.clock()
-            if now - checkedAt >= 0.5 then
-                checkedAt = now
-                shown = H.visible()
-            end
-            local config = data.hologram
-            if shown and S.model and config and config.rotate then
-                S.angle = (S.angle + math.min(elapsed, K.STEP_SLOW) * config.speed) % 360
-                H.applyOrbit()
-                interval = elapsed > K.STEP * 2.5 and K.STEP_SLOW or K.STEP
-            else
-                interval = K.STEP_HIDDEN
-            end
-        end)
-    end
-
     function H.clearHologram()
-        H.stopRotate()
         local old = S.model
-        local wasCached = S.cached
         S.model = nil
-        S.cached = false
         S.size = nil
         S.signature = nil
+        S.velocity = 0
+        S.tilt = 0
         if old then
             old.Parent = nil
-            if not wasCached then
-                task.defer(old.Destroy, old)
-            end
+            task.defer(old.Destroy, old)
         end
         U.fallback.Image = ""
         U.fallback.ImageColor3 = Color3.new(1, 1, 1)
         U.fallback.Visible = false
+        H.refreshLoading()
     end
 
-    function H.mountHolder(holder, size, isCharacter, cacheEntry)
+    function H.mountHolder(holder, size, isCharacter)
         S.pitch = isCharacter and K.PITCH_CHAR or K.PITCH_ITEM
         S.size = size
+        S.tilt = 0
         H.stopTween(U.viewport)
-        U.viewport.ImageTransparency = LOW_END and 0 or 1
+        U.viewport.ImageTransparency = 1
         holder.Parent = U.viewport
         S.model = holder
-        S.cached = cacheEntry ~= nil
         S.lastAngle = nil
         H.fitCamera()
         U.fallback.Visible = false
-        if not LOW_END then
-            H.tween(U.viewport, TI.FADE, { ImageTransparency = 0 })
-        end
-        local config = data.hologram
-        if config and config.rotate then
-            H.startRotate()
-        end
+        H.tween(U.viewport, TI.FADE, { ImageTransparency = 0 })
+        H.refreshLoading()
     end
 
+    ------------------------------------------------------------------
+    -- Construcao do modelo (sem limites de otimizacao)
+    ------------------------------------------------------------------
     function H.resetPose(model)
         local root = model:FindFirstChild("HumanoidRootPart")
         if not root or not root:IsA("BasePart") then return end
@@ -1220,19 +1164,7 @@ Elements.Register("Paragraph", function(section, options)
         end
     end
 
-    function H.pacer(token)
-        local last = os.clock()
-        return function()
-            if os.clock() - last < K.BUDGET then
-                return false
-            end
-            task.wait()
-            last = os.clock()
-            return S.destroyed or S.holoToken ~= token
-        end
-    end
-
-    function H.collectParts(model, token)
+    function H.collectParts(model)
         local isCharacter = model:FindFirstChildOfClass("Humanoid") ~= nil
 
         if isCharacter then
@@ -1248,29 +1180,18 @@ Elements.Register("Paragraph", function(section, options)
         end)
 
         local parts = {}
-        local pace = H.pacer(token)
-
         for _, descendant in ipairs(model:GetDescendants()) do
             if descendant:IsA("BasePart") then
                 parts[#parts + 1] = descendant
             elseif REMOVABLE[descendant.ClassName] or descendant:IsA("PostEffect") then
                 descendant:Destroy()
             end
-            if pace() then
-                return nil, isCharacter
-            end
         end
 
         return parts, isCharacter
     end
 
-    function H.setFidelity(part, value)
-        part.RenderFidelity = value
-    end
-
-    function H.tuneParts(parts, tint, token)
-        local fidelity = LOW_END and Enum.RenderFidelity.Performance or Enum.RenderFidelity.Automatic
-        local pace = H.pacer(token)
+    function H.tuneParts(parts, tint)
         for _, part in ipairs(parts) do
             if part.Parent then
                 part.Anchored = true
@@ -1282,19 +1203,17 @@ Elements.Register("Paragraph", function(section, options)
                     part.Color = part.Color:Lerp(tint, 0.4)
                 end
                 if part:IsA("MeshPart") then
-                    pcall(H.setFidelity, part, fidelity)
+                    pcall(function()
+                        part.RenderFidelity = Enum.RenderFidelity.Precise
+                    end)
                 end
             end
-            if pace() then
-                return false
-            end
         end
-        return true
     end
 
-    function H.dropInvisible(parts, token)
+    -- partes invisiveis estragam o centro do bounding box
+    function H.dropInvisible(parts)
         local kept = {}
-        local pace = H.pacer(token)
         for _, part in ipairs(parts) do
             if part.Parent then
                 if part.Transparency >= K.HIDDEN_ALPHA then
@@ -1302,42 +1221,6 @@ Elements.Register("Paragraph", function(section, options)
                 else
                     kept[#kept + 1] = part
                 end
-            end
-            if pace() then
-                return nil
-            end
-        end
-        return kept
-    end
-
-    function H.limitParts(parts, maxParts, token)
-        if #parts <= maxParts then
-            return parts
-        end
-
-        local pace = H.pacer(token)
-        local sizes = {}
-        for _, part in ipairs(parts) do
-            sizes[part] = part.Size.Magnitude
-            if pace() then
-                return nil
-            end
-        end
-
-        local ranked = table.clone(parts)
-        table.sort(ranked, function(a, b)
-            return sizes[a] > sizes[b]
-        end)
-
-        local kept = table.create(maxParts)
-        for index, part in ipairs(ranked) do
-            if index <= maxParts then
-                kept[index] = part
-            elseif part.Parent then
-                part:Destroy()
-            end
-            if pace() then
-                return nil
             end
         end
         return kept
@@ -1398,12 +1281,8 @@ Elements.Register("Paragraph", function(section, options)
         watcher:Disconnect()
     end
 
-    function H.cloneSource(source, token)
+    function H.cloneSource(source)
         local changed = {}
-        local pace = token and H.pacer(token) or nil
-        local cancelled = false
-        local count = 0
-        local limit = source:FindFirstChildOfClass("Humanoid") and math.huge or K.MAX_DESC
 
         local function force(instance)
             if not instance.Archivable then
@@ -1417,23 +1296,11 @@ Elements.Register("Paragraph", function(section, options)
         force(source)
         for _, descendant in ipairs(source:GetDescendants()) do
             force(descendant)
-            count = count + 1
-            if count > limit then
-                cancelled = true
-                break
-            end
-            if pace and pace() then
-                cancelled = true
-                break
-            end
         end
 
-        local ok, clone = false, nil
-        if not cancelled then
-            ok, clone = pcall(function()
-                return source:Clone()
-            end)
-        end
+        local ok, clone = pcall(function()
+            return source:Clone()
+        end)
 
         for _, instance in ipairs(changed) do
             pcall(function()
@@ -1468,7 +1335,7 @@ Elements.Register("Paragraph", function(section, options)
         end
         if S.destroyed or S.holoToken ~= token then return nil end
 
-        local clone = temporary and source or H.cloneSource(source, token)
+        local clone = temporary and source or H.cloneSource(source)
         if not clone then return nil end
 
         local holder = clone
@@ -1477,21 +1344,10 @@ Elements.Register("Paragraph", function(section, options)
             clone.Parent = holder
         end
 
-        local parts, isCharacter = H.collectParts(holder, token)
-        if not parts or S.destroyed or S.holoToken ~= token then
-            holder:Destroy()
-            return nil
-        end
+        local parts, isCharacter = H.collectParts(holder)
 
         if not isCharacter then
-            parts = H.dropInvisible(parts, token)
-            if parts then
-                parts = H.limitParts(parts, K.MAX_PARTS, token)
-            end
-            if not parts or S.destroyed or S.holoToken ~= token then
-                holder:Destroy()
-                return nil
-            end
+            parts = H.dropInvisible(parts)
         end
 
         if #parts == 0 then
@@ -1499,10 +1355,7 @@ Elements.Register("Paragraph", function(section, options)
             return nil
         end
 
-        if not H.tuneParts(parts, tint, token) or S.destroyed or S.holoToken ~= token then
-            holder:Destroy()
-            return nil
-        end
+        H.tuneParts(parts, tint)
 
         if isCharacter then
             H.resetPose(holder)
@@ -1525,6 +1378,9 @@ Elements.Register("Paragraph", function(section, options)
         return holder, boxSize, isCharacter
     end
 
+    ------------------------------------------------------------------
+    -- Resolver alvo (player, asset, imagem, caminho)
+    ------------------------------------------------------------------
     function H.resolveTarget(target, kind)
         if typeof(target) == "Instance" then
             if target:IsA("Player") then
@@ -1708,7 +1564,7 @@ Elements.Register("Paragraph", function(section, options)
         end
 
         local meshOk, meshPart = pcall(function()
-            return Svc.insert:CreateMeshPartAsync("rbxassetid://" .. assetId, Enum.CollisionFidelity.Box, Enum.RenderFidelity.Automatic)
+            return Svc.insert:CreateMeshPartAsync("rbxassetid://" .. assetId, Enum.CollisionFidelity.Box, Enum.RenderFidelity.Precise)
         end)
         if meshOk and typeof(meshPart) == "Instance" then
             return meshPart, nil, true
@@ -1783,9 +1639,10 @@ Elements.Register("Paragraph", function(section, options)
         if S.destroyed or S.holoToken ~= token then return end
 
         U.fallback.ImageColor3 = tint and Color3.new(1, 1, 1):Lerp(tint, 0.5) or Color3.new(1, 1, 1)
-        U.fallback.ImageTransparency = LOW_END and K.IMAGE_ALPHA or 1
+        U.fallback.ImageTransparency = 1
         U.fallback.Image = image
         U.fallback.Visible = true
+        H.refreshLoading()
 
         local started = os.clock()
         while not U.fallback.IsLoaded and os.clock() - started < K.PRELOAD do
@@ -1807,11 +1664,12 @@ Elements.Register("Paragraph", function(section, options)
             end
         end
 
-        if not LOW_END then
-            H.tween(U.fallback, TI.FADE, { ImageTransparency = K.IMAGE_ALPHA })
-        end
+        H.tween(U.fallback, TI.FADE, { ImageTransparency = K.IMAGE_ALPHA })
     end
 
+    ------------------------------------------------------------------
+    -- Atualizacao ao vivo (aparencia do personagem)
+    ------------------------------------------------------------------
     function H.signature(source)
         local parts = {}
         if not source:FindFirstChildOfClass("Humanoid") then
@@ -1858,10 +1716,10 @@ Elements.Register("Paragraph", function(section, options)
         if signature == S.signature then return end
 
         local token = S.holoToken
-        S.busy = token
+        H.setBusy(token)
         local ok, holder, size, isCharacter = pcall(H.buildHolder, source, config.tint, token, false)
         if S.busy == token then
-            S.busy = nil
+            H.setBusy(nil)
         end
         if not ok or not holder then return end
         if S.destroyed or S.holoToken ~= token then
@@ -1870,7 +1728,7 @@ Elements.Register("Paragraph", function(section, options)
         end
         H.clearHologram()
         S.signature = signature
-        H.mountHolder(holder, size, isCharacter, nil)
+        H.mountHolder(holder, size, isCharacter)
     end
 
     function H.clearWatch()
@@ -1910,6 +1768,9 @@ Elements.Register("Paragraph", function(section, options)
         end
     end
 
+    ------------------------------------------------------------------
+    -- Carregar holograma
+    ------------------------------------------------------------------
     function H.load()
         S.holoToken = S.holoToken + 1
         local token = S.holoToken
@@ -1919,19 +1780,19 @@ Elements.Register("Paragraph", function(section, options)
         H.clearHologram()
 
         if not config or config.target == nil then
-            S.busy = nil
+            H.setBusy(nil)
             return
         end
 
         if H.isImage(config.type) or config.type == "thumbnail" then
-            S.busy = token
+            H.setBusy(token)
             task.spawn(function()
                 local ok, image, assetId = pcall(H.resolveImage, config)
                 if ok and image and not S.destroyed and S.holoToken == token then
                     H.showImage(image, token, assetId, config.tint)
                 end
                 if S.busy == token then
-                    S.busy = nil
+                    H.setBusy(nil)
                 end
             end)
             return
@@ -1939,22 +1800,16 @@ Elements.Register("Paragraph", function(section, options)
 
         local knownImage = S.images[config.target]
         if knownImage then
-            S.busy = nil
+            H.setBusy(nil)
             U.fallback.ImageColor3 = config.tint and Color3.new(1, 1, 1):Lerp(config.tint, 0.5) or Color3.new(1, 1, 1)
             U.fallback.ImageTransparency = K.IMAGE_ALPHA
             U.fallback.Image = knownImage
             U.fallback.Visible = true
+            H.refreshLoading()
             return
         end
 
-        local cached = H.cacheFind(config)
-        if cached then
-            S.busy = nil
-            H.mountHolder(cached.holder, cached.size, cached.isCharacter, cached)
-            return
-        end
-
-        S.busy = token
+        H.setBusy(token)
 
         task.spawn(function()
             local mounted = false
@@ -1995,12 +1850,7 @@ Elements.Register("Paragraph", function(section, options)
                     end
 
                     if ok and holder then
-                        local cacheable = config.live ~= true and not isCharacter and signature == nil
-                        local entry = nil
-                        if cacheable then
-                            entry = H.cacheStore(config, holder, size, isCharacter)
-                        end
-                        H.mountHolder(holder, size, isCharacter, entry)
+                        H.mountHolder(holder, size, isCharacter)
                         S.signature = signature
                         mounted = true
                         break
@@ -2030,7 +1880,7 @@ Elements.Register("Paragraph", function(section, options)
             end
 
             if S.busy == token then
-                S.busy = nil
+                H.setBusy(nil)
             end
         end)
     end
@@ -2042,7 +1892,7 @@ Elements.Register("Paragraph", function(section, options)
             while not S.destroyed and S.loopToken == token do
                 task.wait(K.UPDATE)
                 if S.destroyed or S.loopToken ~= token then return end
-                if data.hologram and H.visible() then
+                if data.hologram then
                     pcall(H.poll)
                 end
             end
@@ -2060,29 +1910,85 @@ Elements.Register("Paragraph", function(section, options)
         return S.model == nil and not U.fallback.Visible and S.busy == nil
     end
 
+    ------------------------------------------------------------------
+    -- Interacao: arrastar para girar + animacao (flutuar, scanline, inercia)
+    ------------------------------------------------------------------
+    H.connect(U.drag.InputBegan, function(input)
+        local kind = input.UserInputType
+        if kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch then
+            S.dragging = true
+            S.dragInput = input
+            S.velocity = 0
+        end
+    end)
+
+    H.connect(Svc.input.InputChanged, function(input)
+        if not S.dragging or not S.model then return end
+        local kind = input.UserInputType
+        if kind == Enum.UserInputType.MouseMovement or (kind == Enum.UserInputType.Touch and input == S.dragInput) then
+            local delta = input.Delta
+            S.angle = (S.angle + delta.X * K.DRAG) % 360
+            S.tilt = math.clamp(S.tilt + delta.Y * 0.3, K.TILT_MIN, K.TILT_MAX)
+            S.velocity = math.clamp(S.velocity * 0.6 + (delta.X * K.DRAG * 60) * 0.4, -720, 720)
+        end
+    end)
+
+    H.connect(Svc.input.InputEnded, function(input)
+        if not S.dragging then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input == S.dragInput then
+            S.dragging = false
+            S.dragInput = nil
+            S.lastDrag = os.clock()
+        end
+    end)
+
+    H.connect(Svc.run.RenderStepped, function(dt)
+        if S.destroyed then return end
+        S.time = S.time + dt
+
+        local wave = math.sin(S.time * 1.8)
+        U.viewport.Position = UDim2.new(0, 0, 0, -K.LIFT + wave * K.BOB)
+        U.fallback.Position = UDim2.new(0.5, 0, 0.5, -K.LIFT + wave * K.BOB)
+        U.platform.BackgroundTransparency = 0.8 + wave * 0.06
+
+        if not S.model then return end
+
+        local config = data.hologram
+        if S.dragging then
+            S.velocity = S.velocity * (1 - math.min(dt * 10, 1))
+        else
+            S.velocity = S.velocity * (1 - math.min(dt * 3, 1))
+            S.tilt = S.tilt * (1 - math.min(dt * 2.5, 1))
+            local step = S.velocity
+            if config and config.rotate and os.clock() - S.lastDrag >= K.RESUME then
+                step = step + config.speed
+            end
+            S.angle = (S.angle + step * dt) % 360
+        end
+
+        H.applyOrbit()
+    end)
+
     H.connect(U.viewport:GetPropertyChangedSignal("AbsoluteSize"), function()
         if S.model then
             H.fitCamera()
         end
     end)
 
-    H.connect(U.nextButton.Activated, function()
-        H.setPage("status", true)
-    end)
-
-    H.connect(U.backButton.Activated, function()
-        H.setPage("hologram", true)
-    end)
-
+    ------------------------------------------------------------------
+    -- Inicializacao
+    ------------------------------------------------------------------
     H.setThumbnail(data.thumbnail)
     H.applyCorners()
     H.rebuildStatus()
     H.load()
     H.startLoop()
     H.applyDisabled()
-    H.updateRow()
-    H.updateScroll()
+    H.layout()
 
+    ------------------------------------------------------------------
+    -- API publica
+    ------------------------------------------------------------------
     function data:SetTitle(newTitle)
         if S.destroyed then return end
         newTitle = tostring(newTitle or "")
@@ -2091,7 +1997,7 @@ Elements.Register("Paragraph", function(section, options)
         U.title.Text = H.text(newTitle)
         U.title.Visible = newTitle ~= ""
         U.container.Name = (newTitle ~= "" and newTitle or "Paragraph") .. "_Paragraph"
-        H.updateRow()
+        H.layout()
     end
 
     function data:SetDescription(newDesc)
@@ -2101,7 +2007,17 @@ Elements.Register("Paragraph", function(section, options)
         data.description = newDesc
         U.desc.Text = H.text(newDesc)
         U.desc.Visible = newDesc ~= ""
-        H.updateRow()
+        H.layout()
+    end
+
+    function data:SetTag(newTag)
+        if S.destroyed then return end
+        newTag = tostring(newTag or "")
+        if newTag == data.tag then return end
+        data.tag = newTag
+        U.tag.Text = H.text(newTag)
+        U.tag.Visible = newTag ~= ""
+        H.layout()
     end
 
     function data:SetThumbnail(value)
@@ -2129,9 +2045,8 @@ Elements.Register("Paragraph", function(section, options)
         if S.destroyed then return end
         local number = tonumber(value)
         if not number then return end
-        K.CARD_H = math.clamp(number, 100, 320)
-        U.card.Size = UDim2.new(1, 0, 0, K.CARD_H)
-        U.fallback.Size = UDim2.fromOffset(K.CARD_H - 44, K.CARD_H - 44)
+        K.CARD_H = math.clamp(number, 120, 420)
+        H.resize()
         if S.model then
             H.fitCamera()
         end
@@ -2162,12 +2077,8 @@ Elements.Register("Paragraph", function(section, options)
             and not H.idle()
         if not unchanged then
             H.load()
-        elseif updated and updated.rotate and S.model then
-            H.startRotate()
-        elseif updated and not updated.rotate then
-            H.stopRotate()
         end
-        H.syncPage()
+        H.layout()
     end
 
     function data:SetTarget(target, kind, thumbType)
@@ -2186,7 +2097,7 @@ Elements.Register("Paragraph", function(section, options)
         if previousTarget ~= target or previousKind ~= config.type or previousThumb ~= config.thumbType or H.idle() then
             H.load()
         end
-        H.syncPage()
+        H.layout()
     end
 
     function data:SetBackground(value)
@@ -2199,7 +2110,7 @@ Elements.Register("Paragraph", function(section, options)
         local config = H.ensureHologram()
         config.corners = H.copy(corners)
         H.applyCorners()
-        H.syncPage()
+        H.layout()
     end
 
     function data:SetCorner(name, text)
@@ -2207,20 +2118,12 @@ Elements.Register("Paragraph", function(section, options)
         local config = H.ensureHologram()
         config.corners[name] = text
         H.applyCorners()
-        H.syncPage()
+        H.layout()
     end
 
     function data:SetRotate(value)
         if S.destroyed then return end
-        local config = H.ensureHologram()
-        config.rotate = value ~= false
-        if config.rotate then
-            if S.model then
-                H.startRotate()
-            end
-        else
-            H.stopRotate()
-        end
+        H.ensureHologram().rotate = value ~= false
     end
 
     function data:SetSpeed(value)
@@ -2235,13 +2138,12 @@ Elements.Register("Paragraph", function(section, options)
         if config.tint == tint then return end
         config.tint = tint
         H.load()
-        H.syncPage()
+        H.layout()
     end
 
     function data:Refresh()
         if S.destroyed or not data.hologram then return end
         H.clearHologram()
-        H.cacheClear()
         S.images = {}
         H.load()
     end
@@ -2310,7 +2212,7 @@ Elements.Register("Paragraph", function(section, options)
         S.status[#S.status + 1] = { name = name, value = value, max = tonumber(max) }
         local newIndex = #S.status
         S.rows[newIndex] = H.createStatRow(S.status[newIndex], newIndex)
-        H.syncPage()
+        H.layout()
     end
 
     function data:GetStat(name)
@@ -2339,6 +2241,7 @@ Elements.Register("Paragraph", function(section, options)
         if S.destroyed or type(fields) ~= "table" then return end
         if fields.title ~= nil then data:SetTitle(fields.title) end
         if fields.description ~= nil then data:SetDescription(fields.description) end
+        if fields.tag ~= nil then data:SetTag(fields.tag) end
         if fields.thumbnail ~= nil then data:SetThumbnail(fields.thumbnail) end
         if fields.disabled ~= nil then data:SetDisabled(fields.disabled) end
         if fields.visible ~= nil then data:SetVisible(fields.visible) end
@@ -2353,15 +2256,17 @@ Elements.Register("Paragraph", function(section, options)
         return {
             title = data.title,
             description = data.description,
+            tag = data.tag,
             page = S.page,
             disabled = data.disabled,
             status = data:GetStatus(),
         }
     end
 
+    -- "hologram" rola para o topo, "status" rola ate a lista de status
     function data:SetPage(page)
         if S.destroyed then return end
-        H.setPage(page, true)
+        H.setPage(page)
     end
 
     function data:GetPage()
@@ -2375,14 +2280,16 @@ Elements.Register("Paragraph", function(section, options)
         H.stopThumbLive()
         S.loopToken = S.loopToken + 1
         S.holoToken = S.holoToken + 1
-        S.hideToken = S.hideToken + 1
         H.clearWatch()
+        if S.scanTween then
+            pcall(function() S.scanTween:Cancel() end)
+            S.scanTween = nil
+        end
         for _, conn in ipairs(S.connections) do
             conn:Disconnect()
         end
         table.clear(S.connections)
         H.clearHologram()
-        H.cacheClear()
         U.container:Destroy()
     end
 
