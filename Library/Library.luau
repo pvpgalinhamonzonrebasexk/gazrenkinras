@@ -444,127 +444,7 @@ local Locale = {
 }
 
 local TEXT_PROPERTIES = {TextLabel = "Text", TextButton = "Text", TextBox = "PlaceholderText"}
-
-local LOCALE_STRINGS = {
-    en = {
-        SearchPlaceholder = "Search...",
-        SearchPrompt = "Search tabs and elements...",
-        NoResults = "No results found.",
-        ErrorLabel = "Error"
-    },
-    pt = {
-        SearchPlaceholder = "Pesquisar...",
-        SearchPrompt = "Pesquisar abas e elementos...",
-        NoResults = "Nenhum resultado encontrado.",
-        ErrorLabel = "Erro"
-    },
-    es = {
-        SearchPlaceholder = "Buscar...",
-        SearchPrompt = "Buscar pestañas y elementos...",
-        NoResults = "No se encontraron resultados.",
-        ErrorLabel = "Error"
-    }
-}
-
-local LOCALE_PATTERNS = {
-    pt = {
-        {"^(%d+) selected$", "%1 selecionados"}
-    },
-    es = {
-        {"^(%d+) selected$", "%1 seleccionados"}
-    }
-}
-
-local LOCALE_WORDS = {
-    pt = {
-        ["Main"] = "Principal", ["Home"] = "Início", ["General"] = "Geral", ["Settings"] = "Configurações", ["Configuration"] = "Configuração",
-        ["Options"] = "Opções", ["Misc"] = "Diversos", ["Miscellaneous"] = "Diversos", ["Other"] = "Outros", ["Tools"] = "Ferramentas",
-        ["Utilities"] = "Utilitários", ["Utility"] = "Utilitário", ["Info"] = "Informações", ["Information"] = "Informações", ["About"] = "Sobre",
-        ["Credits"] = "Créditos", ["Status"] = "Status", ["Search"] = "Pesquisar", ["Search..."] = "Pesquisar...", ["Select"] = "Selecionar",
-        ["Select..."] = "Selecionar...", ["No results found"] = "Nenhum resultado encontrado", ["None"] = "Nenhum", ["Selected"] = "Selecionado",
-        ["Enable"] = "Ativar", ["Enabled"] = "Ativado", ["Disable"] = "Desativar", ["Disabled"] = "Desativado", ["Start"] = "Iniciar",
-        ["Stop"] = "Parar", ["Pause"] = "Pausar", ["Resume"] = "Continuar", ["Reset"] = "Redefinir", ["Save"] = "Salvar",
-        ["Load"] = "Carregar", ["Delete"] = "Excluir", ["Remove"] = "Remover", ["Add"] = "Adicionar", ["Apply"] = "Aplicar",
-        ["Cancel"] = "Cancelar", ["Confirm"] = "Confirmar", ["Close"] = "Fechar", ["Open"] = "Abrir", ["Refresh"] = "Atualizar",
-        ["Update"] = "Atualizar", ["Copy"] = "Copiar", ["Paste"] = "Colar", ["Clear"] = "Limpar", ["Hide"] = "Ocultar",
-        ["Show"] = "Mostrar", ["Loading"] = "Carregando", ["Ready"] = "Pronto", ["Error"] = "Erro", ["Warning"] = "Aviso",
-        ["Success"] = "Sucesso", ["Toggle"] = "Alternar", ["Button"] = "Botão", ["Checkbox"] = "Caixa de seleção", ["Slider"] = "Controle deslizante",
-        ["Dropdown"] = "Menu suspenso", ["Paragraph"] = "Parágrafo", ["Color Picker"] = "Seletor de cor", ["ColorPicker"] = "Seletor de cor",
-        ["Tutorial"] = "Tutorial", ["Tutorials"] = "Tutoriais", ["Example"] = "Exemplo", ["Examples"] = "Exemplos",
-        ["Auto Farm"] = "Farm Automático", ["Auto Fish"] = "Pesca Automática", ["Auto Fishing"] = "Pesca Automática", ["Fishing"] = "Pesca",
-        ["Fish"] = "Peixe", ["Auto Collect"] = "Coleta Automática", ["Auto Quest"] = "Missão Automática", ["Auto Buy"] = "Compra Automática",
-        ["Auto Sell"] = "Venda Automática", ["Auto Race"] = "Corrida Automática", ["Auto Click"] = "Clique Automático", ["Auto Clicker"] = "Clicador Automático",
-        ["Auto Rejoin"] = "Reentrada Automática", ["Auto Equip"] = "Equipar Automático", ["Auto Heal"] = "Cura Automática", ["Auto Open"] = "Abertura Automática",
-        ["Auto Claim"] = "Resgate Automático", ["Quest"] = "Missão", ["Quests"] = "Missões", ["Event"] = "Evento", ["Events"] = "Eventos",
-        ["Shop"] = "Loja", ["Store"] = "Loja", ["Buy"] = "Comprar", ["Sell"] = "Vender", ["Buy All"] = "Comprar Tudo",
-        ["Sell All"] = "Vender Tudo", ["Inventory"] = "Inventário", ["Item"] = "Item", ["Items"] = "Itens", ["Weapon"] = "Arma",
-        ["Weapons"] = "Armas", ["Knife"] = "Faca", ["Melee"] = "Corpo a Corpo", ["Skins"] = "Skins", ["Skin Changer"] = "Trocador de Skin",
-        ["Effect"] = "Efeito", ["Effects"] = "Efeitos", ["Garage"] = "Garagem", ["Race"] = "Corrida", ["Races"] = "Corridas",
-        ["Car"] = "Carro", ["Cars"] = "Carros", ["Vehicle"] = "Veículo", ["Vehicles"] = "Veículos", ["Teleport"] = "Teleporte",
-        ["Teleports"] = "Teleportes", ["Teleport To"] = "Teleportar para", ["Location"] = "Local", ["Locations"] = "Locais", ["Map"] = "Mapa",
-        ["World"] = "Mundo", ["Island"] = "Ilha", ["Islands"] = "Ilhas", ["Reward"] = "Recompensa", ["Rewards"] = "Recompensas",
-        ["Collect"] = "Coletar", ["Boost"] = "Impulso", ["Boosts"] = "Impulsos", ["Notification"] = "Notificação", ["Notifications"] = "Notificações",
-        ["Theme"] = "Tema", ["Language"] = "Idioma", ["Keybind"] = "Atalho", ["Keybinds"] = "Atalhos", ["Color"] = "Cor",
-        ["Colors"] = "Cores", ["Transparency"] = "Transparência", ["Size"] = "Tamanho", ["Range"] = "Alcance", ["Distance"] = "Distância",
-        ["Delay"] = "Atraso", ["Amount"] = "Quantidade", ["Value"] = "Valor", ["Mode"] = "Modo", ["Type"] = "Tipo",
-        ["Target"] = "Alvo", ["Targets"] = "Alvos", ["Radius"] = "Raio", ["Speed"] = "Velocidade", ["Walk Speed"] = "Velocidade de Caminhada",
-        ["Jump Power"] = "Força do Pulo", ["Jump"] = "Pulo", ["Infinite Jump"] = "Pulo Infinito", ["Fly"] = "Voar", ["Gravity"] = "Gravidade",
-        ["Health"] = "Vida", ["Money"] = "Dinheiro", ["Cash"] = "Dinheiro", ["Coins"] = "Moedas", ["Level"] = "Nível",
-        ["Experience"] = "Experiência", ["Stats"] = "Estatísticas", ["Statistics"] = "Estatísticas", ["Player"] = "Jogador", ["Players"] = "Jogadores",
-        ["Character"] = "Personagem", ["Movement"] = "Movimento", ["Combat"] = "Combate", ["Visuals"] = "Visuais", ["Visual"] = "Visual",
-        ["Server"] = "Servidor", ["Server Hop"] = "Trocar de Servidor", ["Rejoin"] = "Reentrar", ["Performance"] = "Desempenho", ["FPS Boost"] = "Aumento de FPS",
-        ["Optimization"] = "Otimização", ["Graphics"] = "Gráficos", ["Lighting"] = "Iluminação", ["Time"] = "Tempo", ["Day"] = "Dia",
-        ["Night"] = "Noite", ["Weather"] = "Clima", ["Fog"] = "Neblina", ["Sky"] = "Céu", ["Debug"] = "Depuração",
-        ["Developer"] = "Desenvolvedor", ["Luck"] = "Sorte", ["Potion"] = "Poção", ["Potions"] = "Poções", ["Craft"] = "Criar",
-        ["Crafting"] = "Criação", ["Enemy"] = "Inimigo", ["Enemies"] = "Inimigos", ["Boss"] = "Chefe", ["Bosses"] = "Chefes",
-        ["Pet"] = "Pet", ["Pets"] = "Pets", ["Profile"] = "Perfil", ["Profiles"] = "Perfis", ["Unlock"] = "Desbloquear",
-        ["Lock"] = "Bloquear", ["Unlock All"] = "Desbloquear Tudo", ["Minimum"] = "Mínimo", ["Maximum"] = "Máximo", ["Minimum Time"] = "Tempo Mínimo"
-    },
-    es = {
-        ["Main"] = "Principal", ["Home"] = "Inicio", ["General"] = "General", ["Settings"] = "Configuración", ["Configuration"] = "Configuración",
-        ["Options"] = "Opciones", ["Misc"] = "Varios", ["Miscellaneous"] = "Varios", ["Other"] = "Otros", ["Tools"] = "Herramientas",
-        ["Utilities"] = "Utilidades", ["Utility"] = "Utilidad", ["Info"] = "Información", ["Information"] = "Información", ["About"] = "Acerca de",
-        ["Credits"] = "Créditos", ["Status"] = "Estado", ["Search"] = "Buscar", ["Search..."] = "Buscar...", ["Select"] = "Seleccionar",
-        ["Select..."] = "Seleccionar...", ["No results found"] = "No se encontraron resultados", ["None"] = "Ninguno", ["Selected"] = "Seleccionado",
-        ["Enable"] = "Activar", ["Enabled"] = "Activado", ["Disable"] = "Desactivar", ["Disabled"] = "Desactivado", ["Start"] = "Iniciar",
-        ["Stop"] = "Detener", ["Pause"] = "Pausar", ["Resume"] = "Continuar", ["Reset"] = "Restablecer", ["Save"] = "Guardar",
-        ["Load"] = "Cargar", ["Delete"] = "Eliminar", ["Remove"] = "Quitar", ["Add"] = "Añadir", ["Apply"] = "Aplicar",
-        ["Cancel"] = "Cancelar", ["Confirm"] = "Confirmar", ["Close"] = "Cerrar", ["Open"] = "Abrir", ["Refresh"] = "Actualizar",
-        ["Update"] = "Actualizar", ["Copy"] = "Copiar", ["Paste"] = "Pegar", ["Clear"] = "Limpiar", ["Hide"] = "Ocultar",
-        ["Show"] = "Mostrar", ["Loading"] = "Cargando", ["Ready"] = "Listo", ["Error"] = "Error", ["Warning"] = "Advertencia",
-        ["Success"] = "Éxito", ["Toggle"] = "Alternar", ["Button"] = "Botón", ["Checkbox"] = "Casilla de verificación", ["Slider"] = "Deslizador",
-        ["Dropdown"] = "Menú desplegable", ["Paragraph"] = "Párrafo", ["Color Picker"] = "Selector de color", ["ColorPicker"] = "Selector de color",
-        ["Tutorial"] = "Tutorial", ["Tutorials"] = "Tutoriales", ["Example"] = "Ejemplo", ["Examples"] = "Ejemplos",
-        ["Auto Farm"] = "Farmeo Automático", ["Auto Fish"] = "Pesca Automática", ["Auto Fishing"] = "Pesca Automática", ["Fishing"] = "Pesca",
-        ["Fish"] = "Pez", ["Auto Collect"] = "Recolección Automática", ["Auto Quest"] = "Misión Automática", ["Auto Buy"] = "Compra Automática",
-        ["Auto Sell"] = "Venta Automática", ["Auto Race"] = "Carrera Automática", ["Auto Click"] = "Clic Automático", ["Auto Clicker"] = "Autoclicker",
-        ["Auto Rejoin"] = "Reingreso Automático", ["Auto Equip"] = "Equipar Automático", ["Auto Heal"] = "Curación Automática", ["Auto Open"] = "Apertura Automática",
-        ["Auto Claim"] = "Reclamo Automático", ["Quest"] = "Misión", ["Quests"] = "Misiones", ["Event"] = "Evento", ["Events"] = "Eventos",
-        ["Shop"] = "Tienda", ["Store"] = "Tienda", ["Buy"] = "Comprar", ["Sell"] = "Vender", ["Buy All"] = "Comprar Todo",
-        ["Sell All"] = "Vender Todo", ["Inventory"] = "Inventario", ["Item"] = "Objeto", ["Items"] = "Objetos", ["Weapon"] = "Arma",
-        ["Weapons"] = "Armas", ["Knife"] = "Cuchillo", ["Melee"] = "Cuerpo a Cuerpo", ["Skins"] = "Skins", ["Skin Changer"] = "Cambiador de Skin",
-        ["Effect"] = "Efecto", ["Effects"] = "Efectos", ["Garage"] = "Garaje", ["Race"] = "Carrera", ["Races"] = "Carreras",
-        ["Car"] = "Auto", ["Cars"] = "Autos", ["Vehicle"] = "Vehículo", ["Vehicles"] = "Vehículos", ["Teleport"] = "Teletransporte",
-        ["Teleports"] = "Teletransportes", ["Teleport To"] = "Teletransportar a", ["Location"] = "Ubicación", ["Locations"] = "Ubicaciones", ["Map"] = "Mapa",
-        ["World"] = "Mundo", ["Island"] = "Isla", ["Islands"] = "Islas", ["Reward"] = "Recompensa", ["Rewards"] = "Recompensas",
-        ["Collect"] = "Recolectar", ["Boost"] = "Impulso", ["Boosts"] = "Impulsos", ["Notification"] = "Notificación", ["Notifications"] = "Notificaciones",
-        ["Theme"] = "Tema", ["Language"] = "Idioma", ["Keybind"] = "Atajo", ["Keybinds"] = "Atajos", ["Color"] = "Color",
-        ["Colors"] = "Colores", ["Transparency"] = "Transparencia", ["Size"] = "Tamaño", ["Range"] = "Alcance", ["Distance"] = "Distancia",
-        ["Delay"] = "Retraso", ["Amount"] = "Cantidad", ["Value"] = "Valor", ["Mode"] = "Modo", ["Type"] = "Tipo",
-        ["Target"] = "Objetivo", ["Targets"] = "Objetivos", ["Radius"] = "Radio", ["Speed"] = "Velocidad", ["Walk Speed"] = "Velocidad de Caminata",
-        ["Jump Power"] = "Fuerza de Salto", ["Jump"] = "Salto", ["Infinite Jump"] = "Salto Infinito", ["Fly"] = "Volar", ["Gravity"] = "Gravedad",
-        ["Health"] = "Vida", ["Money"] = "Dinero", ["Cash"] = "Efectivo", ["Coins"] = "Monedas", ["Level"] = "Nivel",
-        ["Experience"] = "Experiencia", ["Stats"] = "Estadísticas", ["Statistics"] = "Estadísticas", ["Player"] = "Jugador", ["Players"] = "Jugadores",
-        ["Character"] = "Personaje", ["Movement"] = "Movimiento", ["Combat"] = "Combate", ["Visuals"] = "Visuales", ["Visual"] = "Visual",
-        ["Server"] = "Servidor", ["Server Hop"] = "Cambiar de Servidor", ["Rejoin"] = "Reingresar", ["Performance"] = "Rendimiento", ["FPS Boost"] = "Aumento de FPS",
-        ["Optimization"] = "Optimización", ["Graphics"] = "Gráficos", ["Lighting"] = "Iluminación", ["Time"] = "Tiempo", ["Day"] = "Día",
-        ["Night"] = "Noche", ["Weather"] = "Clima", ["Fog"] = "Niebla", ["Sky"] = "Cielo", ["Debug"] = "Depuración",
-        ["Developer"] = "Desarrollador", ["Luck"] = "Suerte", ["Potion"] = "Poción", ["Potions"] = "Pociones", ["Craft"] = "Fabricar",
-        ["Crafting"] = "Fabricación", ["Enemy"] = "Enemigo", ["Enemies"] = "Enemigos", ["Boss"] = "Jefe", ["Bosses"] = "Jefes",
-        ["Pet"] = "Mascota", ["Pets"] = "Mascotas", ["Profile"] = "Perfil", ["Profiles"] = "Perfiles", ["Unlock"] = "Desbloquear",
-        ["Lock"] = "Bloquear", ["Unlock All"] = "Desbloquear Todo", ["Minimum"] = "Mínimo", ["Maximum"] = "Máximo", ["Minimum Time"] = "Tiempo Mínimo"
-    }
-}
+local WIDE_LETTERS = "[\195-\197\208-\219\224\227-\237]"
 
 local FOLD_MAP = {}
 for base, letters in pairs({a = "àáâãäå", c = "ç", e = "èéêë", i = "ìíîï", n = "ñ", o = "òóôõö", u = "ùúûü", y = "ý"}) do
@@ -577,19 +457,22 @@ FOLD_MAP[utf8.char(255)] = "y"
 
 function Locale.GetId()
     local player = Players.LocalPlayer
-    if player then
-        local ok, id = pcall(function()
-            return player.LocaleId
-        end)
+    local readers = {
+        function()
+            return player and player.LocaleId
+        end,
+        function()
+            return LocalizationService.RobloxLocaleId
+        end,
+        function()
+            return LocalizationService.SystemLocaleId
+        end
+    }
+    for _, read in ipairs(readers) do
+        local ok, id = pcall(read)
         if ok and type(id) == "string" and id ~= "" then
             return string.lower(id)
         end
-    end
-    local ok2, id2 = pcall(function()
-        return LocalizationService.RobloxLocaleId
-    end)
-    if ok2 and type(id2) == "string" and id2 ~= "" then
-        return string.lower(id2)
     end
     return nil
 end
@@ -619,7 +502,14 @@ function Locale.Watch(maid)
     if player then
         maid:Connect(player:GetPropertyChangedSignal("LocaleId"), update)
     end
-    maid:Connect(LocalizationService:GetPropertyChangedSignal("RobloxLocaleId"), update)
+    for _, name in ipairs({"RobloxLocaleId", "SystemLocaleId"}) do
+        local ok, signal = pcall(function()
+            return LocalizationService:GetPropertyChangedSignal(name)
+        end)
+        if ok and signal then
+            maid:Connect(signal, update)
+        end
+    end
     task.spawn(function()
         local tries = 0
         while not Locale.GetId() and tries < 20 do
@@ -644,19 +534,6 @@ end
 
 function Locale.Is(lang)
     return Locale.GetLang() == string.lower(tostring(lang))
-end
-
-function Locale.T(key)
-    local lang = Locale.GetLang()
-    local set = LOCALE_STRINGS[lang]
-    if set and set[key] then
-        return set[key]
-    end
-    local base = LOCALE_STRINGS.en[key] or key
-    if lang == "en" then
-        return base
-    end
-    return Locale.Translate(base)
 end
 
 function Locale.Upper(text)
@@ -716,9 +593,6 @@ function Locale.State(lang)
         end
     end
 
-    for key, value in pairs(LOCALE_WORDS[lang] or {}) do
-        put(key, value)
-    end
     for key, value in pairs(Locale.Custom[lang] or {}) do
         put(key, value)
     end
@@ -760,16 +634,6 @@ function Locale.Resolve(state, text, lang)
                 parts[#parts + 1] = Locale.Translate(string.sub(text, cursor))
             end
             return table.concat(parts)
-        end
-    end
-
-    local rules = LOCALE_PATTERNS[lang]
-    if rules then
-        for _, rule in ipairs(rules) do
-            local replaced, count = string.gsub(text, rule[1], rule[2])
-            if count > 0 then
-                return replaced
-            end
         end
     end
 
@@ -855,7 +719,7 @@ function Locale.Translate(text)
         return text
     end
     local lang = Locale.GetLang()
-    if lang == "en" or not string.find(text, "%a") then
+    if lang == "en" or (not string.find(text, "%a") and not string.find(text, WIDE_LETTERS)) then
         return text
     end
 
@@ -880,13 +744,11 @@ function Locale.Translate(text)
         end
     end
 
-    local rules = LOCALE_PATTERNS[lang]
-    if rules then
-        for _, rule in ipairs(rules) do
-            local replaced, count = string.gsub(text, rule[1], rule[2])
-            if count > 0 then
-                return replaced
-            end
+    local roblox = Locale.Roblox
+    if roblox then
+        local result = roblox.Get(text, lang)
+        if result then
+            return result
         end
     end
 
@@ -1280,7 +1142,7 @@ function Notify.Create(title, description, key)
     }, card)
     Util.List(column, 2)
     Util.Padding(column, 12, 14, 0, 0)
-    Notify.Label(column, Locale.Upper(Locale.T("ErrorLabel")), config.NameSize, color, false, 1).Name = "Name"
+    Notify.Label(column, Locale.Upper(Locale.Translate("Error")), config.NameSize, color, false, 1).Name = "Name"
     Notify.Label(column, title, config.TitleSize, theme.Text, true, 2).Name = "Title"
     Notify.Label(column, description, config.DescriptionSize, theme.Muted, true, 3).Name = "Description"
 
@@ -1621,11 +1483,81 @@ function Http.Fetch(urls, rounds)
     error(failure, 0)
 end
 
+-- // Tradutor Roblox
+local Roblox = {Translator = nil, Lang = nil, Loading = false, Cache = {}, Count = 0}
+Locale.Roblox = Roblox
+
+function Roblox.Load()
+    if Roblox.Translator or Roblox.Loading then
+        return
+    end
+    Roblox.Loading = true
+    task.spawn(function()
+        local ok, translator = pcall(function()
+            return LocalizationService:GetTranslatorForPlayerAsync(Players.LocalPlayer)
+        end)
+        Roblox.Loading = false
+        if not ok or not translator then
+            return
+        end
+        local readable, id = pcall(function()
+            return translator.LocaleId
+        end)
+        if not readable or type(id) ~= "string" then
+            return
+        end
+        Roblox.Lang = string.match(string.lower(id), "^([^%-_]+)")
+        Roblox.Translator = translator
+        Roblox.Cache = {}
+        Roblox.Count = 0
+        Locale.Refresh()
+    end)
+end
+
+function Roblox.Get(text, lang)
+    local translator = Roblox.Translator
+    if not translator or Roblox.Lang ~= lang then
+        return nil
+    end
+    local cached = Roblox.Cache[text]
+    if cached ~= nil then
+        return cached or nil
+    end
+    if Roblox.Count > 2000 then
+        Roblox.Cache = {}
+        Roblox.Count = 0
+    end
+    Roblox.Count = Roblox.Count + 1
+    local ok, result = pcall(translator.Translate, translator, PlayerGui, text)
+    if ok and type(result) == "string" and result ~= "" and result ~= text then
+        Roblox.Cache[text] = result
+        return result
+    end
+    Roblox.Cache[text] = false
+    return nil
+end
+
 -- // Tradução automática
-local Machine = {Cache = {}, Queue = {}, Queued = {}, Failed = {}, Active = 0, Limit = 3, Token = 0, Ready = false}
+local Machine = {
+    Cache = {},
+    Queue = {},
+    Queued = {},
+    Failed = {},
+    Active = 0,
+    Limit = 6,
+    Retries = 4,
+    Cooldown = 20,
+    BatchSize = 30,
+    BatchChars = 1000,
+    SingleChars = 200,
+    Waiting = false,
+    Recovering = false,
+    Ready = false
+}
 Locale.Machine = Machine
 
 local MACHINE_CODES = {zh = "zh-CN", he = "iw", fil = "tl"}
+local MACHINE_HOSTS = {"translate.googleapis.com", "translate.google.com"}
 
 function Machine.Load()
     if Machine.Ready then
@@ -1637,6 +1569,10 @@ function Machine.Load()
         data.Translations = {}
     end
     Machine.Cache = data.Translations
+end
+
+function Machine.Trim(text)
+    return (string.gsub(string.gsub(text, "^%s+", ""), "%s+$", ""))
 end
 
 function Machine.Template(text)
@@ -1652,6 +1588,18 @@ function Machine.Restore(text, numbers)
     return (string.gsub(text, "{%s*(%d+)%s*}", function(index)
         return numbers[tonumber(index)]
     end))
+end
+
+function Machine.Valid(text, slots)
+    local found = 0
+    for index in string.gmatch(text, "{%s*(%d+)%s*}") do
+        local number = tonumber(index)
+        if not number or number < 1 or number > slots then
+            return false
+        end
+        found = found + 1
+    end
+    return found == slots
 end
 
 function Machine.Chunks(text)
@@ -1674,43 +1622,199 @@ function Machine.Chunks(text)
     return chunks
 end
 
-function Machine.Fetch(text, lang)
-    local code = MACHINE_CODES[lang] or lang
-    local out = {}
-    for _, chunk in ipairs(Machine.Chunks(text)) do
-        local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl="
-            .. code .. "&dt=t&q=" .. HttpService:UrlEncode(chunk)
-        local data = HttpService:JSONDecode(Http.Get(url))
-        local piece = {}
-        for _, segment in ipairs(data[1] or {}) do
-            if type(segment[1]) == "string" then
-                piece[#piece + 1] = segment[1]
+function Machine.Request(text, code)
+    local failure = "request failed"
+    local query = HttpService:UrlEncode(text)
+    for _, host in ipairs(MACHINE_HOSTS) do
+        local url = "https://" .. host .. "/translate_a/single?client=gtx&sl=auto&tl=" .. code .. "&dt=t&q=" .. query
+        local ok, body = pcall(Http.Get, url)
+        if ok then
+            local parsed, data = pcall(HttpService.JSONDecode, HttpService, body)
+            if parsed and type(data) == "table" and type(data[1]) == "table" then
+                local pieces = {}
+                for _, segment in ipairs(data[1]) do
+                    if type(segment) == "table" and type(segment[1]) == "string" then
+                        pieces[#pieces + 1] = segment[1]
+                    end
+                end
+                local joined = table.concat(pieces)
+                if joined ~= "" then
+                    return joined
+                end
+                failure = "empty translation"
+            else
+                failure = "invalid response"
             end
+        else
+            failure = tostring(body)
         end
-        out[#out + 1] = table.concat(piece)
     end
-    local result = table.concat(out)
+    error(failure, 0)
+end
+
+function Machine.FetchOne(text, lang)
+    local code = MACHINE_CODES[lang] or lang
+    local result = ""
+    for _, chunk in ipairs(Machine.Chunks(text)) do
+        local piece = Machine.Request(chunk, code)
+        if result ~= "" and not string.find(result, "%s$") and not string.find(piece, "^%s") then
+            result = result .. " "
+        end
+        result = result .. piece
+    end
+    result = Machine.Trim(result)
     if result == "" then
         error("empty translation", 0)
     end
     return result
 end
 
-function Machine.Store(lang, template, result)
+function Machine.FetchBatch(jobs, lang)
+    local code = MACHINE_CODES[lang] or lang
+    local lines = {}
+    for index, job in ipairs(jobs) do
+        lines[index] = job.Text
+    end
+    local joined = Machine.Trim(Machine.Request(table.concat(lines, "\n"), code))
+    local results = {}
+    for line in string.gmatch(joined .. "\n", "([^\n]*)\n") do
+        results[#results + 1] = Machine.Trim(line)
+    end
+    if #results ~= #jobs then
+        return nil
+    end
+    for _, line in ipairs(results) do
+        if line == "" then
+            return nil
+        end
+    end
+    return results
+end
+
+function Machine.Schedule()
+    if Machine.Waiting then
+        return
+    end
+    Machine.Waiting = true
+    task.delay(0.1, function()
+        Machine.Waiting = false
+        Locale.Refresh()
+    end)
+end
+
+function Machine.Recover()
+    if Machine.Recovering then
+        return
+    end
+    Machine.Recovering = true
+    task.delay(Machine.Cooldown + 1, function()
+        Machine.Recovering = false
+        if Locale.IsActive() then
+            Locale.Refresh()
+        end
+    end)
+end
+
+function Machine.Store(lang, key, result)
     local bucket = Machine.Cache[lang]
     if type(bucket) ~= "table" then
         bucket = {}
         Machine.Cache[lang] = bucket
     end
-    bucket[template] = result
+    bucket[key] = result
     Save.Touch()
-    Machine.Token = Machine.Token + 1
-    local token = Machine.Token
-    task.delay(0.35, function()
-        if Machine.Token == token then
-            Locale.Refresh()
+    Machine.Schedule()
+end
+
+function Machine.Fail(job)
+    if not Machine.Queued[job.Key] then
+        return
+    end
+    job.Attempts = (job.Attempts or 0) + 1
+    if job.Attempts < Machine.Retries then
+        task.delay(job.Attempts * 1.5, function()
+            Machine.Queue[#Machine.Queue + 1] = job
+            Machine.Start()
+        end)
+        return
+    end
+    Machine.Queued[job.Key] = nil
+    Machine.Failed[job.Key] = os.clock()
+    Machine.Recover()
+end
+
+function Machine.Batchable(job)
+    return #job.Text <= Machine.SingleChars and not string.find(job.Text, "\n", 1, true)
+end
+
+function Machine.Take()
+    local first = table.remove(Machine.Queue, 1)
+    if not first then
+        return nil
+    end
+    local jobs = {first}
+    if not Machine.Batchable(first) then
+        return jobs, first.Lang
+    end
+    local chars = #first.Text + 1
+    local index = 1
+    while index <= #Machine.Queue and #jobs < Machine.BatchSize do
+        local job = Machine.Queue[index]
+        if job.Lang == first.Lang and Machine.Batchable(job) and chars + #job.Text + 1 <= Machine.BatchChars then
+            table.remove(Machine.Queue, index)
+            jobs[#jobs + 1] = job
+            chars = chars + #job.Text + 1
+        else
+            index = index + 1
         end
-    end)
+    end
+    return jobs, first.Lang
+end
+
+function Machine.Solve(job, lang, preset)
+    if preset then
+        if Machine.Valid(preset, job.Slots) then
+            return job.Text, preset
+        end
+    else
+        local ok, value = pcall(Machine.FetchOne, job.Text, lang)
+        if ok and Machine.Valid(value, job.Slots) then
+            return job.Text, value
+        end
+        if not ok then
+            return nil
+        end
+    end
+    if job.Raw then
+        local ok, value = pcall(Machine.FetchOne, job.Raw, lang)
+        if ok then
+            return job.Raw, value
+        end
+    end
+    return nil
+end
+
+function Machine.Process(jobs, lang)
+    local results = nil
+    if #jobs > 1 then
+        local ok, value = pcall(Machine.FetchBatch, jobs, lang)
+        if not ok then
+            for _, job in ipairs(jobs) do
+                Machine.Fail(job)
+            end
+            return
+        end
+        results = value
+    end
+    for index, job in ipairs(jobs) do
+        local key, value = Machine.Solve(job, lang, results and results[index] or nil)
+        if key then
+            Machine.Queued[job.Key] = nil
+            Machine.Store(lang, key, value)
+        else
+            Machine.Fail(job)
+        end
+    end
 end
 
 function Machine.Start()
@@ -1719,34 +1823,42 @@ function Machine.Start()
     end
     Machine.Active = Machine.Active + 1
     task.spawn(function()
+        task.wait(0.05)
         while true do
-            local job = table.remove(Machine.Queue, 1)
-            if not job then
+            local jobs, lang = Machine.Take()
+            if not jobs then
                 break
             end
-            local ok, result = pcall(Machine.Fetch, job.Text, job.Lang)
-            Machine.Queued[job.Key] = nil
-            if ok and result then
-                Machine.Store(job.Lang, job.Text, result)
-            else
-                Machine.Failed[job.Key] = os.clock()
+            local ok = pcall(Machine.Process, jobs, lang)
+            if not ok then
+                for _, job in ipairs(jobs) do
+                    Machine.Fail(job)
+                end
             end
         end
         Machine.Active = Machine.Active - 1
     end)
 end
 
-function Machine.Enqueue(template, lang)
+function Machine.Enqueue(template, lang, slots, raw)
     local key = lang .. "|" .. template
     if Machine.Queued[key] then
         return
     end
     local failed = Machine.Failed[key]
-    if failed and os.clock() - failed < 60 then
+    if failed and os.clock() - failed < Machine.Cooldown then
         return
     end
+    Machine.Failed[key] = nil
     Machine.Queued[key] = true
-    Machine.Queue[#Machine.Queue + 1] = {Text = template, Lang = lang, Key = key}
+    Machine.Queue[#Machine.Queue + 1] = {
+        Text = template,
+        Lang = lang,
+        Key = key,
+        Slots = slots,
+        Raw = slots > 0 and raw or nil,
+        Attempts = 0
+    }
     Machine.Start()
 end
 
@@ -1757,15 +1869,21 @@ function Machine.Get(text, lang)
         return nil
     end
     local template, numbers = Machine.Template(core)
-    if not string.find(template, "%a%a") then
+    if not string.find(template, "%a%a") and not string.find(template, WIDE_LETTERS) then
         return nil
     end
     local bucket = Machine.Cache[lang]
-    local hit = type(bucket) == "table" and bucket[template]
-    if hit then
-        return lead .. Machine.Restore(hit, numbers) .. tail
+    if type(bucket) == "table" then
+        local hit = bucket[template]
+        if type(hit) == "string" and Machine.Valid(hit, #numbers) then
+            return lead .. Machine.Restore(hit, numbers) .. tail
+        end
+        local exact = bucket[core]
+        if type(exact) == "string" then
+            return lead .. exact .. tail
+        end
     end
-    Machine.Enqueue(template, lang)
+    Machine.Enqueue(template, lang, #numbers, core)
     return nil
 end
 
@@ -2991,7 +3109,7 @@ function Palette:_Build()
         Position = UDim2.new(0, 36, 0, 0),
         BackgroundTransparency = 1,
         Text = "",
-        PlaceholderText = Locale.T("SearchPrompt"),
+        PlaceholderText = Locale.Translate("Search tabs and elements..."),
         PlaceholderColor3 = Theme.Placeholder,
         TextColor3 = Theme.Text,
         TextSize = 14,
@@ -3335,7 +3453,7 @@ function Palette:Render(query)
             Name = "Empty",
             Size = UDim2.new(1, 0, 0, 48),
             BackgroundTransparency = 1,
-            Text = Locale.T("NoResults"),
+            Text = Locale.Translate("No results found."),
             TextColor3 = Theme.Dim,
             TextSize = 14,
             Font = Enum.Font.SourceSans
@@ -4014,6 +4132,7 @@ function Window.new(config)
 
     Save.Init()
     Locale.Watch(self.Maid)
+    Roblox.Load()
     self:_BuildMain()
     self:_BuildPanel()
     self.Palette = Palette.new(self)
@@ -4037,8 +4156,8 @@ function Window:_Relocalize()
     if self.Destroyed then
         return
     end
-    self.SearchButton.Text = Locale.T("SearchPlaceholder")
-    self.Palette.Input.PlaceholderText = Locale.T("SearchPrompt")
+    self.SearchButton.Text = Locale.Translate("Search...")
+    self.Palette.Input.PlaceholderText = Locale.Translate("Search tabs and elements...")
     if self.Crumbs then
         self:_SetBreadcrumb(self.Crumbs)
     end
@@ -4205,7 +4324,7 @@ function Window:_BuildMain()
         Position = UDim2.new(0, 28, 0, 0),
         BackgroundTransparency = 1,
         AutoButtonColor = false,
-        Text = Locale.T("SearchPlaceholder"),
+        Text = Locale.Translate("Search..."),
         TextColor3 = Theme.Placeholder,
         TextSize = 13,
         Font = Enum.Font.SourceSans,
