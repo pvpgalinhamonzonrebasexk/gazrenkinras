@@ -1,3 +1,11 @@
+do
+    local genv = getgenv and getgenv() or _G
+    local current = genv.EcoHubLibrary
+    if current and current.Window and not current.Window.Destroyed and not genv.EcoHubReload then
+        return current
+    end
+end
+
 -- // Serviços
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -87,6 +95,8 @@ local isTouch = UserInputService.TouchEnabled
 
 -- // Util
 local Util = {}
+
+Util.Owners = setmetatable({}, {__mode = "k"})
 
 function Util.Create(className, props, parent)
     local instance = Instance.new(className)
@@ -596,6 +606,9 @@ function Locale.SetLang(lang)
     if type(lang) == "string" then
         code = string.match(string.lower(lang), "^([^%-_]+)")
     end
+    if code == "auto" then
+        code = nil
+    end
     Locale.Lang = code
     Locale.Refresh()
 end
@@ -605,8 +618,16 @@ function Locale.Is(lang)
 end
 
 function Locale.T(key)
-    local set = LOCALE_STRINGS[Locale.GetLang()] or LOCALE_STRINGS.en
-    return set[key] or LOCALE_STRINGS.en[key] or key
+    local lang = Locale.GetLang()
+    local set = LOCALE_STRINGS[lang]
+    if set and set[key] then
+        return set[key]
+    end
+    local base = LOCALE_STRINGS.en[key] or key
+    if lang == "en" then
+        return base
+    end
+    return Locale.Translate(base)
 end
 
 function Locale.Upper(text)
@@ -684,7 +705,7 @@ function Locale.State(lang)
 end
 
 function Locale.IsActive()
-    return Locale.State(Locale.GetLang()) ~= nil
+    return Locale.GetLang() ~= "en"
 end
 
 function Locale.Resolve(state, text, lang)
@@ -781,36 +802,77 @@ function Locale.Resolve(state, text, lang)
     return table.concat(parts)
 end
 
+function Locale.TranslateTagged(text)
+    local parts, cursor, tagged = {}, 1, false
+    for first, after in string.gmatch(text, "()%b<>()") do
+        tagged = true
+        if first > cursor then
+            parts[#parts + 1] = Locale.Translate(string.sub(text, cursor, first - 1))
+        end
+        parts[#parts + 1] = string.sub(text, first, after - 1)
+        cursor = after
+    end
+    if not tagged then
+        return nil
+    end
+    if cursor <= #text then
+        parts[#parts + 1] = Locale.Translate(string.sub(text, cursor))
+    end
+    return table.concat(parts)
+end
+
 function Locale.Translate(text)
     if type(text) ~= "string" or text == "" then
         return text
     end
     local lang = Locale.GetLang()
+    if lang == "en" or not string.find(text, "%a") then
+        return text
+    end
+
     local state = Locale.State(lang)
-    if not state or not string.find(text, "%a") then
-        return text
-    end
-
-    local hit = state.Cache[text]
-    if hit then
-        return hit
-    end
-    if state.Miss[text] then
-        return text
-    end
-
-    local result = Locale.Resolve(state, text, lang)
-    if result ~= text then
-        state.Cache[text] = result
-    else
-        if state.MissCount >= 1500 then
-            state.Miss = {}
-            state.MissCount = 0
+    if state then
+        local cached = state.Cache[text]
+        if cached then
+            return cached
         end
-        state.Miss[text] = true
-        state.MissCount = state.MissCount + 1
+        local direct = state.Index[string.lower(text)]
+        if direct then
+            local result = Locale.Adapt(text, direct)
+            state.Cache[text] = result
+            return result
+        end
     end
-    return result
+
+    if string.find(text, "<", 1, true) and string.find(text, ">", 1, true) then
+        local tagged = Locale.TranslateTagged(text)
+        if tagged then
+            return tagged
+        end
+    end
+
+    local rules = LOCALE_PATTERNS[lang]
+    if rules then
+        for _, rule in ipairs(rules) do
+            local replaced, count = string.gsub(text, rule[1], rule[2])
+            if count > 0 then
+                return replaced
+            end
+        end
+    end
+
+    local machine = Locale.Machine
+    if machine then
+        local result = machine.Get(text, lang)
+        if result then
+            return result
+        end
+    end
+
+    if state then
+        return Locale.Resolve(state, text, lang)
+    end
+    return text
 end
 
 function Locale.Add(lang, map, silent)
@@ -1530,6 +1592,154 @@ function Http.Fetch(urls, rounds)
     error(failure, 0)
 end
 
+-- // Tradução automática
+local Machine = {Cache = {}, Queue = {}, Queued = {}, Failed = {}, Active = 0, Limit = 3, Token = 0, Ready = false}
+Locale.Machine = Machine
+
+local MACHINE_CODES = {zh = "zh-CN", he = "iw", fil = "tl"}
+
+function Machine.Load()
+    if Machine.Ready then
+        return
+    end
+    Machine.Ready = true
+    local data = Save.Read()
+    if type(data.Translations) ~= "table" then
+        data.Translations = {}
+    end
+    Machine.Cache = data.Translations
+end
+
+function Machine.Template(text)
+    local numbers = {}
+    local template = string.gsub(text, "%d+", function(number)
+        numbers[#numbers + 1] = number
+        return "{" .. #numbers .. "}"
+    end)
+    return template, numbers
+end
+
+function Machine.Restore(text, numbers)
+    return (string.gsub(text, "{%s*(%d+)%s*}", function(index)
+        return numbers[tonumber(index)]
+    end))
+end
+
+function Machine.Chunks(text)
+    if #text <= 300 then
+        return {text}
+    end
+    local chunks, current = {}, ""
+    for sentence in string.gmatch(text, "[^%.!?\n]*[%.!?\n]*%s*") do
+        if sentence ~= "" then
+            if #current + #sentence > 300 and current ~= "" then
+                chunks[#chunks + 1] = current
+                current = ""
+            end
+            current = current .. sentence
+        end
+    end
+    if current ~= "" then
+        chunks[#chunks + 1] = current
+    end
+    return chunks
+end
+
+function Machine.Fetch(text, lang)
+    local code = MACHINE_CODES[lang] or lang
+    local out = {}
+    for _, chunk in ipairs(Machine.Chunks(text)) do
+        local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl="
+            .. code .. "&dt=t&q=" .. HttpService:UrlEncode(chunk)
+        local data = HttpService:JSONDecode(Http.Get(url))
+        local piece = {}
+        for _, segment in ipairs(data[1] or {}) do
+            if type(segment[1]) == "string" then
+                piece[#piece + 1] = segment[1]
+            end
+        end
+        out[#out + 1] = table.concat(piece)
+    end
+    local result = table.concat(out)
+    if result == "" then
+        error("empty translation", 0)
+    end
+    return result
+end
+
+function Machine.Store(lang, template, result)
+    local bucket = Machine.Cache[lang]
+    if type(bucket) ~= "table" then
+        bucket = {}
+        Machine.Cache[lang] = bucket
+    end
+    bucket[template] = result
+    Save.Touch()
+    Machine.Token = Machine.Token + 1
+    local token = Machine.Token
+    task.delay(0.35, function()
+        if Machine.Token == token then
+            Locale.Refresh()
+        end
+    end)
+end
+
+function Machine.Start()
+    if Machine.Active >= Machine.Limit then
+        return
+    end
+    Machine.Active = Machine.Active + 1
+    task.spawn(function()
+        while true do
+            local job = table.remove(Machine.Queue, 1)
+            if not job then
+                break
+            end
+            local ok, result = pcall(Machine.Fetch, job.Text, job.Lang)
+            Machine.Queued[job.Key] = nil
+            if ok and result then
+                Machine.Store(job.Lang, job.Text, result)
+            else
+                Machine.Failed[job.Key] = os.clock()
+            end
+        end
+        Machine.Active = Machine.Active - 1
+    end)
+end
+
+function Machine.Enqueue(template, lang)
+    local key = lang .. "|" .. template
+    if Machine.Queued[key] then
+        return
+    end
+    local failed = Machine.Failed[key]
+    if failed and os.clock() - failed < 60 then
+        return
+    end
+    Machine.Queued[key] = true
+    Machine.Queue[#Machine.Queue + 1] = {Text = template, Lang = lang, Key = key}
+    Machine.Start()
+end
+
+function Machine.Get(text, lang)
+    Machine.Load()
+    local lead, core, tail = string.match(text, "^(%s*)(.-)(%s*)$")
+    if core == "" then
+        return nil
+    end
+    local template, numbers = Machine.Template(core)
+    if not string.find(template, "%a%a") then
+        return nil
+    end
+    local bucket = Machine.Cache[lang]
+    local hit = type(bucket) == "table" and bucket[template]
+    if hit then
+        return lead .. Machine.Restore(hit, numbers) .. tail
+    end
+    Machine.Enqueue(template, lang)
+    return nil
+end
+
 -- // Source
 local Source = {}
 
@@ -2132,6 +2342,7 @@ function Element.new(contentSection, elementType, options)
     self.Building = false
     self.Destroyed = false
     self.Instance = nil
+    self.Owner = nil
     self.Registry = tab.Window.Elements
 
     container.Name = name
@@ -2375,10 +2586,12 @@ function ContentSection:AddElement(elementType, options)
     elementType = tostring(elementType)
     self.Count = self.Count + 1
 
+    local owner = Util.Owners[coroutine.running()]
     local name = Element.NameOf(elementType, options)
     local order = nil
     for _, existing in ipairs(self.Tab.Elements) do
-        if existing.Section == self and existing.Type == elementType and existing.Name == name and not existing.Destroyed then
+        if existing.Section == self and existing.Type == elementType and existing.Name == name
+            and existing.Owner == owner and not existing.Destroyed then
             order = existing.Container.LayoutOrder
             existing:Destroy()
             self.Used[name] = math.max((self.Used[name] or 1) - 1, 0)
@@ -2387,6 +2600,7 @@ function ContentSection:AddElement(elementType, options)
     end
 
     local element = Element.new(self, elementType, options)
+    element.Owner = owner
     if order then
         element.Container.LayoutOrder = order
     end
@@ -3444,6 +3658,7 @@ function Features:_Run(job, body)
     local result = nil
 
     task.spawn(function()
+        Util.Owners[coroutine.running()] = job.Key
         local success, value = pcall(function()
             env.Window = window
             env.Windows = window
@@ -3521,14 +3736,14 @@ function Features:_LoadJobs(jobs, options)
             duplicate[i] = first[job.Key]
         else
             first[job.Key] = i
-            if self.Loading[job.Key] then
-                local waited = 0
-                while self.Loading[job.Key] and waited < self.Config.Timeout do
-                    task.wait(0.05)
-                    waited = waited + 0.05
-                end
+            local waited = 0
+            while self.Loading[job.Key] and waited < self.Config.Timeout do
+                task.wait(0.05)
+                waited = waited + 0.05
             end
-            if self.Loaded[job.Key] and not reload then
+            if self.Loading[job.Key] then
+                outcomes[i].Error = "still loading"
+            elseif self.Loaded[job.Key] and not reload then
                 outcomes[i].Success = true
             else
                 if self.Loaded[job.Key] then
@@ -3679,6 +3894,15 @@ function Features:Unload(name)
         local ok, failure = pcall(callback)
         if not ok then
             Report("Feature failed", "unload of " .. entry.Name .. ": " .. tostring(failure))
+        end
+    end
+
+    for _, tab in ipairs(self.Window.Tabs) do
+        for i = #tab.Elements, 1, -1 do
+            local element = tab.Elements[i]
+            if element and element.Owner == key then
+                element:Destroy()
+            end
         end
     end
     return true
@@ -3879,6 +4103,9 @@ function Window:_BuildMain()
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd
     }, dashboard)
+
+    Locale.Bind(titleText, "Text")
+    Locale.Bind(subTitleText, "Text")
 
     local tabList = Util.Create("ScrollingFrame", {
         Name = "TabList",
@@ -4528,6 +4755,25 @@ function Window:Translate(text)
     return Locale.Translate(tostring(text))
 end
 
+function Window:TranslateGame(state)
+    if self.GameConnection then
+        self.GameConnection:Disconnect()
+        self.GameConnection = nil
+    end
+    if not state then
+        return
+    end
+    local function attach(gui)
+        if gui:IsA("ScreenGui") and not string.find(gui.Name, "^EcoHub") then
+            Locale.Attach(gui)
+        end
+    end
+    for _, gui in ipairs(PlayerGui:GetChildren()) do
+        attach(gui)
+    end
+    self.GameConnection = self.Maid:Connect(PlayerGui.ChildAdded, attach)
+end
+
 function Window:LoadFeature(name, options)
     return self.Features:Load(name, options)
 end
@@ -4683,7 +4929,8 @@ local FEATURE_METHODS = {
     "LoadElements",
     "CreateTab",
     "GetTab",
-    "SelectTab"
+    "SelectTab",
+    "TranslateGame"
 }
 
 for _, method in ipairs(FEATURE_METHODS) do
@@ -4708,6 +4955,7 @@ for _, name in ipairs({"EcoHub", "EcoHubToggle", "EcoHubNotification"}) do
     end
 end
 
+env.EcoHubReload = nil
 env.EcoHubLibrary = Library
 Icons.Load()
 
