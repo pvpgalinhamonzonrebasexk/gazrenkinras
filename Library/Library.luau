@@ -58,10 +58,7 @@ local Config = {
     ScrollHold = 0.9,
     ScrollWidth = 6,
     SaveFile = "Ecohub.json",
-    SaveDelay = 1,
-    LegacyFolder = "Ecohub",
-    LegacySaveFile = "Ecohub/Save.json",
-    LegacyElementsFile = "Ecohub/Elements.json"
+    SaveDelay = 1
 }
 
 Config.ElementsApi = "https://api.github.com/repos/" .. Config.Repo .. "/contents/" .. Config.ElementsPath .. "?ref=" .. Config.Branch
@@ -366,6 +363,62 @@ function Util.ScrollArea(scroll)
 
     task.defer(update)
     return bar
+end
+
+-- // Json
+local Json = {}
+
+function Json.EncodeString(text)
+    text = string.gsub(text, "\\", "\\\\")
+    text = string.gsub(text, "\"", "\\\"")
+    text = string.gsub(text, "\n", "\\n")
+    text = string.gsub(text, "\r", "\\r")
+    text = string.gsub(text, "\t", "\\t")
+    return "\"" .. text .. "\""
+end
+
+function Json.Encode(value, indent)
+    indent = indent or 0
+    local pad = string.rep("    ", indent)
+    local inner = string.rep("    ", indent + 1)
+
+    if type(value) == "table" then
+        local isArray = true
+        local count = 0
+        for key in pairs(value) do
+            count = count + 1
+            if type(key) ~= "number" then
+                isArray = false
+            end
+        end
+        if count == 0 then
+            return "{}"
+        end
+        if isArray then
+            local parts = {}
+            for i = 1, count do
+                parts[#parts + 1] = inner .. Json.Encode(value[i], indent + 1)
+            end
+            return "[\n" .. table.concat(parts, ",\n") .. "\n" .. pad .. "]"
+        end
+        local keys = {}
+        for key in pairs(value) do
+            keys[#keys + 1] = key
+        end
+        table.sort(keys, function(a, b)
+            return tostring(a) < tostring(b)
+        end)
+        local parts = {}
+        for _, key in ipairs(keys) do
+            parts[#parts + 1] = inner .. Json.EncodeString(tostring(key)) .. ": " .. Json.Encode(value[key], indent + 1)
+        end
+        return "{\n" .. table.concat(parts, ",\n") .. "\n" .. pad .. "}"
+    elseif type(value) == "string" then
+        return Json.EncodeString(value)
+    elseif type(value) == "number" or type(value) == "boolean" then
+        return tostring(value)
+    end
+    return "null"
 end
 
 -- // Notificação
@@ -705,7 +758,7 @@ local function Report(title, detail)
 end
 
 -- // Salvamento
-local Save = {Data = nil, Entry = nil, Key = nil, Name = nil, Dirty = false, Token = 0, Started = false, Cleanup = false}
+local Save = {Data = nil, Entry = nil, Key = nil, Name = nil, Dirty = false, Token = 0, Started = false}
 
 function Save.Read()
     if Save.Data then
@@ -730,15 +783,11 @@ function Save.Read()
     if type(data.Player) ~= "table" then
         data.Player = {}
     end
-    if type(data.Elements) ~= "table" then
-        data.Elements = {}
-    end
     if type(data.Games) ~= "table" then
         data.Games = {}
     end
     Save.Data = data
     Save.Identify()
-    Save.Migrate()
     return data
 end
 
@@ -759,78 +808,6 @@ function Save.Identify()
     if changed then
         Save.Touch()
     end
-end
-
-function Save.Migrate()
-    if type(isfile) ~= "function" or type(readfile) ~= "function" then
-        return
-    end
-    local data = Save.Data
-
-    local function load(path)
-        local ok, decoded = pcall(function()
-            if isfile(path) then
-                return HttpService:JSONDecode(readfile(path))
-            end
-            return nil
-        end)
-        if ok and type(decoded) == "table" then
-            return decoded
-        end
-        return nil
-    end
-
-    local function empty()
-        return type(data.Elements.Files) ~= "table" or #data.Elements.Files == 0
-    end
-
-    local found = false
-
-    local legacy = load(Config.LegacySaveFile)
-    if legacy then
-        found = true
-        if type(legacy.Games) == "table" then
-            for name, entry in pairs(legacy.Games) do
-                if data.Games[name] == nil then
-                    data.Games[name] = entry
-                end
-            end
-        end
-        if type(legacy.Elements) == "table" and type(legacy.Elements.Files) == "table" and #legacy.Elements.Files > 0 and empty() then
-            data.Elements.Files = legacy.Elements.Files
-        end
-    end
-
-    local list = load(Config.LegacyElementsFile)
-    if list then
-        found = true
-        if #list > 0 and empty() then
-            data.Elements.Files = list
-        end
-    end
-
-    if found then
-        Save.Cleanup = true
-        Save.Touch()
-    end
-end
-
-function Save.Purge()
-    Save.Cleanup = false
-    pcall(function()
-        if type(isfile) == "function" and type(delfile) == "function" then
-            for _, path in ipairs({Config.LegacySaveFile, Config.LegacyElementsFile}) do
-                if isfile(path) then
-                    delfile(path)
-                end
-            end
-        end
-        if type(isfolder) == "function" and type(delfolder) == "function" and type(listfiles) == "function" then
-            if isfolder(Config.LegacyFolder) and #listfiles(Config.LegacyFolder) == 0 then
-                delfolder(Config.LegacyFolder)
-            end
-        end
-    end)
 end
 
 function Save.Find()
@@ -925,14 +902,10 @@ function Save.Flush()
         return
     end
     local ok, failure = pcall(function()
-        writefile(Config.SaveFile, HttpService:JSONEncode(Save.Data))
+        writefile(Config.SaveFile, Json.Encode(Save.Data))
     end)
     if not ok then
         Report("Save failed", failure)
-        return
-    end
-    if Save.Cleanup then
-        Save.Purge()
     end
 end
 
@@ -951,23 +924,6 @@ end
 
 function Save.Delete(key)
     Save.Class().AutoSave[tostring(key)] = nil
-    Save.Touch()
-end
-
-function Save.GetElements()
-    local files = Save.Read().Elements.Files
-    if type(files) == "table" and #files > 0 then
-        return files
-    end
-    return nil
-end
-
-function Save.SetElements(files)
-    local data = Save.Read()
-    if Util.DeepEqual(data.Elements.Files, files) then
-        return
-    end
-    data.Elements.Files = files
     Save.Touch()
 end
 
@@ -1135,6 +1091,29 @@ end
 
 function Locale.Is(lang)
     return Locale.GetLang() == string.lower(tostring(lang))
+end
+
+local LOCALE_STRINGS = {
+    en = {
+        SearchPlaceholder = "Search...",
+        SearchPrompt = "Search tabs and elements...",
+        NoResults = "No results found."
+    },
+    pt = {
+        SearchPlaceholder = "Pesquisar...",
+        SearchPrompt = "Pesquisar abas e elementos...",
+        NoResults = "Nenhum resultado encontrado."
+    },
+    es = {
+        SearchPlaceholder = "Buscar...",
+        SearchPrompt = "Buscar pestañas y elementos...",
+        NoResults = "No se encontraron resultados."
+    }
+}
+
+function Locale.T(key)
+    local set = LOCALE_STRINGS[Locale.GetLang()] or LOCALE_STRINGS.en
+    return set[key] or LOCALE_STRINGS.en[key] or key
 end
 
 -- // Icons
@@ -1467,19 +1446,9 @@ function ElementRegistry:_ListFiles(names)
         if ok then
             local files = source[2](self, body)
             if #files > 0 then
-                Save.SetElements(files)
                 return files, false
             end
         end
-    end
-
-    local saved = Save.GetElements()
-    if saved then
-        local files = {}
-        for _, name in ipairs(saved) do
-            files[#files + 1] = name
-        end
-        return files, true
     end
 
     local files = {}
@@ -1857,19 +1826,40 @@ function ContentSection.new(tab, name)
     }, tab.Scroll)
     Util.List(frame, 6)
 
-    local title = Util.Create("TextLabel", {
-        Name = "Title",
+    local header = Util.Create("Frame", {
+        Name = "Header",
         Size = UDim2.new(1, 0, 0, 16),
         BackgroundTransparency = 1,
-        Text = name,
-        TextColor3 = Theme.Dim,
-        TextSize = 12,
-        Font = Enum.Font.SourceSansSemibold,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd,
         LayoutOrder = 0
     }, frame)
-    Util.Padding(title, 0, 0, 2, 0)
+    Util.Padding(header, 0, 0, 2, 0)
+    Util.List(header, 6, {
+        FillDirection = Enum.FillDirection.Horizontal,
+        VerticalAlignment = Enum.VerticalAlignment.Center
+    })
+
+    local accent = Util.Create("Frame", {
+        Name = "Accent",
+        Size = UDim2.fromOffset(3, 12),
+        BackgroundColor3 = Theme.Active,
+        BorderSizePixel = 0,
+        LayoutOrder = 0
+    }, header)
+    Util.Corner(accent, 2)
+
+    local title = Util.Create("TextLabel", {
+        Name = "Title",
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = string.upper(name),
+        TextColor3 = Theme.Active,
+        TextSize = 12,
+        Font = Enum.Font.SourceSansBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        LayoutOrder = 1
+    }, header)
 
     local holder = Util.Create("Frame", {
         Name = "Holder",
@@ -1916,7 +1906,7 @@ end
 ContentSection.CreateElement = ContentSection.AddElement
 
 function ContentSection:SetTitle(text)
-    self.TitleLabel.Text = tostring(text)
+    self.TitleLabel.Text = string.upper(tostring(text))
 end
 
 -- // Tab
@@ -2248,7 +2238,7 @@ function Palette:_Build()
         Position = UDim2.new(0, 36, 0, 0),
         BackgroundTransparency = 1,
         Text = "",
-        PlaceholderText = "Search tabs and elements...",
+        PlaceholderText = Locale.T("SearchPrompt"),
         PlaceholderColor3 = Theme.Placeholder,
         TextColor3 = Theme.Text,
         TextSize = 14,
@@ -2550,37 +2540,37 @@ function Palette:Render(query)
     local groups = 0
 
     for _, section in ipairs(self.Window.SideSections) do
-        local sectionMatch = query ~= "" and Util.Contains(section.Name, query)
-        local rows = {}
-
         for _, tab in ipairs(section.Tabs) do
-            if query == "" or sectionMatch or Util.Contains(tab.Name .. " " .. section.Name, query) then
+            local tabMatch = query ~= "" and Util.Contains(tab.Name .. " " .. section.Name, query)
+            local rows = {}
+
+            if query == "" or tabMatch then
                 rows[#rows + 1] = {Kind = "tab", Name = tab.Name, Icon = tab.IconName, Trail = {section.Name}, Tab = tab}
             end
             for _, element in ipairs(tab.Elements) do
-                if element.Built and (query == "" or Util.Contains(element.Search, query)) then
+                if element.Built and (query == "" or tabMatch or Util.Contains(element.Search, query)) then
                     rows[#rows + 1] = {
                         Kind = "element",
                         Name = element.Name,
                         Icon = ELEMENT_ICONS[Util.ResolveKey(element.Type)] or "box",
-                        Trail = {tab.Name, element.Group},
+                        Trail = {element.Group},
                         Element = element
                     }
                 end
             end
-        end
 
-        if #rows > 0 then
-            groups = groups + 1
-            if groups > 1 then
+            if #rows > 0 then
+                groups = groups + 1
+                if groups > 1 then
+                    order = order + 1
+                    self:_CreateSeparator(order)
+                end
                 order = order + 1
-                self:_CreateSeparator(order)
-            end
-            order = order + 1
-            self:_CreateHeading(order, section.Name)
-            for _, row in ipairs(rows) do
-                order = order + 1
-                self:_CreateRow(order, row)
+                self:_CreateHeading(order, tab.Name)
+                for _, row in ipairs(rows) do
+                    order = order + 1
+                    self:_CreateRow(order, row)
+                end
             end
         end
     end
@@ -2590,7 +2580,7 @@ function Palette:Render(query)
             Name = "Empty",
             Size = UDim2.new(1, 0, 0, 48),
             BackgroundTransparency = 1,
-            Text = "No results found.",
+            Text = Locale.T("NoResults"),
             TextColor3 = Theme.Dim,
             TextSize = 14,
             Font = Enum.Font.SourceSans
@@ -3430,7 +3420,7 @@ function Window:_BuildMain()
         Position = UDim2.new(0, 28, 0, 0),
         BackgroundTransparency = 1,
         AutoButtonColor = false,
-        Text = "Search...",
+        Text = Locale.T("SearchPlaceholder"),
         TextColor3 = Theme.Placeholder,
         TextSize = 13,
         Font = Enum.Font.SourceSans,
