@@ -1,4 +1,7 @@
--- // Paragraph v2
+--[[
+    Paragraph
+]]
+
 Elements.Register("Paragraph", function(section, options)
     options = type(options) == "table" and options or {}
 
@@ -6,20 +9,21 @@ Elements.Register("Paragraph", function(section, options)
 
     local C = {
         Accent = typeof(accentOption) == "Color3" and accentOption or Color3.fromRGB(74, 222, 128),
-        Card = Color3.fromRGB(17, 17, 19),
-        CardStroke = Color3.fromRGB(42, 42, 46),
-        Row = Color3.fromRGB(25, 25, 28),
-        RowStroke = Color3.fromRGB(42, 42, 46),
-        HoloBg = Color3.fromRGB(10, 10, 12),
-        TextActive = Color3.fromRGB(250, 250, 250),
+        Card = Color3.fromRGB(15, 15, 18),
+        CardTop = Color3.fromRGB(22, 22, 27),
+        CardStroke = Color3.fromRGB(40, 40, 47),
+        Row = Color3.fromRGB(23, 23, 28),
+        RowStroke = Color3.fromRGB(38, 38, 45),
+        HoloBg = Color3.fromRGB(9, 9, 12),
+        TextActive = Color3.fromRGB(245, 245, 247),
         TextDisabled = Color3.fromRGB(82, 82, 91),
-        DescText = Color3.fromRGB(170, 170, 178),
+        DescText = Color3.fromRGB(150, 150, 162),
         DescDisabled = Color3.fromRGB(82, 82, 91),
-        Muted = Color3.fromRGB(113, 113, 122),
-        ThumbBg = Color3.fromRGB(24, 24, 27),
+        Muted = Color3.fromRGB(108, 108, 120),
+        ThumbBg = Color3.fromRGB(22, 22, 27),
         Grid = Color3.fromRGB(255, 255, 255),
-        CornerText = Color3.fromRGB(228, 228, 231),
-        Bar = Color3.fromRGB(42, 42, 46),
+        CornerText = Color3.fromRGB(196, 196, 206),
+        Bar = Color3.fromRGB(30, 30, 36),
     }
 
     local REMOVABLE = {
@@ -63,42 +67,37 @@ Elements.Register("Paragraph", function(section, options)
     local sizeOption = tonumber(options.size or options.Size)
 
     local K = {
-        -- textos (legiveis, mas sem exagero)
-        TAG = MOBILE and 12 or 11,
-        TITLE = MOBILE and 19 or 17,
-        DESC = MOBILE and 14 or 13,
-        STAT = MOBILE and 14 or 13,
-        HEAD = MOBILE and 13 or 12,
-        CORNER = MOBILE and 12 or 11,
+        TAG = MOBILE and 10 or 10,
+        TITLE = MOBILE and 16 or 15,
+        DESC = MOBILE and 12 or 11,
+        STAT = MOBILE and 12 or 11,
+        HEAD = MOBILE and 11 or 10,
+        CORNER = MOBILE and 10 or 9,
 
-        -- layout
-        CARD_H = math.clamp(sizeOption or (MOBILE and 190 or 170), 120, 420),
-        MIN_H = 40,
+        CARD_H = math.clamp(sizeOption or (MOBILE and 168 or 150), 110, 420),
+        MIN_H = 36,
         PAD = 10,
-        GAP = 8,
-        INFO_SCALE = 0.56,
-        THUMB = MOBILE and 46 or 42,
-        THUMB_GAP = 10,
-        STAT_H = MOBILE and 32 or 30,
+        GAP = 6,
+        INFO_SCALE = 0.60,
+        THUMB = MOBILE and 40 or 38,
+        THUMB_GAP = 9,
+        STAT_H = MOBILE and 26 or 24,
         EDGE = 8,
-        GRID_TILE = MOBILE and 28 or 32,
-        GRID_ALPHA = 0.94,
+        GRID_TILE = MOBILE and 26 or 24,
+        GRID_ALPHA = 0.96,
         IMAGE_ALPHA = 0.05,
 
-        -- holograma
         FOV = 40,
         SPEED = 40,
-        MARGIN = 1.1,
-        PITCH_ITEM = 16,
-        PITCH_CHAR = 6,
-        LIFT = 8,
-        BOB = 3,
-        DRAG = 0.5,
-        TILT_MIN = -20,
-        TILT_MAX = 35,
-        RESUME = 1.5,
+        MARGIN = 1.12,
+        PITCH_ITEM = 14,
+        PITCH_CHAR = 4,
+        LIFT = 6,
+        DRAG = 0.45,
+        TILT_MIN = -15,
+        TILT_MAX = 30,
+        RESUME = 1e9,
 
-        -- carregamento
         ATTEMPTS = 3,
         RETRY = 0.8,
         PRELOAD = 10,
@@ -112,7 +111,7 @@ Elements.Register("Paragraph", function(section, options)
 
     local TI = {
         PAGE = TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        FAST = TweenInfo.new(0.15),
+        FAST = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
         FADE = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     }
 
@@ -147,8 +146,6 @@ Elements.Register("Paragraph", function(section, options)
         dragInput = nil,
         velocity = 0,
         lastDrag = 0,
-        time = 0,
-        scanTween = nil,
     }
 
     if type(S.callback) ~= "function" then
@@ -158,9 +155,6 @@ Elements.Register("Paragraph", function(section, options)
     local H = {}
     local U = {}
 
-    ------------------------------------------------------------------
-    -- Helpers
-    ------------------------------------------------------------------
     function H.new(class, props, parent)
         local instance = Instance.new(class)
         for key, value in pairs(props) do
@@ -324,7 +318,7 @@ Elements.Register("Paragraph", function(section, options)
             type = H.kind(config.type or config.Type),
             thumbType = H.thumbType(config.thumbType or config.thumbnailType or config.thumb),
             corners = H.copy(config.corners or config.info),
-            rotate = config.rotate ~= false,
+            rotate = config.rotate == true or config.Rotate == true,
             speed = speed or K.SPEED,
             tint = typeof(tint) == "Color3" and tint or nil,
             live = config.live == true or config.Live == true,
@@ -372,9 +366,6 @@ Elements.Register("Paragraph", function(section, options)
 
     S.status = H.statusList(options.status or options.Status)
 
-    ------------------------------------------------------------------
-    -- UI: card principal
-    ------------------------------------------------------------------
     U.container = H.new("Frame", {
         Name = (data.title ~= "" and data.title or "Paragraph") .. "_Paragraph",
         Size = UDim2.new(1, 0, 0, K.CARD_H),
@@ -382,8 +373,16 @@ Elements.Register("Paragraph", function(section, options)
         BorderSizePixel = 0,
         ClipsDescendants = true,
     }, section.frame)
-    H.corner(U.container, 8)
+    H.corner(U.container, 10)
     H.stroke(U.container, C.CardStroke, 1)
+    H.new("UIGradient", {
+        Rotation = 90,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, C.CardTop),
+            ColorSequenceKeypoint.new(0.4, C.Card),
+            ColorSequenceKeypoint.new(1, C.Card),
+        }),
+    }, U.container)
 
     U.content = H.new("Frame", {
         Name = "Content",
@@ -398,9 +397,6 @@ Elements.Register("Paragraph", function(section, options)
         PaddingRight = UDim.new(0, K.PAD),
     }, U.content)
 
-    ------------------------------------------------------------------
-    -- UI: coluna de informacoes (scroll para tudo)
-    ------------------------------------------------------------------
     U.info = H.new("ScrollingFrame", {
         Name = "Info",
         Size = UDim2.new(K.INFO_SCALE, -K.GAP, 1, 0),
@@ -420,9 +416,8 @@ Elements.Register("Paragraph", function(section, options)
         SortOrder = Enum.SortOrder.LayoutOrder,
         Padding = UDim.new(0, K.GAP),
     }, U.info)
-    H.new("UIPadding", { PaddingRight = UDim.new(0, 8) }, U.info)
+    H.new("UIPadding", { PaddingRight = UDim.new(0, 6) }, U.info)
 
-    -- cabecalho (thumb + tag + titulo + descricao)
     U.header = H.new("Frame", {
         Name = "Header",
         Size = UDim2.new(1, 0, 0, 0),
@@ -459,7 +454,7 @@ Elements.Register("Paragraph", function(section, options)
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
     }, U.header)
-    H.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 3) }, U.textFrame)
+    H.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) }, U.textFrame)
 
     U.tag = H.new("TextLabel", {
         Name = "Tag",
@@ -507,13 +502,12 @@ Elements.Register("Paragraph", function(section, options)
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Top,
         TextWrapped = true,
-        LineHeight = 1.15,
+        LineHeight = 1.12,
         RichText = S.rich,
         LayoutOrder = 3,
         Visible = data.description ~= "",
     }, U.textFrame)
 
-    -- status (lista com barras)
     U.stats = H.new("Frame", {
         Name = "Stats",
         Size = UDim2.new(1, 0, 0, 0),
@@ -522,11 +516,11 @@ Elements.Register("Paragraph", function(section, options)
         LayoutOrder = 2,
         Visible = false,
     }, U.info)
-    H.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }, U.stats)
+    H.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 5) }, U.stats)
 
     U.statusHeader = H.new("TextLabel", {
         Name = "Header",
-        Size = UDim2.new(1, 0, 0, 18),
+        Size = UDim2.new(1, 0, 0, 14),
         BackgroundTransparency = 1,
         Text = S.statusTitle,
         TextColor3 = C.Accent,
@@ -537,9 +531,6 @@ Elements.Register("Paragraph", function(section, options)
         LayoutOrder = 0,
     }, U.stats)
 
-    ------------------------------------------------------------------
-    -- UI: painel do holograma (lado direito)
-    ------------------------------------------------------------------
     U.holo = H.new("Frame", {
         Name = "Hologram",
         Size = UDim2.new(1 - K.INFO_SCALE, 0, 1, 0),
@@ -550,11 +541,14 @@ Elements.Register("Paragraph", function(section, options)
         ClipsDescendants = true,
         Visible = false,
     }, U.content)
-    H.corner(U.holo, 8)
+    H.corner(U.holo, 9)
     H.stroke(U.holo, C.CardStroke, 1)
     H.new("UIGradient", {
         Rotation = 90,
-        Color = ColorSequence.new(C.HoloBg, C.HoloBg:Lerp(C.Accent, 0.16)),
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, C.HoloBg),
+            ColorSequenceKeypoint.new(1, C.HoloBg:Lerp(C.Accent, 0.12)),
+        }),
     }, U.holo)
 
     U.grid = H.new("ImageLabel", {
@@ -571,7 +565,7 @@ Elements.Register("Paragraph", function(section, options)
 
     U.platformRing = H.new("Frame", {
         Name = "PlatformRing",
-        Size = UDim2.new(0.8, 0, 0, 18),
+        Size = UDim2.new(0.82, 0, 0, 20),
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.new(0.5, 0, 0.88, 0),
         BackgroundColor3 = C.Accent,
@@ -587,12 +581,12 @@ Elements.Register("Paragraph", function(section, options)
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.new(0.5, 0, 0.88, 0),
         BackgroundColor3 = C.Accent,
-        BackgroundTransparency = 0.8,
+        BackgroundTransparency = 0.78,
         BorderSizePixel = 0,
         ZIndex = 2,
     }, U.holo)
     H.corner(U.platform, 99)
-    H.stroke(U.platform, C.Accent, 1, 0.45)
+    H.stroke(U.platform, C.Accent, 1, 0.4)
 
     U.viewport = H.new("ViewportFrame", {
         Name = "Viewport",
@@ -600,7 +594,7 @@ Elements.Register("Paragraph", function(section, options)
         Position = UDim2.new(0, 0, 0, -K.LIFT),
         BackgroundTransparency = 1,
         ImageTransparency = 0,
-        Ambient = Color3.fromRGB(200, 200, 210),
+        Ambient = Color3.fromRGB(205, 205, 215),
         LightColor = Color3.fromRGB(255, 255, 255),
         LightDirection = S.light,
         ZIndex = 3,
@@ -626,41 +620,10 @@ Elements.Register("Paragraph", function(section, options)
         AspectType = Enum.AspectType.FitWithinMaxSize,
     }, U.fallback)
 
-    U.scan = H.new("Frame", {
-        Name = "Scan",
-        Size = UDim2.new(1, 0, 0, 2),
-        Position = UDim2.new(0, 0, 0.08, 0),
-        BackgroundColor3 = C.Accent,
-        BackgroundTransparency = 0.45,
-        BorderSizePixel = 0,
-        ZIndex = 4,
-    }, U.holo)
-    H.new("UIGradient", {
-        Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 1),
-            NumberSequenceKeypoint.new(0.5, 0),
-            NumberSequenceKeypoint.new(1, 1),
-        }),
-    }, U.scan)
-
-    do
-        local ok, tween = pcall(
-            Svc.tween.Create,
-            Svc.tween,
-            U.scan,
-            TweenInfo.new(2.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-            { Position = UDim2.new(0, 0, 0.92, 0) }
-        )
-        if ok and tween then
-            S.scanTween = tween
-            tween:Play()
-        end
-    end
-
     function H.cornerLabel(name, position, anchor, alignX, alignY, font, color)
         return H.new("TextLabel", {
             Name = name,
-            Size = UDim2.new(0.5, -(K.EDGE + 4), 0, 16),
+            Size = UDim2.new(0.5, -(K.EDGE + 4), 0, 14),
             AnchorPoint = anchor,
             Position = position,
             BackgroundTransparency = 1,
@@ -671,7 +634,7 @@ Elements.Register("Paragraph", function(section, options)
             TextXAlignment = alignX,
             TextYAlignment = alignY,
             TextTruncate = Enum.TextTruncate.AtEnd,
-            TextStrokeTransparency = 0.6,
+            TextStrokeTransparency = 0.7,
             TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
             RichText = S.rich,
             Visible = false,
@@ -688,7 +651,7 @@ Elements.Register("Paragraph", function(section, options)
 
     U.loading = H.new("TextLabel", {
         Name = "Loading",
-        Size = UDim2.new(1, 0, 0, 16),
+        Size = UDim2.new(1, 0, 0, 14),
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.new(0.5, 0, 0.5, 0),
         BackgroundTransparency = 1,
@@ -700,7 +663,6 @@ Elements.Register("Paragraph", function(section, options)
         ZIndex = 4,
     }, U.holo)
 
-    -- area de arrastar (gira o holograma com mouse/toque)
     U.drag = H.new("TextButton", {
         Name = "Drag",
         Size = UDim2.new(1, 0, 1, 0),
@@ -721,11 +683,8 @@ Elements.Register("Paragraph", function(section, options)
         Visible = false,
         ZIndex = 20,
     }, U.container)
-    H.corner(U.veil, 8)
+    H.corner(U.veil, 10)
 
-    ------------------------------------------------------------------
-    -- Layout / scroll
-    ------------------------------------------------------------------
     function H.hasHologram()
         return data.hologram ~= nil
     end
@@ -799,9 +758,6 @@ Elements.Register("Paragraph", function(section, options)
         U.loading.Visible = S.busy ~= nil and S.model == nil and not U.fallback.Visible
     end
 
-    ------------------------------------------------------------------
-    -- Thumbnail
-    ------------------------------------------------------------------
     function H.layoutThumb(hasThumb)
         U.headerConstraint.MinSize = Vector2.new(0, hasThumb and K.THUMB or 0)
         if hasThumb then
@@ -893,9 +849,6 @@ Elements.Register("Paragraph", function(section, options)
         H.layout()
     end
 
-    ------------------------------------------------------------------
-    -- Status
-    ------------------------------------------------------------------
     function H.formatStat(stat)
         if stat.max ~= nil and tonumber(stat.value) ~= nil then
             return H.number(stat.value) .. "/" .. H.number(stat.max)
@@ -917,7 +870,7 @@ Elements.Register("Paragraph", function(section, options)
 
     function H.createStatRow(stat, index)
         local ratio = H.ratio(stat)
-        local rowHeight = ratio and (K.STAT_H + 8) or K.STAT_H
+        local rowHeight = ratio and (K.STAT_H + 7) or K.STAT_H
 
         local frame = H.new("Frame", {
             Name = "Stat_" .. index,
@@ -929,7 +882,7 @@ Elements.Register("Paragraph", function(section, options)
         H.corner(frame, 6)
         H.stroke(frame, C.RowStroke, 1)
 
-        local nameLabel = H.new("TextLabel", {
+        H.new("TextLabel", {
             Name = "Name",
             Size = UDim2.new(0.55, -10, 0, K.STAT_H),
             Position = UDim2.new(0, 10, 0, 0),
@@ -943,7 +896,7 @@ Elements.Register("Paragraph", function(section, options)
             RichText = S.rich,
         }, frame)
 
-        local valueLabel = H.new("TextLabel", {
+        H.new("TextLabel", {
             Name = "Value",
             Size = UDim2.new(0.45, -10, 0, K.STAT_H),
             Position = UDim2.new(0.55, 0, 0, 0),
@@ -962,7 +915,7 @@ Elements.Register("Paragraph", function(section, options)
             local track = H.new("Frame", {
                 Name = "Track",
                 Size = UDim2.new(1, -20, 0, 4),
-                Position = UDim2.new(0, 10, 0, K.STAT_H - 1),
+                Position = UDim2.new(0, 10, 0, K.STAT_H - 2),
                 BackgroundColor3 = C.Bar,
                 BorderSizePixel = 0,
             }, frame)
@@ -974,9 +927,22 @@ Elements.Register("Paragraph", function(section, options)
                 BorderSizePixel = 0,
             }, track)
             H.corner(fill, 99)
+            H.new("UIGradient", {
+                Rotation = 0,
+                Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, C.Accent),
+                    ColorSequenceKeypoint.new(1, C.Accent:Lerp(Color3.new(0, 0, 0), 0.25)),
+                }),
+            }, fill)
         end
 
-        return { frame = frame, nameLabel = nameLabel, valueLabel = valueLabel, fill = fill, hasBar = ratio ~= nil }
+        return {
+            frame = frame,
+            nameLabel = frame:FindFirstChild("Name"),
+            valueLabel = frame:FindFirstChild("Value"),
+            fill = fill,
+            hasBar = ratio ~= nil,
+        }
     end
 
     function H.refreshStat(index)
@@ -1062,9 +1028,6 @@ Elements.Register("Paragraph", function(section, options)
         end
     end
 
-    ------------------------------------------------------------------
-    -- Camera / orbita
-    ------------------------------------------------------------------
     function H.applyOrbit()
         local rotation = CFrame.Angles(0, -math.rad(S.angle), 0)
         local pitch = math.rad(S.pitch + S.tilt)
@@ -1123,9 +1086,6 @@ Elements.Register("Paragraph", function(section, options)
         H.refreshLoading()
     end
 
-    ------------------------------------------------------------------
-    -- Construcao do modelo (sem limites de otimizacao)
-    ------------------------------------------------------------------
     function H.resetPose(model)
         local root = model:FindFirstChild("HumanoidRootPart")
         if not root or not root:IsA("BasePart") then return end
@@ -1211,7 +1171,6 @@ Elements.Register("Paragraph", function(section, options)
         end
     end
 
-    -- partes invisiveis estragam o centro do bounding box
     function H.dropInvisible(parts)
         local kept = {}
         for _, part in ipairs(parts) do
@@ -1378,9 +1337,6 @@ Elements.Register("Paragraph", function(section, options)
         return holder, boxSize, isCharacter
     end
 
-    ------------------------------------------------------------------
-    -- Resolver alvo (player, asset, imagem, caminho)
-    ------------------------------------------------------------------
     function H.resolveTarget(target, kind)
         if typeof(target) == "Instance" then
             if target:IsA("Player") then
@@ -1667,9 +1623,6 @@ Elements.Register("Paragraph", function(section, options)
         H.tween(U.fallback, TI.FADE, { ImageTransparency = K.IMAGE_ALPHA })
     end
 
-    ------------------------------------------------------------------
-    -- Atualizacao ao vivo (aparencia do personagem)
-    ------------------------------------------------------------------
     function H.signature(source)
         local parts = {}
         if not source:FindFirstChildOfClass("Humanoid") then
@@ -1768,9 +1721,6 @@ Elements.Register("Paragraph", function(section, options)
         end
     end
 
-    ------------------------------------------------------------------
-    -- Carregar holograma
-    ------------------------------------------------------------------
     function H.load()
         S.holoToken = S.holoToken + 1
         local token = S.holoToken
@@ -1910,9 +1860,6 @@ Elements.Register("Paragraph", function(section, options)
         return S.model == nil and not U.fallback.Visible and S.busy == nil
     end
 
-    ------------------------------------------------------------------
-    -- Interacao: arrastar para girar + animacao (flutuar, scanline, inercia)
-    ------------------------------------------------------------------
     H.connect(U.drag.InputBegan, function(input)
         local kind = input.UserInputType
         if kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch then
@@ -1944,22 +1891,15 @@ Elements.Register("Paragraph", function(section, options)
 
     H.connect(Svc.run.RenderStepped, function(dt)
         if S.destroyed then return end
-        S.time = S.time + dt
-
-        local wave = math.sin(S.time * 1.8)
-        U.viewport.Position = UDim2.new(0, 0, 0, -K.LIFT + wave * K.BOB)
-        U.fallback.Position = UDim2.new(0.5, 0, 0.5, -K.LIFT + wave * K.BOB)
-        U.platform.BackgroundTransparency = 0.8 + wave * 0.06
-
         if not S.model then return end
 
-        local config = data.hologram
         if S.dragging then
             S.velocity = S.velocity * (1 - math.min(dt * 10, 1))
         else
             S.velocity = S.velocity * (1 - math.min(dt * 3, 1))
-            S.tilt = S.tilt * (1 - math.min(dt * 2.5, 1))
+            S.tilt = S.tilt * (1 - math.min(dt * 3, 1))
             local step = S.velocity
+            local config = data.hologram
             if config and config.rotate and os.clock() - S.lastDrag >= K.RESUME then
                 step = step + config.speed
             end
@@ -1975,9 +1915,6 @@ Elements.Register("Paragraph", function(section, options)
         end
     end)
 
-    ------------------------------------------------------------------
-    -- Inicializacao
-    ------------------------------------------------------------------
     H.setThumbnail(data.thumbnail)
     H.applyCorners()
     H.rebuildStatus()
@@ -1986,9 +1923,6 @@ Elements.Register("Paragraph", function(section, options)
     H.applyDisabled()
     H.layout()
 
-    ------------------------------------------------------------------
-    -- API publica
-    ------------------------------------------------------------------
     function data:SetTitle(newTitle)
         if S.destroyed then return end
         newTitle = tostring(newTitle or "")
@@ -2045,7 +1979,7 @@ Elements.Register("Paragraph", function(section, options)
         if S.destroyed then return end
         local number = tonumber(value)
         if not number then return end
-        K.CARD_H = math.clamp(number, 120, 420)
+        K.CARD_H = math.clamp(number, 110, 420)
         H.resize()
         if S.model then
             H.fitCamera()
@@ -2123,7 +2057,7 @@ Elements.Register("Paragraph", function(section, options)
 
     function data:SetRotate(value)
         if S.destroyed then return end
-        H.ensureHologram().rotate = value ~= false
+        H.ensureHologram().rotate = value == true
     end
 
     function data:SetSpeed(value)
@@ -2263,7 +2197,6 @@ Elements.Register("Paragraph", function(section, options)
         }
     end
 
-    -- "hologram" rola para o topo, "status" rola ate a lista de status
     function data:SetPage(page)
         if S.destroyed then return end
         H.setPage(page)
@@ -2281,10 +2214,6 @@ Elements.Register("Paragraph", function(section, options)
         S.loopToken = S.loopToken + 1
         S.holoToken = S.holoToken + 1
         H.clearWatch()
-        if S.scanTween then
-            pcall(function() S.scanTween:Cancel() end)
-            S.scanTween = nil
-        end
         for _, conn in ipairs(S.connections) do
             conn:Disconnect()
         end
