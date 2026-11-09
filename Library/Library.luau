@@ -576,29 +576,58 @@ end
 FOLD_MAP[utf8.char(255)] = "y"
 
 function Locale.GetId()
-    local ok, id = pcall(function()
-        return LocalizationService.RobloxLocaleId
-    end)
-    if ok and type(id) == "string" and id ~= "" then
-        return string.lower(id)
+    local player = Players.LocalPlayer
+    if player then
+        local ok, id = pcall(function()
+            return player.LocaleId
+        end)
+        if ok and type(id) == "string" and id ~= "" then
+            return string.lower(id)
+        end
     end
     local ok2, id2 = pcall(function()
-        return Players.LocalPlayer.LocaleId
+        return LocalizationService.RobloxLocaleId
     end)
     if ok2 and type(id2) == "string" and id2 ~= "" then
         return string.lower(id2)
     end
-    return "en-us"
+    return nil
+end
+
+function Locale.Detect()
+    local id = Locale.GetId()
+    if id then
+        Locale.Detected = string.match(id, "^([^%-_]+)") or "en"
+    end
+    return Locale.Detected
 end
 
 function Locale.GetLang()
-    local lang = Locale.Lang
-    if lang then
-        return lang
+    return Locale.Lang or Locale.Detected or Locale.Detect() or "en"
+end
+
+function Locale.Watch(maid)
+    local function update()
+        local before = Locale.Detected
+        Locale.Detected = nil
+        Locale.Detect()
+        if Locale.Detected ~= before and not Locale.Lang then
+            Locale.Refresh()
+        end
     end
-    lang = string.match(Locale.GetId(), "^([^%-_]+)") or "en"
-    Locale.Lang = lang
-    return lang
+    local player = Players.LocalPlayer
+    if player then
+        maid:Connect(player:GetPropertyChangedSignal("LocaleId"), update)
+    end
+    maid:Connect(LocalizationService:GetPropertyChangedSignal("RobloxLocaleId"), update)
+    task.spawn(function()
+        local tries = 0
+        while not Locale.GetId() and tries < 20 do
+            tries = tries + 1
+            task.wait(0.5)
+        end
+        update()
+    end)
 end
 
 function Locale.SetLang(lang)
@@ -3984,6 +4013,7 @@ function Window.new(config)
     self.Crumbs = nil
 
     Save.Init()
+    Locale.Watch(self.Maid)
     self:_BuildMain()
     self:_BuildPanel()
     self.Palette = Palette.new(self)
