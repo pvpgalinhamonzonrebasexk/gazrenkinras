@@ -421,6 +421,540 @@ function Json.Encode(value, indent)
     return "null"
 end
 
+-- // Locale
+local Locale = {
+    Lang = nil,
+    Version = 0,
+    States = {},
+    Custom = {},
+    Records = setmetatable({}, {__mode = "k"}),
+    Roots = setmetatable({}, {__mode = "k"}),
+    Listeners = {},
+    NextListener = 0
+}
+
+local TEXT_PROPERTIES = {TextLabel = "Text", TextButton = "Text", TextBox = "PlaceholderText"}
+
+local LOCALE_STRINGS = {
+    en = {
+        SearchPlaceholder = "Search...",
+        SearchPrompt = "Search tabs and elements...",
+        NoResults = "No results found.",
+        ErrorLabel = "Error"
+    },
+    pt = {
+        SearchPlaceholder = "Pesquisar...",
+        SearchPrompt = "Pesquisar abas e elementos...",
+        NoResults = "Nenhum resultado encontrado.",
+        ErrorLabel = "Erro"
+    },
+    es = {
+        SearchPlaceholder = "Buscar...",
+        SearchPrompt = "Buscar pestañas y elementos...",
+        NoResults = "No se encontraron resultados.",
+        ErrorLabel = "Error"
+    }
+}
+
+local LOCALE_PATTERNS = {
+    pt = {
+        {"^(%d+) selected$", "%1 selecionados"}
+    },
+    es = {
+        {"^(%d+) selected$", "%1 seleccionados"}
+    }
+}
+
+local LOCALE_WORDS = {
+    pt = {
+        ["Main"] = "Principal", ["Home"] = "Início", ["General"] = "Geral", ["Settings"] = "Configurações", ["Configuration"] = "Configuração",
+        ["Options"] = "Opções", ["Misc"] = "Diversos", ["Miscellaneous"] = "Diversos", ["Other"] = "Outros", ["Tools"] = "Ferramentas",
+        ["Utilities"] = "Utilitários", ["Utility"] = "Utilitário", ["Info"] = "Informações", ["Information"] = "Informações", ["About"] = "Sobre",
+        ["Credits"] = "Créditos", ["Status"] = "Status", ["Search"] = "Pesquisar", ["Search..."] = "Pesquisar...", ["Select"] = "Selecionar",
+        ["Select..."] = "Selecionar...", ["No results found"] = "Nenhum resultado encontrado", ["None"] = "Nenhum", ["Selected"] = "Selecionado",
+        ["Enable"] = "Ativar", ["Enabled"] = "Ativado", ["Disable"] = "Desativar", ["Disabled"] = "Desativado", ["Start"] = "Iniciar",
+        ["Stop"] = "Parar", ["Pause"] = "Pausar", ["Resume"] = "Continuar", ["Reset"] = "Redefinir", ["Save"] = "Salvar",
+        ["Load"] = "Carregar", ["Delete"] = "Excluir", ["Remove"] = "Remover", ["Add"] = "Adicionar", ["Apply"] = "Aplicar",
+        ["Cancel"] = "Cancelar", ["Confirm"] = "Confirmar", ["Close"] = "Fechar", ["Open"] = "Abrir", ["Refresh"] = "Atualizar",
+        ["Update"] = "Atualizar", ["Copy"] = "Copiar", ["Paste"] = "Colar", ["Clear"] = "Limpar", ["Hide"] = "Ocultar",
+        ["Show"] = "Mostrar", ["Loading"] = "Carregando", ["Ready"] = "Pronto", ["Error"] = "Erro", ["Warning"] = "Aviso",
+        ["Success"] = "Sucesso", ["Toggle"] = "Alternar", ["Button"] = "Botão", ["Checkbox"] = "Caixa de seleção", ["Slider"] = "Controle deslizante",
+        ["Dropdown"] = "Menu suspenso", ["Paragraph"] = "Parágrafo", ["Color Picker"] = "Seletor de cor", ["ColorPicker"] = "Seletor de cor",
+        ["Tutorial"] = "Tutorial", ["Tutorials"] = "Tutoriais", ["Example"] = "Exemplo", ["Examples"] = "Exemplos",
+        ["Auto Farm"] = "Farm Automático", ["Auto Fish"] = "Pesca Automática", ["Auto Fishing"] = "Pesca Automática", ["Fishing"] = "Pesca",
+        ["Fish"] = "Peixe", ["Auto Collect"] = "Coleta Automática", ["Auto Quest"] = "Missão Automática", ["Auto Buy"] = "Compra Automática",
+        ["Auto Sell"] = "Venda Automática", ["Auto Race"] = "Corrida Automática", ["Auto Click"] = "Clique Automático", ["Auto Clicker"] = "Clicador Automático",
+        ["Auto Rejoin"] = "Reentrada Automática", ["Auto Equip"] = "Equipar Automático", ["Auto Heal"] = "Cura Automática", ["Auto Open"] = "Abertura Automática",
+        ["Auto Claim"] = "Resgate Automático", ["Quest"] = "Missão", ["Quests"] = "Missões", ["Event"] = "Evento", ["Events"] = "Eventos",
+        ["Shop"] = "Loja", ["Store"] = "Loja", ["Buy"] = "Comprar", ["Sell"] = "Vender", ["Buy All"] = "Comprar Tudo",
+        ["Sell All"] = "Vender Tudo", ["Inventory"] = "Inventário", ["Item"] = "Item", ["Items"] = "Itens", ["Weapon"] = "Arma",
+        ["Weapons"] = "Armas", ["Knife"] = "Faca", ["Melee"] = "Corpo a Corpo", ["Skins"] = "Skins", ["Skin Changer"] = "Trocador de Skin",
+        ["Effect"] = "Efeito", ["Effects"] = "Efeitos", ["Garage"] = "Garagem", ["Race"] = "Corrida", ["Races"] = "Corridas",
+        ["Car"] = "Carro", ["Cars"] = "Carros", ["Vehicle"] = "Veículo", ["Vehicles"] = "Veículos", ["Teleport"] = "Teleporte",
+        ["Teleports"] = "Teleportes", ["Teleport To"] = "Teleportar para", ["Location"] = "Local", ["Locations"] = "Locais", ["Map"] = "Mapa",
+        ["World"] = "Mundo", ["Island"] = "Ilha", ["Islands"] = "Ilhas", ["Reward"] = "Recompensa", ["Rewards"] = "Recompensas",
+        ["Collect"] = "Coletar", ["Boost"] = "Impulso", ["Boosts"] = "Impulsos", ["Notification"] = "Notificação", ["Notifications"] = "Notificações",
+        ["Theme"] = "Tema", ["Language"] = "Idioma", ["Keybind"] = "Atalho", ["Keybinds"] = "Atalhos", ["Color"] = "Cor",
+        ["Colors"] = "Cores", ["Transparency"] = "Transparência", ["Size"] = "Tamanho", ["Range"] = "Alcance", ["Distance"] = "Distância",
+        ["Delay"] = "Atraso", ["Amount"] = "Quantidade", ["Value"] = "Valor", ["Mode"] = "Modo", ["Type"] = "Tipo",
+        ["Target"] = "Alvo", ["Targets"] = "Alvos", ["Radius"] = "Raio", ["Speed"] = "Velocidade", ["Walk Speed"] = "Velocidade de Caminhada",
+        ["Jump Power"] = "Força do Pulo", ["Jump"] = "Pulo", ["Infinite Jump"] = "Pulo Infinito", ["Fly"] = "Voar", ["Gravity"] = "Gravidade",
+        ["Health"] = "Vida", ["Money"] = "Dinheiro", ["Cash"] = "Dinheiro", ["Coins"] = "Moedas", ["Level"] = "Nível",
+        ["Experience"] = "Experiência", ["Stats"] = "Estatísticas", ["Statistics"] = "Estatísticas", ["Player"] = "Jogador", ["Players"] = "Jogadores",
+        ["Character"] = "Personagem", ["Movement"] = "Movimento", ["Combat"] = "Combate", ["Visuals"] = "Visuais", ["Visual"] = "Visual",
+        ["Server"] = "Servidor", ["Server Hop"] = "Trocar de Servidor", ["Rejoin"] = "Reentrar", ["Performance"] = "Desempenho", ["FPS Boost"] = "Aumento de FPS",
+        ["Optimization"] = "Otimização", ["Graphics"] = "Gráficos", ["Lighting"] = "Iluminação", ["Time"] = "Tempo", ["Day"] = "Dia",
+        ["Night"] = "Noite", ["Weather"] = "Clima", ["Fog"] = "Neblina", ["Sky"] = "Céu", ["Debug"] = "Depuração",
+        ["Developer"] = "Desenvolvedor", ["Luck"] = "Sorte", ["Potion"] = "Poção", ["Potions"] = "Poções", ["Craft"] = "Criar",
+        ["Crafting"] = "Criação", ["Enemy"] = "Inimigo", ["Enemies"] = "Inimigos", ["Boss"] = "Chefe", ["Bosses"] = "Chefes",
+        ["Pet"] = "Pet", ["Pets"] = "Pets", ["Profile"] = "Perfil", ["Profiles"] = "Perfis", ["Unlock"] = "Desbloquear",
+        ["Lock"] = "Bloquear", ["Unlock All"] = "Desbloquear Tudo", ["Minimum"] = "Mínimo", ["Maximum"] = "Máximo", ["Minimum Time"] = "Tempo Mínimo"
+    },
+    es = {
+        ["Main"] = "Principal", ["Home"] = "Inicio", ["General"] = "General", ["Settings"] = "Configuración", ["Configuration"] = "Configuración",
+        ["Options"] = "Opciones", ["Misc"] = "Varios", ["Miscellaneous"] = "Varios", ["Other"] = "Otros", ["Tools"] = "Herramientas",
+        ["Utilities"] = "Utilidades", ["Utility"] = "Utilidad", ["Info"] = "Información", ["Information"] = "Información", ["About"] = "Acerca de",
+        ["Credits"] = "Créditos", ["Status"] = "Estado", ["Search"] = "Buscar", ["Search..."] = "Buscar...", ["Select"] = "Seleccionar",
+        ["Select..."] = "Seleccionar...", ["No results found"] = "No se encontraron resultados", ["None"] = "Ninguno", ["Selected"] = "Seleccionado",
+        ["Enable"] = "Activar", ["Enabled"] = "Activado", ["Disable"] = "Desactivar", ["Disabled"] = "Desactivado", ["Start"] = "Iniciar",
+        ["Stop"] = "Detener", ["Pause"] = "Pausar", ["Resume"] = "Continuar", ["Reset"] = "Restablecer", ["Save"] = "Guardar",
+        ["Load"] = "Cargar", ["Delete"] = "Eliminar", ["Remove"] = "Quitar", ["Add"] = "Añadir", ["Apply"] = "Aplicar",
+        ["Cancel"] = "Cancelar", ["Confirm"] = "Confirmar", ["Close"] = "Cerrar", ["Open"] = "Abrir", ["Refresh"] = "Actualizar",
+        ["Update"] = "Actualizar", ["Copy"] = "Copiar", ["Paste"] = "Pegar", ["Clear"] = "Limpiar", ["Hide"] = "Ocultar",
+        ["Show"] = "Mostrar", ["Loading"] = "Cargando", ["Ready"] = "Listo", ["Error"] = "Error", ["Warning"] = "Advertencia",
+        ["Success"] = "Éxito", ["Toggle"] = "Alternar", ["Button"] = "Botón", ["Checkbox"] = "Casilla de verificación", ["Slider"] = "Deslizador",
+        ["Dropdown"] = "Menú desplegable", ["Paragraph"] = "Párrafo", ["Color Picker"] = "Selector de color", ["ColorPicker"] = "Selector de color",
+        ["Tutorial"] = "Tutorial", ["Tutorials"] = "Tutoriales", ["Example"] = "Ejemplo", ["Examples"] = "Ejemplos",
+        ["Auto Farm"] = "Farmeo Automático", ["Auto Fish"] = "Pesca Automática", ["Auto Fishing"] = "Pesca Automática", ["Fishing"] = "Pesca",
+        ["Fish"] = "Pez", ["Auto Collect"] = "Recolección Automática", ["Auto Quest"] = "Misión Automática", ["Auto Buy"] = "Compra Automática",
+        ["Auto Sell"] = "Venta Automática", ["Auto Race"] = "Carrera Automática", ["Auto Click"] = "Clic Automático", ["Auto Clicker"] = "Autoclicker",
+        ["Auto Rejoin"] = "Reingreso Automático", ["Auto Equip"] = "Equipar Automático", ["Auto Heal"] = "Curación Automática", ["Auto Open"] = "Apertura Automática",
+        ["Auto Claim"] = "Reclamo Automático", ["Quest"] = "Misión", ["Quests"] = "Misiones", ["Event"] = "Evento", ["Events"] = "Eventos",
+        ["Shop"] = "Tienda", ["Store"] = "Tienda", ["Buy"] = "Comprar", ["Sell"] = "Vender", ["Buy All"] = "Comprar Todo",
+        ["Sell All"] = "Vender Todo", ["Inventory"] = "Inventario", ["Item"] = "Objeto", ["Items"] = "Objetos", ["Weapon"] = "Arma",
+        ["Weapons"] = "Armas", ["Knife"] = "Cuchillo", ["Melee"] = "Cuerpo a Cuerpo", ["Skins"] = "Skins", ["Skin Changer"] = "Cambiador de Skin",
+        ["Effect"] = "Efecto", ["Effects"] = "Efectos", ["Garage"] = "Garaje", ["Race"] = "Carrera", ["Races"] = "Carreras",
+        ["Car"] = "Auto", ["Cars"] = "Autos", ["Vehicle"] = "Vehículo", ["Vehicles"] = "Vehículos", ["Teleport"] = "Teletransporte",
+        ["Teleports"] = "Teletransportes", ["Teleport To"] = "Teletransportar a", ["Location"] = "Ubicación", ["Locations"] = "Ubicaciones", ["Map"] = "Mapa",
+        ["World"] = "Mundo", ["Island"] = "Isla", ["Islands"] = "Islas", ["Reward"] = "Recompensa", ["Rewards"] = "Recompensas",
+        ["Collect"] = "Recolectar", ["Boost"] = "Impulso", ["Boosts"] = "Impulsos", ["Notification"] = "Notificación", ["Notifications"] = "Notificaciones",
+        ["Theme"] = "Tema", ["Language"] = "Idioma", ["Keybind"] = "Atajo", ["Keybinds"] = "Atajos", ["Color"] = "Color",
+        ["Colors"] = "Colores", ["Transparency"] = "Transparencia", ["Size"] = "Tamaño", ["Range"] = "Alcance", ["Distance"] = "Distancia",
+        ["Delay"] = "Retraso", ["Amount"] = "Cantidad", ["Value"] = "Valor", ["Mode"] = "Modo", ["Type"] = "Tipo",
+        ["Target"] = "Objetivo", ["Targets"] = "Objetivos", ["Radius"] = "Radio", ["Speed"] = "Velocidad", ["Walk Speed"] = "Velocidad de Caminata",
+        ["Jump Power"] = "Fuerza de Salto", ["Jump"] = "Salto", ["Infinite Jump"] = "Salto Infinito", ["Fly"] = "Volar", ["Gravity"] = "Gravedad",
+        ["Health"] = "Vida", ["Money"] = "Dinero", ["Cash"] = "Efectivo", ["Coins"] = "Monedas", ["Level"] = "Nivel",
+        ["Experience"] = "Experiencia", ["Stats"] = "Estadísticas", ["Statistics"] = "Estadísticas", ["Player"] = "Jugador", ["Players"] = "Jugadores",
+        ["Character"] = "Personaje", ["Movement"] = "Movimiento", ["Combat"] = "Combate", ["Visuals"] = "Visuales", ["Visual"] = "Visual",
+        ["Server"] = "Servidor", ["Server Hop"] = "Cambiar de Servidor", ["Rejoin"] = "Reingresar", ["Performance"] = "Rendimiento", ["FPS Boost"] = "Aumento de FPS",
+        ["Optimization"] = "Optimización", ["Graphics"] = "Gráficos", ["Lighting"] = "Iluminación", ["Time"] = "Tiempo", ["Day"] = "Día",
+        ["Night"] = "Noche", ["Weather"] = "Clima", ["Fog"] = "Niebla", ["Sky"] = "Cielo", ["Debug"] = "Depuración",
+        ["Developer"] = "Desarrollador", ["Luck"] = "Suerte", ["Potion"] = "Poción", ["Potions"] = "Pociones", ["Craft"] = "Fabricar",
+        ["Crafting"] = "Fabricación", ["Enemy"] = "Enemigo", ["Enemies"] = "Enemigos", ["Boss"] = "Jefe", ["Bosses"] = "Jefes",
+        ["Pet"] = "Mascota", ["Pets"] = "Mascotas", ["Profile"] = "Perfil", ["Profiles"] = "Perfiles", ["Unlock"] = "Desbloquear",
+        ["Lock"] = "Bloquear", ["Unlock All"] = "Desbloquear Todo", ["Minimum"] = "Mínimo", ["Maximum"] = "Máximo", ["Minimum Time"] = "Tiempo Mínimo"
+    }
+}
+
+local FOLD_MAP = {}
+for base, letters in pairs({a = "àáâãäå", c = "ç", e = "èéêë", i = "ìíîï", n = "ñ", o = "òóôõö", u = "ùúûü", y = "ý"}) do
+    for _, code in utf8.codes(letters) do
+        FOLD_MAP[utf8.char(code)] = base
+        FOLD_MAP[utf8.char(code - 32)] = base
+    end
+end
+FOLD_MAP[utf8.char(255)] = "y"
+
+function Locale.GetId()
+    local ok, id = pcall(function()
+        return LocalizationService.RobloxLocaleId
+    end)
+    if ok and type(id) == "string" and id ~= "" then
+        return string.lower(id)
+    end
+    local ok2, id2 = pcall(function()
+        return Players.LocalPlayer.LocaleId
+    end)
+    if ok2 and type(id2) == "string" and id2 ~= "" then
+        return string.lower(id2)
+    end
+    return "en-us"
+end
+
+function Locale.GetLang()
+    local lang = Locale.Lang
+    if lang then
+        return lang
+    end
+    lang = string.match(Locale.GetId(), "^([^%-_]+)") or "en"
+    Locale.Lang = lang
+    return lang
+end
+
+function Locale.SetLang(lang)
+    local code = nil
+    if type(lang) == "string" then
+        code = string.match(string.lower(lang), "^([^%-_]+)")
+    end
+    Locale.Lang = code
+    Locale.Refresh()
+end
+
+function Locale.Is(lang)
+    return Locale.GetLang() == string.lower(tostring(lang))
+end
+
+function Locale.T(key)
+    local set = LOCALE_STRINGS[Locale.GetLang()] or LOCALE_STRINGS.en
+    return set[key] or LOCALE_STRINGS.en[key] or key
+end
+
+function Locale.Upper(text)
+    text = string.upper(text)
+    if not string.find(text, "\195", 1, true) then
+        return text
+    end
+    return (string.gsub(text, "\195([\160-\190])", function(byte)
+        local code = string.byte(byte)
+        if code == 183 then
+            return nil
+        end
+        return "\195" .. string.char(code - 32)
+    end))
+end
+
+function Locale.Fold(text)
+    text = string.lower(text)
+    if string.find(text, "\195", 1, true) then
+        text = string.gsub(text, "\195[\128-\191]", FOLD_MAP)
+    end
+    return text
+end
+
+function Locale.Adapt(source, translated)
+    if not string.find(source, "%l") then
+        if string.find(source, "%u") then
+            return Locale.Upper(translated)
+        end
+        return translated
+    end
+    if string.find(source, "^%l") then
+        return (string.gsub(translated, "^%u", string.lower))
+    end
+    return translated
+end
+
+function Locale.State(lang)
+    local state = Locale.States[lang]
+    if state ~= nil then
+        return state or nil
+    end
+
+    local index = {}
+    local count = 0
+    local longest = 1
+
+    local function put(key, value)
+        key = string.lower(key)
+        if index[key] == nil then
+            count = count + 1
+        end
+        index[key] = value
+        local words = select(2, string.gsub(key, "%S+", ""))
+        if words > longest then
+            longest = math.min(words, 6)
+        end
+    end
+
+    for key, value in pairs(LOCALE_WORDS[lang] or {}) do
+        put(key, value)
+    end
+    for key, value in pairs(Locale.Custom[lang] or {}) do
+        put(key, value)
+    end
+
+    if count == 0 then
+        Locale.States[lang] = false
+        return nil
+    end
+
+    state = {Index = index, Max = longest, Cache = {}, Miss = {}, MissCount = 0}
+    Locale.States[lang] = state
+    return state
+end
+
+function Locale.IsActive()
+    return Locale.State(Locale.GetLang()) ~= nil
+end
+
+function Locale.Resolve(state, text, lang)
+    local direct = state.Index[string.lower(text)]
+    if direct then
+        return Locale.Adapt(text, direct)
+    end
+
+    if string.find(text, "<", 1, true) and string.find(text, ">", 1, true) then
+        local parts = {}
+        local cursor = 1
+        local tagged = false
+        for first, after in string.gmatch(text, "()%b<>()") do
+            tagged = true
+            if first > cursor then
+                parts[#parts + 1] = Locale.Translate(string.sub(text, cursor, first - 1))
+            end
+            parts[#parts + 1] = string.sub(text, first, after - 1)
+            cursor = after
+        end
+        if tagged then
+            if cursor <= #text then
+                parts[#parts + 1] = Locale.Translate(string.sub(text, cursor))
+            end
+            return table.concat(parts)
+        end
+    end
+
+    local rules = LOCALE_PATTERNS[lang]
+    if rules then
+        for _, rule in ipairs(rules) do
+            local replaced, count = string.gsub(text, rule[1], rule[2])
+            if count > 0 then
+                return replaced
+            end
+        end
+    end
+
+    local words = {}
+    for first, _, after in string.gmatch(text, "()(%a[%w']*)()") do
+        words[#words + 1] = {first, after - 1}
+        if #words > 6 then
+            return text
+        end
+    end
+
+    local total = #words
+    if total == 0 then
+        return text
+    end
+
+    local joinable = {}
+    for position = 1, total - 1 do
+        joinable[position] = string.sub(text, words[position][2] + 1, words[position + 1][1] - 1) == " "
+    end
+
+    local parts = {}
+    local cursor = 1
+    local changed = false
+    local position = 1
+
+    while position <= total do
+        local reach = 1
+        while reach < state.Max and position + reach <= total and joinable[position + reach - 1] do
+            reach = reach + 1
+        end
+
+        local matched = false
+        for span = reach, 1, -1 do
+            local first = words[position][1]
+            local last = words[position + span - 1][2]
+            local piece = string.sub(text, first, last)
+            local hit = state.Index[string.lower(piece)]
+            if hit then
+                parts[#parts + 1] = string.sub(text, cursor, first - 1)
+                parts[#parts + 1] = Locale.Adapt(piece, hit)
+                cursor = last + 1
+                position = position + span
+                changed = true
+                matched = true
+                break
+            end
+        end
+
+        if not matched then
+            position = position + 1
+        end
+    end
+
+    if not changed then
+        return text
+    end
+    parts[#parts + 1] = string.sub(text, cursor)
+    return table.concat(parts)
+end
+
+function Locale.Translate(text)
+    if type(text) ~= "string" or text == "" then
+        return text
+    end
+    local lang = Locale.GetLang()
+    local state = Locale.State(lang)
+    if not state or not string.find(text, "%a") then
+        return text
+    end
+
+    local hit = state.Cache[text]
+    if hit then
+        return hit
+    end
+    if state.Miss[text] then
+        return text
+    end
+
+    local result = Locale.Resolve(state, text, lang)
+    if result ~= text then
+        state.Cache[text] = result
+    else
+        if state.MissCount >= 1500 then
+            state.Miss = {}
+            state.MissCount = 0
+        end
+        state.Miss[text] = true
+        state.MissCount = state.MissCount + 1
+    end
+    return result
+end
+
+function Locale.Add(lang, map, silent)
+    if type(lang) ~= "string" or type(map) ~= "table" then
+        return false
+    end
+    lang = string.lower(lang)
+    lang = string.match(lang, "^([^%-_]+)") or lang
+
+    local custom = Locale.Custom[lang]
+    if not custom then
+        custom = {}
+        Locale.Custom[lang] = custom
+    end
+    for key, value in pairs(map) do
+        if type(key) == "string" and type(value) == "string" then
+            custom[key] = value
+        elseif type(value) == "table" and type(value[1]) == "string" and type(value[2]) == "string" then
+            custom[value[1]] = value[2]
+        end
+    end
+
+    Locale.States[lang] = nil
+    if not silent then
+        Locale.Refresh()
+    end
+    return true
+end
+
+function Locale.AddMany(languages)
+    if type(languages) ~= "table" then
+        return false
+    end
+    for lang, map in pairs(languages) do
+        Locale.Add(lang, map, true)
+    end
+    Locale.Refresh()
+    return true
+end
+
+function Locale.Paint(instance, property, record)
+    local translated = Locale.Translate(record.Source)
+    if record.Transform then
+        translated = record.Transform(translated)
+    end
+    record.Applied = translated
+    if instance[property] ~= translated then
+        instance[property] = translated
+    end
+end
+
+function Locale.Bind(instance, property, transform)
+    local records = Locale.Records[instance]
+    if not records then
+        records = {}
+        Locale.Records[instance] = records
+    end
+    if records[property] then
+        return
+    end
+
+    local record = {Source = instance[property], Applied = nil, Transform = transform}
+    records[property] = record
+    Locale.Paint(instance, property, record)
+
+    instance:GetPropertyChangedSignal(property):Connect(function()
+        local text = instance[property]
+        if text == record.Applied then
+            return
+        end
+        record.Source = text
+        Locale.Paint(instance, property, record)
+    end)
+end
+
+function Locale.BindInstance(instance)
+    local property = TEXT_PROPERTIES[instance.ClassName]
+    if not property then
+        return
+    end
+    if instance.ClassName ~= "TextLabel" and instance[property] == "" then
+        return
+    end
+    Locale.Bind(instance, property)
+end
+
+function Locale.Scan(root, entry)
+    if entry.Done then
+        return
+    end
+    if not root.Parent then
+        Locale.Roots[root] = nil
+        return
+    end
+    entry.Done = true
+    Locale.BindInstance(root)
+    for _, descendant in ipairs(root:GetDescendants()) do
+        Locale.BindInstance(descendant)
+    end
+    root.DescendantAdded:Connect(Locale.BindInstance)
+end
+
+function Locale.Attach(root)
+    if Locale.Roots[root] then
+        return
+    end
+    local entry = {Done = false}
+    Locale.Roots[root] = entry
+    if Locale.IsActive() then
+        Locale.Scan(root, entry)
+    end
+end
+
+function Locale.OnChange(callback)
+    Locale.NextListener = Locale.NextListener + 1
+    local id = Locale.NextListener
+    Locale.Listeners[id] = callback
+    return function()
+        Locale.Listeners[id] = nil
+    end
+end
+
+function Locale.Refresh()
+    Locale.Version = Locale.Version + 1
+
+    for instance, records in pairs(Locale.Records) do
+        for property, record in pairs(records) do
+            Locale.Paint(instance, property, record)
+        end
+    end
+
+    if Locale.IsActive() then
+        for root, entry in pairs(Locale.Roots) do
+            if not entry.Done then
+                Locale.Scan(root, entry)
+            end
+        end
+    end
+
+    for _, listener in pairs(Locale.Listeners) do
+        task.spawn(pcall, listener)
+    end
+end
+
 -- // Notificação
 local Notify = {
     Config = {
@@ -655,7 +1189,7 @@ function Notify.Create(title, description, key)
     }, card)
     Util.List(column, 2)
     Util.Padding(column, 12, 14, 0, 0)
-    Notify.Label(column, "ERROR", config.NameSize, color, false, 1).Name = "Name"
+    Notify.Label(column, Locale.Upper(Locale.T("ErrorLabel")), config.NameSize, color, false, 1).Name = "Name"
     Notify.Label(column, title, config.TitleSize, theme.Text, true, 2).Name = "Title"
     Notify.Label(column, description, config.DescriptionSize, theme.Muted, true, 3).Name = "Description"
 
@@ -1064,56 +1598,6 @@ function Maid:Destroy()
         end
     end
     table.clear(self.Tasks)
-end
-
--- // Locale
-local Locale = {}
-
-function Locale.GetId()
-    local ok, id = pcall(function()
-        return LocalizationService.RobloxLocaleId
-    end)
-    if ok and type(id) == "string" and id ~= "" then
-        return string.lower(id)
-    end
-    local ok2, id2 = pcall(function()
-        return Players.LocalPlayer.LocaleId
-    end)
-    if ok2 and type(id2) == "string" and id2 ~= "" then
-        return string.lower(id2)
-    end
-    return "en-us"
-end
-
-function Locale.GetLang()
-    return string.match(Locale.GetId(), "^([^%-]+)") or "en"
-end
-
-function Locale.Is(lang)
-    return Locale.GetLang() == string.lower(tostring(lang))
-end
-
-local LOCALE_STRINGS = {
-    en = {
-        SearchPlaceholder = "Search...",
-        SearchPrompt = "Search tabs and elements...",
-        NoResults = "No results found."
-    },
-    pt = {
-        SearchPlaceholder = "Pesquisar...",
-        SearchPrompt = "Pesquisar abas e elementos...",
-        NoResults = "Nenhum resultado encontrado."
-    },
-    es = {
-        SearchPlaceholder = "Buscar...",
-        SearchPrompt = "Buscar pestañas y elementos...",
-        NoResults = "No se encontraron resultados."
-    }
-}
-
-function Locale.T(key)
-    local set = LOCALE_STRINGS[Locale.GetLang()] or LOCALE_STRINGS.en
-    return set[key] or LOCALE_STRINGS.en[key] or key
 end
 
 -- // Icons
@@ -1632,7 +2116,9 @@ function Element.new(contentSection, elementType, options)
     self.Type = elementType
     self.Name = name
     self.Group = contentSection.Name
-    self.Search = string.lower(name .. " " .. elementType .. " " .. contentSection.Name .. " " .. tab.Name .. " " .. description)
+    self.Description = description
+    self.SearchText = ""
+    self.SearchVersion = -1
     self.Tab = tab
     self.Section = contentSection
     self.Container = container
@@ -1650,6 +2136,21 @@ function Element.new(contentSection, elementType, options)
 
     container.Name = name
     return self
+end
+
+function Element:GetSearch()
+    if self.SearchVersion ~= Locale.Version then
+        self.SearchVersion = Locale.Version
+        local parts = {self.Name, self.Type, self.Group, self.Tab.Name, self.Description}
+        local text = table.concat(parts, " ")
+        if Locale.IsActive() then
+            for _, part in ipairs(parts) do
+                text = text .. " " .. Locale.Translate(part)
+            end
+        end
+        self.SearchText = Locale.Fold(text)
+    end
+    return self.SearchText
 end
 
 function Element:ApplyFrame(frameless)
@@ -1729,6 +2230,7 @@ function Element:Build(entry, options, attempt)
         return
     end
 
+    Locale.Attach(self.Container)
     self.Container.Visible = true
     self.Built = true
     self.Instance = type(result) == "table" and result or {}
@@ -1838,21 +2340,12 @@ function ContentSection.new(tab, name)
         VerticalAlignment = Enum.VerticalAlignment.Center
     })
 
-    local accent = Util.Create("Frame", {
-        Name = "Accent",
-        Size = UDim2.fromOffset(3, 12),
-        BackgroundColor3 = Theme.Active,
-        BorderSizePixel = 0,
-        LayoutOrder = 0
-    }, header)
-    Util.Corner(accent, 2)
-
     local title = Util.Create("TextLabel", {
         Name = "Title",
         AutomaticSize = Enum.AutomaticSize.X,
         Size = UDim2.new(0, 0, 1, 0),
         BackgroundTransparency = 1,
-        Text = string.upper(name),
+        Text = name,
         TextColor3 = Theme.Active,
         TextSize = 12,
         Font = Enum.Font.SourceSansBold,
@@ -1860,6 +2353,7 @@ function ContentSection.new(tab, name)
         TextTruncate = Enum.TextTruncate.AtEnd,
         LayoutOrder = 1
     }, header)
+    Locale.Bind(title, "Text", Locale.Upper)
 
     local holder = Util.Create("Frame", {
         Name = "Holder",
@@ -1906,7 +2400,7 @@ end
 ContentSection.CreateElement = ContentSection.AddElement
 
 function ContentSection:SetTitle(text)
-    self.TitleLabel.Text = string.upper(tostring(text))
+    self.TitleLabel.Text = tostring(text)
 end
 
 -- // Tab
@@ -1923,6 +2417,8 @@ function Tab.new(window, sideSection, name, iconName)
     self.IconName = iconName
     self.Sections = {}
     self.Elements = {}
+    self.SearchText = ""
+    self.SearchVersion = -1
 
     local button = Util.Create("TextButton", {
         Name = name,
@@ -1954,6 +2450,7 @@ function Tab.new(window, sideSection, name, iconName)
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd
     }, button)
+    Locale.Bind(label, "Text")
 
     local page = Util.Create("Frame", {
         Name = name,
@@ -2027,6 +2524,18 @@ function Tab.new(window, sideSection, name, iconName)
     return self
 end
 
+function Tab:GetSearch()
+    if self.SearchVersion ~= Locale.Version then
+        self.SearchVersion = Locale.Version
+        local text = self.Name .. " " .. self.Section.Name
+        if Locale.IsActive() then
+            text = text .. " " .. Locale.Translate(self.Name) .. " " .. Locale.Translate(self.Section.Name)
+        end
+        self.SearchText = Locale.Fold(text)
+    end
+    return self.SearchText
+end
+
 function Tab:Style()
     local isActive = self.Window.ActiveTab == self
     local color = isActive and Theme.TabActive or Theme.TabInactive
@@ -2098,6 +2607,7 @@ function SideSection.new(window, name)
         LayoutOrder = 0
     }, frame)
     Util.Padding(labelButton, 0, 0, 10, 26)
+    Locale.Bind(labelButton, "Text")
 
     local chevron = Icons.Create(labelButton, "chevron-down", 14, Theme.Dim)
     chevron.AnchorPoint = Vector2.new(1, 0.5)
@@ -2348,7 +2858,7 @@ function Palette:_Resize()
 end
 
 function Palette:_Query()
-    local text = string.lower(self.Input.Text)
+    local text = Locale.Fold(self.Input.Text)
     text = string.gsub(text, "^%s+", "")
     text = string.gsub(text, "%s+$", "")
     return text
@@ -2540,20 +3050,22 @@ function Palette:Render(query)
     local groups = 0
 
     for _, section in ipairs(self.Window.SideSections) do
+        local sectionName = Locale.Translate(section.Name)
         for _, tab in ipairs(section.Tabs) do
-            local tabMatch = query ~= "" and Util.Contains(tab.Name .. " " .. section.Name, query)
+            local tabName = Locale.Translate(tab.Name)
+            local tabMatch = query ~= "" and Util.Contains(tab:GetSearch(), query)
             local rows = {}
 
             if query == "" or tabMatch then
-                rows[#rows + 1] = {Kind = "tab", Name = tab.Name, Icon = tab.IconName, Trail = {section.Name}, Tab = tab}
+                rows[#rows + 1] = {Kind = "tab", Name = tabName, Icon = tab.IconName, Trail = {sectionName}, Tab = tab}
             end
             for _, element in ipairs(tab.Elements) do
-                if element.Built and (query == "" or tabMatch or Util.Contains(element.Search, query)) then
+                if element.Built and (query == "" or tabMatch or Util.Contains(element:GetSearch(), query)) then
                     rows[#rows + 1] = {
                         Kind = "element",
-                        Name = element.Name,
+                        Name = Locale.Translate(element.Name),
                         Icon = ELEMENT_ICONS[Util.ResolveKey(element.Type)] or "box",
-                        Trail = {element.Group},
+                        Trail = {Locale.Translate(element.Group)},
                         Element = element
                     }
                 end
@@ -2566,7 +3078,7 @@ function Palette:Render(query)
                     self:_CreateSeparator(order)
                 end
                 order = order + 1
-                self:_CreateHeading(order, tab.Name)
+                self:_CreateHeading(order, tabName)
                 for _, row in ipairs(rows) do
                     order = order + 1
                     self:_CreateRow(order, row)
@@ -3245,11 +3757,15 @@ function Window.new(config)
     self.Features = Features.new(self)
     self.FeatureConfig = self.Features.Config
     self.Locale = Locale
+    self.Crumbs = nil
 
     Save.Init()
     self:_BuildMain()
     self:_BuildPanel()
     self.Palette = Palette.new(self)
+    self.Maid:Add(Locale.OnChange(function()
+        self:_Relocalize()
+    end))
     self:_BuildToggle()
     self:_Guard(self.Gui)
     self:_Guard(self.ToggleGui)
@@ -3261,6 +3777,18 @@ function Window.new(config)
     self:Configure(config)
     self:_RestoreSize()
     return self
+end
+
+function Window:_Relocalize()
+    if self.Destroyed then
+        return
+    end
+    self.SearchButton.Text = Locale.T("SearchPlaceholder")
+    self.Palette.Input.PlaceholderText = Locale.T("SearchPrompt")
+    if self.Crumbs then
+        self:_SetBreadcrumb(self.Crumbs)
+    end
+    self:RefreshSearch()
 end
 
 function Window:_Guard(gui)
@@ -3804,6 +4332,7 @@ function Window:_SetBreadcrumb(items)
     if type(items) ~= "table" then
         return
     end
+    self.Crumbs = items
     for _, child in ipairs(self.Breadcrumb:GetChildren()) do
         if child:IsA("GuiObject") then
             child:Destroy()
@@ -3818,7 +4347,7 @@ function Window:_SetBreadcrumb(items)
             AutomaticSize = Enum.AutomaticSize.X,
             Size = UDim2.new(0, 0, 0, 20),
             BackgroundTransparency = 1,
-            Text = tostring(text),
+            Text = Locale.Translate(tostring(text)),
             TextSize = 14,
             Font = isLast and Enum.Font.SourceSansBold or Enum.Font.SourceSans,
             TextColor3 = isLast and Theme.Active or Theme.Inactive,
@@ -3983,6 +4512,22 @@ function Window:Error(title, detail)
     Report(tostring(title or "Error"), tostring(detail or ""))
 end
 
+function Window:SetLanguage(lang)
+    Locale.SetLang(lang)
+end
+
+function Window:GetLanguage()
+    return Locale.GetLang()
+end
+
+function Window:AddTranslations(languages)
+    return Locale.AddMany(languages)
+end
+
+function Window:Translate(text)
+    return Locale.Translate(tostring(text))
+end
+
 function Window:LoadFeature(name, options)
     return self.Features:Load(name, options)
 end
@@ -4102,6 +4647,23 @@ function Library:CreateWindow(config)
     window.ToggleGui.Enabled = true
     window.Elements:Load()
     return window
+end
+
+function Library.SetLanguage(first, second)
+    Locale.SetLang(rawequal(first, Library) and second or first)
+end
+
+function Library.GetLanguage()
+    return Locale.GetLang()
+end
+
+function Library.AddTranslations(first, second)
+    return Locale.AddMany(rawequal(first, Library) and second or first)
+end
+
+function Library.Translate(first, second)
+    local text = rawequal(first, Library) and second or first
+    return Locale.Translate(tostring(text))
 end
 
 -- // Library Features
