@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
+local LocalizationService = game:GetService("LocalizationService")
 
 -- // Tema
 local Theme = {
@@ -51,9 +52,7 @@ local Config = {
     TabPress = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     TabRelease = TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
     TabPop = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-    SaveFolder = "Ecohub",
-    SaveDelay = 0.5,
-    SaveRestoreWindow = 0.4
+    SaveFolder = "Ecohub"
 }
 
 Config.ElementsCache = Config.SaveFolder .. "/Elements.json"
@@ -172,6 +171,18 @@ end
 function Util.Prepare(source, header)
     source = string.gsub(source, "^\239\187\191", "")
     return header .. source
+end
+
+function Util.DeepEqual(a, b)
+    if a == b then return true end
+    if type(a) ~= "table" or type(b) ~= "table" then return false end
+    for key, value in pairs(a) do
+        if not Util.DeepEqual(value, b[key]) then return false end
+    end
+    for key in pairs(b) do
+        if a[key] == nil then return false end
+    end
+    return true
 end
 
 -- // Http
@@ -313,294 +324,31 @@ function Maid:Destroy()
     table.clear(self.Tasks)
 end
 
--- // Save
-local Save = {}
-Save.__index = Save
+-- // Locale
+local Locale = {}
 
-local SAVE_SKIP = {button = true, paragraph = true, label = true}
-local SAVE_CALLBACKS = {"callback", "Callback", "onChange", "OnChange", "onChanged", "OnChanged", "Changed", "changed", "Function", "func", "Action", "action"}
-local SAVE_VALUES = {"default", "Default", "value", "Value", "state", "State", "checked", "Checked", "toggled", "Toggled"}
-local SAVE_SETTERS = {"SetValue", "SetState", "SetChecked", "SetToggle", "SetToggled", "SetSelected", "SetColor", "Set"}
-local SAVE_ESCAPES = {['"'] = '\\"', ["\\"] = "\\\\", ["\n"] = "\\n", ["\r"] = "\\r", ["\t"] = "\\t"}
-local SAVE_VALID = {
-    checkbox = function(value)
-        return type(value) == "boolean"
-    end,
-    slider = function(value)
-        return type(value) == "number"
-    end,
-    colorpicker = function(value)
-        return typeof(value) == "Color3"
-    end,
-    dropdown = function(value)
-        local kind = type(value)
-        return kind == "string" or kind == "table" or kind == "number"
-    end
-}
-
-function Save.Quote(text)
-    local escaped = string.gsub(text, '[%c"\\]', function(char)
-        return SAVE_ESCAPES[char] or string.format("\\u%04x", string.byte(char))
+function Locale.GetId()
+    local ok, id = pcall(function()
+        return LocalizationService.RobloxLocaleId
     end)
-    return '"' .. escaped .. '"'
-end
-
-function Save.Encode(value, depth)
-    depth = depth or 0
-    local kind = type(value)
-    if kind == "string" then
-        return Save.Quote(value)
-    elseif kind == "number" then
-        if value ~= value or value == math.huge or value == -math.huge then
-            return "0"
-        end
-        return string.format("%.14g", value)
-    elseif kind == "boolean" then
-        return tostring(value)
-    elseif kind ~= "table" then
-        return "null"
+    if ok and type(id) == "string" and id ~= "" then
+        return string.lower(id)
     end
-
-    local count = 0
-    for _ in pairs(value) do
-        count = count + 1
-    end
-    if count == 0 then
-        return "{}"
-    end
-
-    local pad = string.rep("    ", depth + 1)
-    local close = string.rep("    ", depth)
-    local lines = {}
-
-    if count == #value then
-        for i = 1, count do
-            lines[i] = pad .. Save.Encode(value[i], depth + 1)
-        end
-        return "[\n" .. table.concat(lines, ",\n") .. "\n" .. close .. "]"
-    end
-
-    local keys = {}
-    for key in pairs(value) do
-        keys[#keys + 1] = key
-    end
-    table.sort(keys, function(a, b)
-        local first = string.lower(tostring(a))
-        local second = string.lower(tostring(b))
-        if first == second then
-            return tostring(a) < tostring(b)
-        end
-        return first < second
+    local ok2, id2 = pcall(function()
+        return Players.LocalPlayer.LocaleId
     end)
-    for i, key in ipairs(keys) do
-        lines[i] = pad .. Save.Quote(tostring(key)) .. ": " .. Save.Encode(value[key], depth + 1)
+    if ok2 and type(id2) == "string" and id2 ~= "" then
+        return string.lower(id2)
     end
-    return "{\n" .. table.concat(lines, ",\n") .. "\n" .. close .. "}"
+    return "en-us"
 end
 
-function Save.Pack(value, depth)
-    depth = depth or 0
-    local kind = typeof(value)
-    if kind == "boolean" or kind == "string" then
-        return value
-    elseif kind == "number" then
-        if value ~= value or value == math.huge or value == -math.huge then
-            return nil
-        end
-        return value
-    elseif kind == "Color3" then
-        return {
-            R = math.floor(value.R * 255 + 0.5),
-            G = math.floor(value.G * 255 + 0.5),
-            B = math.floor(value.B * 255 + 0.5)
-        }
-    elseif kind == "table" and depth < 3 then
-        local count = 0
-        for _ in pairs(value) do
-            count = count + 1
-        end
-        local packed = {}
-        if count == #value then
-            for i = 1, count do
-                local item = Save.Pack(value[i], depth + 1)
-                if item ~= nil then
-                    packed[#packed + 1] = item
-                end
-            end
-        else
-            for key, entry in pairs(value) do
-                local item = Save.Pack(entry, depth + 1)
-                if item ~= nil then
-                    packed[tostring(key)] = item
-                end
-            end
-        end
-        return packed
-    end
-    return nil
+function Locale.GetLang()
+    return string.match(Locale.GetId(), "^([^%-]+)") or "en"
 end
 
-function Save.Unpack(value, kind)
-    if kind == "colorpicker" and type(value) == "table" and tonumber(value.R) and tonumber(value.G) and tonumber(value.B) then
-        return Color3.fromRGB(
-            math.clamp(value.R, 0, 255),
-            math.clamp(value.G, 0, 255),
-            math.clamp(value.B, 0, 255)
-        )
-    end
-    return value
-end
-
-function Save.Valid(kind, value)
-    local check = SAVE_VALID[kind]
-    return not check or check(value)
-end
-
-function Save.Equal(a, b)
-    if a == b then
-        return true
-    end
-    if type(a) ~= "table" or type(b) ~= "table" then
-        return false
-    end
-    for key, value in pairs(a) do
-        if not Save.Equal(value, b[key]) then
-            return false
-        end
-    end
-    for key in pairs(b) do
-        if a[key] == nil then
-            return false
-        end
-    end
-    return true
-end
-
-function Save.new()
-    local self = setmetatable({}, Save)
-    self.Enabled = true
-    self.Dirty = false
-    self.Token = 0
-    self.Data = {}
-    self.Folder = Config.SaveFolder
-    self.Path = Config.SaveFolder .. "/" .. tostring(game.PlaceId) .. ".json"
-    self:Prepare()
-    self:Load()
-    return self
-end
-
-function Save:Prepare()
-    pcall(function()
-        if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder(self.Folder) then
-            makefolder(self.Folder)
-        end
-        if type(isfile) == "function" and type(writefile) == "function" and not isfile(self.Path) then
-            writefile(self.Path, "{}")
-        end
-    end)
-end
-
-function Save:Load()
-    self.Data = {}
-    if type(isfile) ~= "function" or type(readfile) ~= "function" then
-        return
-    end
-    local ok, body = pcall(function()
-        if isfile(self.Path) then
-            return readfile(self.Path)
-        end
-        return nil
-    end)
-    if ok and type(body) == "string" and body ~= "" then
-        local parsed, result = pcall(HttpService.JSONDecode, HttpService, body)
-        if parsed and type(result) == "table" then
-            self.Data = result
-        end
-    end
-end
-
-function Save:Flush(force)
-    if not self.Dirty and not force then
-        return
-    end
-    self.Dirty = false
-    if type(writefile) ~= "function" then
-        return
-    end
-    pcall(function()
-        if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder(self.Folder) then
-            makefolder(self.Folder)
-        end
-        writefile(self.Path, Save.Encode(self.Data))
-    end)
-end
-
-function Save:Queue()
-    self.Dirty = true
-    self.Token = self.Token + 1
-    local token = self.Token
-    task.delay(Config.SaveDelay, function()
-        if self.Token == token then
-            self:Flush()
-        end
-    end)
-end
-
-function Save:Clear()
-    self.Data = {}
-    self.Token = self.Token + 1
-    self:Flush(true)
-end
-
-function Save:_Bucket(element, create)
-    local tabName = element.Tab.Name
-    local sectionName = element.Section.Name
-    local tab = self.Data[tabName]
-    if type(tab) ~= "table" then
-        if not create then
-            return nil
-        end
-        tab = {}
-        self.Data[tabName] = tab
-    end
-    local section = tab[sectionName]
-    if type(section) ~= "table" then
-        if not create then
-            return nil
-        end
-        section = {}
-        tab[sectionName] = section
-    end
-    return section
-end
-
-function Save:Get(element)
-    local bucket = self:_Bucket(element, false)
-    if not bucket then
-        return nil
-    end
-    local kind = Util.ResolveKey(element.Type)
-    local value = Save.Unpack(bucket[element.SaveName], kind)
-    if value == nil or not Save.Valid(kind, value) then
-        return nil
-    end
-    return value
-end
-
-function Save:Set(element, value)
-    if not self.Enabled then
-        return
-    end
-    local packed = Save.Pack(value)
-    if packed == nil then
-        return
-    end
-    local bucket = self:_Bucket(element, true)
-    if Save.Equal(bucket[element.SaveName], packed) then
-        return
-    end
-    bucket[element.SaveName] = packed
-    self:Queue()
+function Locale.Is(lang)
+    return Locale.GetLang() == string.lower(tostring(lang))
 end
 
 -- // Icons
@@ -690,7 +438,7 @@ function Icons.Load()
 end
 
 -- // Library
-local Library = {Window = nil}
+local Library = {Window = nil, Locale = Locale}
 Library.__index = Library
 
 -- // ElementRegistry
@@ -941,7 +689,7 @@ function ElementRegistry._ReadCache()
 end
 
 function ElementRegistry._WriteCache(files)
-    if Save.Equal(env.EcoHubElementCache, files) then
+    if Util.DeepEqual(env.EcoHubElementCache, files) then
         return
     end
     env.EcoHubElementCache = files
@@ -1127,13 +875,20 @@ function Element.new(contentSection, elementType, options)
         Name = elementType,
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundColor3 = Theme.Field,
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
         BorderSizePixel = 0,
         LayoutOrder = contentSection.Count,
         Visible = false
     }, contentSection.Holder)
-    Util.Corner(container, 6)
-    Util.Create("UISizeConstraint", {MinSize = Vector2.new(0, 32)}, container)
+    Util.Corner(container, 8)
+    Util.Create("UISizeConstraint", {MinSize = Vector2.new(0, 36)}, container)
+    Util.Create("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(42, 42, 42)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 28, 28))
+        }),
+        Rotation = 90
+    }, container)
 
     local border = Util.Create("UIStroke", {Name = "Border", Color = Theme.Border, Thickness = 1}, container)
     local flash = Util.Create("UIStroke", {Name = "Flash", Color = Theme.Active, Thickness = 1.5, Transparency = 1}, container)
@@ -1147,7 +902,6 @@ function Element.new(contentSection, elementType, options)
 
     self.Type = elementType
     self.Name = name
-    self.SaveName = used[name] > 1 and (name .. " #" .. used[name]) or name
     self.Group = contentSection.Name
     self.Search = string.lower(name .. " " .. elementType .. " " .. contentSection.Name .. " " .. tab.Name .. " " .. description)
     self.Tab = tab
@@ -1162,17 +916,14 @@ function Element.new(contentSection, elementType, options)
     self.Destroyed = false
     self.Instance = nil
     self.Registry = tab.Window.Elements
-    self.Restoring = false
-    self.Delivered = nil
-    self.Originals = {}
 
     container.Name = name
     return self
 end
 
 function Element:ApplyFrame(frameless)
-    local pad = frameless and 0 or 4
-    local side = frameless and 0 or 10
+    local pad = frameless and 0 or 5
+    local side = frameless and 0 or 12
     self.Container.BackgroundTransparency = frameless and 1 or 0
     self.Border.Enabled = not frameless
     self.Inset.PaddingTop = UDim.new(0, pad)
@@ -1192,104 +943,6 @@ function Element:Attach(options)
     end
 end
 
-function Element:_Persist(options)
-    local save = self.Tab.Window.Save
-    local kind = Util.ResolveKey(self.Type)
-    if not save or not save.Enabled or SAVE_SKIP[kind] or options.Save == false or options.save == false then
-        return options, nil
-    end
-
-    local element = self
-    local copy = {}
-    for key, value in pairs(options) do
-        copy[key] = value
-    end
-
-    local originals = {}
-    local function wrap(callback)
-        if callback then
-            originals[#originals + 1] = callback
-        end
-        return function(...)
-            if element.Destroyed then
-                return
-            end
-            local value = ...
-            if element.Restoring then
-                if Save.Equal(element.Delivered, value) then
-                    return
-                end
-            else
-                save:Set(element, value)
-            end
-            element.Delivered = value
-            if callback then
-                return callback(...)
-            end
-        end
-    end
-
-    local wrapped = false
-    for _, name in ipairs(SAVE_CALLBACKS) do
-        if type(copy[name]) == "function" then
-            copy[name] = wrap(copy[name])
-            wrapped = true
-        end
-    end
-    if not wrapped then
-        local tracker = wrap(nil)
-        copy.callback = tracker
-        copy.Callback = tracker
-    end
-    self.Originals = originals
-
-    local stored = save:Get(self)
-    if stored ~= nil then
-        local replaced = false
-        for _, name in ipairs(SAVE_VALUES) do
-            if copy[name] ~= nil then
-                copy[name] = stored
-                replaced = true
-            end
-        end
-        if not replaced then
-            copy.Default = stored
-            copy.default = stored
-            copy.Value = stored
-            copy.value = stored
-        end
-        self.Restoring = true
-    else
-        for _, name in ipairs(SAVE_VALUES) do
-            if options[name] ~= nil then
-                save:Set(self, options[name])
-                break
-            end
-        end
-    end
-    return copy, stored
-end
-
-function Element:_Restore(stored)
-    local instance = self.Instance
-    for _, name in ipairs(SAVE_SETTERS) do
-        local method = instance[name]
-        if type(method) == "function" then
-            pcall(method, instance, stored)
-            break
-        end
-    end
-    if not Save.Equal(self.Delivered, stored) then
-        self.Delivered = stored
-        for _, callback in ipairs(self.Originals) do
-            task.spawn(callback, stored)
-        end
-    end
-    task.delay(Config.SaveRestoreWindow, function()
-        self.Restoring = false
-    end)
-end
-
 function Element:Build(entry, options, attempt)
     if self.Destroyed or self.Built or self.Building then
         return
@@ -1297,12 +950,6 @@ function Element:Build(entry, options, attempt)
     self.Building = true
     attempt = attempt or 1
     self:ApplyFrame(entry.Frameless)
-
-    local persisted, prepared, stored = pcall(self._Persist, self, options)
-    if not persisted then
-        prepared, stored = options, nil
-        self.Restoring = false
-    end
 
     local scope = {
         frame = self.Container,
@@ -1319,7 +966,7 @@ function Element:Build(entry, options, attempt)
         existing[child] = true
     end
 
-    local ok, result = pcall(entry.Builder, scope, prepared)
+    local ok, result = pcall(entry.Builder, scope, options)
     self.Building = false
     if self.Destroyed then
         return
@@ -1344,7 +991,6 @@ function Element:Build(entry, options, attempt)
             return
         end
         warn("[EcoHub] element '" .. self.Type .. "' could not be built: " .. tostring(result))
-        self.Restoring = false
         return
     end
 
@@ -1359,10 +1005,6 @@ function Element:Build(entry, options, attempt)
         if type(method) == "function" then
             pcall(method, self.Instance, table.unpack(call.Args, 1, call.Count))
         end
-    end
-
-    if stored ~= nil then
-        self:_Restore(stored)
     end
 end
 
@@ -2846,7 +2488,7 @@ function Window.new(config)
     self.SidebarWidth = Config.SidebarWidth
     self.Features = Features.new(self)
     self.FeatureConfig = self.Features.Config
-    self.Save = Save.new()
+    self.Locale = Locale
 
     self:_BuildMain()
     self:_BuildPanel()
@@ -2859,9 +2501,6 @@ function Window.new(config)
     self:_MakeDraggable(self.Header, self.Main)
     self:_BindResize()
     self:_BindToggleDrag()
-    self.Maid:Connect(LocalPlayer.OnTeleport, function()
-        self.Save:Flush()
-    end)
     self:Configure(config)
     return self
 end
@@ -3075,6 +2714,7 @@ function Window:_BuildPanel()
     Panel.PageHolder = self.PageHolder
     Panel.TabList = self.TabList
     Panel.CreateIcon = Icons.Create
+    Panel.Locale = Locale
 
     function Panel.SetVisible(a, b)
         window:SetVisible(arg(a, b))
@@ -3481,22 +3121,6 @@ function Window:SetMinimizeKey(keyCode)
     end
 end
 
-function Window:SaveNow()
-    self.Save:Flush(true)
-end
-
-function Window:SetAutoSave(state)
-    self.Save.Enabled = state and true or false
-end
-
-function Window:ClearSave()
-    self.Save:Clear()
-end
-
-function Window:GetSavePath()
-    return self.Save.Path
-end
-
 function Window:LoadFeature(name, options)
     return self.Features:Load(name, options)
 end
@@ -3565,7 +3189,6 @@ function Window:Destroy()
     end
     self.Destroyed = true
     self.Features:UnloadAll()
-    self.Save:Flush()
     self.Elements.Destroyed = true
     self.Maid:Destroy()
     self.Gui:Destroy()
@@ -3632,10 +3255,6 @@ local FEATURE_METHODS = {
     "SetElementsSource",
     "ListElements",
     "LoadElements",
-    "SaveNow",
-    "SetAutoSave",
-    "ClearSave",
-    "GetSavePath",
     "CreateTab",
     "GetTab",
     "SelectTab"
