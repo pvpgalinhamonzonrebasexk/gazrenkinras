@@ -3649,21 +3649,30 @@ function Features.new(window)
     self.IndexToken = 0
     self.IndexFailed = 0
     self.IndexStamp = 0
+    self.Known = nil
+    self.Head = nil
+    self.Watched = {}
+    self.WatchAll = false
+    self.Watching = false
     self.Source = Source.Build(Config.Repo, Config.Branch, Config.FeaturesPath)
     self.Config = {
         Retries = 3,
-        MaxParallel = 4,
+        MaxParallel = 6,
         Parallel = 3,
-        MaxSize = 1048576,
+        MaxSize = 8388608,
         Timeout = 45,
         AttemptTimeout = 20,
         HedgeDelay = 1.2,
         RunTimeout = 8,
-        IndexRefresh = 20,
+        IndexRefresh = 5,
         IndexCooldown = 15,
         IndexWait = 8,
+        FolderFresh = 10,
         ElementsWait = 12,
-        PreloadTtl = 90
+        PreloadTtl = 90,
+        AutoWatch = true,
+        WatchInterval = 20,
+        WatchBlind = 120
     }
     return self
 end
@@ -3676,55 +3685,159 @@ function Features._ToRaw(url)
     return url
 end
 
+function Features._IsScript(path)
+    return string.match(string.lower(tostring(path)), "%.luau?$") ~= nil
+end
+
+function Features._Strip(path)
+    local stripped = string.gsub(tostring(path), "%.[Ll][Uu][Aa][Uu]?$", "")
+    return stripped
+end
+
+function Features._Encode(path)
+    local encoded = string.gsub(path, "[^/]+", function(segment)
+        local safe = string.gsub(segment, "[^%w%-%._~]", function(char)
+            return string.format("%%%02X", string.byte(char))
+        end)
+        return safe
+    end)
+    return encoded
+end
+
 function Features._ParseTree(body, prefix)
     local files = {}
     local ok, data = pcall(HttpService.JSONDecode, HttpService, body)
-    if ok and type(data) == "table" and type(data.tree) == "table" then
-        for _, item in ipairs(data.tree) do
-            if type(item) == "table" and item.type == "blob" and type(item.path) == "string" then
-                if string.sub(item.path, 1, #prefix) == prefix then
-                    local rel = string.sub(item.path, #prefix + 1)
-                    if rel ~= "" and string.match(rel, "%.luau?$") then
-                        files[#files + 1] = rel
-                    end
-                end
-            end
-        end
+    if not ok or type(data) ~= "table" or type(data.tree) ~= "table" then
+        return files, false, false
     end
-    return files
-end
-
-function Features._ParseFlat(body, prefix)
-    local files = {}
-    local ok, data = pcall(HttpService.JSONDecode, HttpService, body)
-    if ok and type(data) == "table" and type(data.files) == "table" then
-        local full = "/" .. prefix
-        for _, item in ipairs(data.files) do
-            local path = type(item) == "table" and item.name
-            if type(path) == "string" and string.sub(path, 1, #full) == full then
-                local rel = string.sub(path, #full + 1)
-                if rel ~= "" and string.match(rel, "%.luau?$") then
+    for _, item in ipairs(data.tree) do
+        if type(item) == "table" and item.type == "blob" and type(item.path) == "string" then
+            if string.sub(item.path, 1, #prefix) == prefix then
+                local rel = string.sub(item.path, #prefix + 1)
+                if rel ~= "" and Features._IsScript(rel) then
                     files[#files + 1] = rel
                 end
             end
         end
     end
-    return files
+    return files, data.truncated == true, true
+end
+
+function Features._ParseFlat(body, prefix)
+    local files = {}
+    local ok, data = pcall(HttpService.JSONDecode, HttpService, body)
+    if not ok or type(data) ~= "table" or type(data.files) ~= "table" then
+        return files, false, false
+    end
+    local full = "/" .. prefix
+    for _, item in ipairs(data.files) do
+        local path = type(item) == "table" and item.name
+        if type(path) == "string" and string.sub(path, 1, #full) == full then
+            local rel = string.sub(path, #full + 1)
+            if rel ~= "" and Features._IsScript(rel) then
+                files[#files + 1] = rel
+            end
+        end
+    end
+    return files, false, true
+end
+
+function Features._ParseAny(body, prefix)
+    local files, truncated, valid = Features._ParseTree(body, prefix)
+    if valid then
+        return files, truncated, true
+    end
+    return Features._ParseFlat(body, prefix)
+end
+
+function Features._Atom(source)
+    return "https://github.com/" .. source.Repo .. "/commits/" .. source.Branch .. ".atom"
+end
+
+function Features._Pinned(source, head)
+    return {
+        "https://data.jsdelivr.com/v1/packages/gh/" .. source.Repo .. "@" .. head .. "?structure=flat",
+        "https://data.jsdelivr.com/v1/package/gh/" .. source.Repo .. "@" .. head .. "/flat"
+    }
+end
+
+-- // Features Index
+function Features:_Head(source)
+    local ok, body = pcall(Http.Fetch, {Features._Atom(source)}, 1)
+    if not ok or type(body) ~= "string" then
+        return nil
+    end
+    local sha = string.match(body, "Grit::Commit/(%x+)") or string.match(body, "/commit/(%x+)")
+    if sha and #sha >= 7 then
+        return sha
+    end
+    return nil
+end
+
+function Features:_Gather(urls, prefix)
+    local found = {}
+    local pending = #urls
+    local deadline = os.clock() + self.Config.AttemptTimeout
+
+    for _, url in ipairs(urls) do
+        task.spawn(function()
+            local ok, body = pcall(Http.Get, url)
+            if ok then
+                local parsed, files = pcall(Features._ParseAny, body, prefix)
+                if parsed and type(files) == "table" then
+                    for _, rel in ipairs(files) do
+                        found[#found + 1] = rel
+                    end
+                end
+            end
+            pending = pending - 1
+        end)
+    end
+
+    while pending > 0 and os.clock() < deadline and not self.Window.Destroyed do
+        task.wait(0.03)
+    end
+    return found
+end
+
+function Features:_Collect(source)
+    local prefix = source.Prefix
+    local seed = {}
+
+    local ok, body = pcall(Http.Fetch, {source.Tree}, 2)
+    if ok then
+        local files, truncated, valid = Features._ParseAny(body, prefix)
+        if valid and not truncated then
+            return files, true
+        end
+        for _, rel in ipairs(files) do
+            seed[#seed + 1] = rel
+        end
+    end
+
+    local head = self:_Head(source)
+    if head then
+        local found = self:_Gather(Features._Pinned(source, head), prefix)
+        for _, rel in ipairs(seed) do
+            found[#found + 1] = rel
+        end
+        if #found > 0 then
+            return found, true
+        end
+    end
+
+    local found = self:_Gather({source.List, source.Flat}, prefix)
+    for _, rel in ipairs(seed) do
+        found[#found + 1] = rel
+    end
+    if #found > 0 then
+        return found, false
+    end
+    return nil, false
 end
 
 function Features:_BuildIndex(source)
-    local urls = {source.Tree, source.List, source.Flat}
-    local files = Http.Race(urls, function(body)
-        local found = Features._ParseTree(body, source.Prefix)
-        if #found == 0 then
-            found = Features._ParseFlat(body, source.Prefix)
-        end
-        if #found == 0 then
-            return nil, "no feature files found"
-        end
-        return found
-    end, {Delay = self.Config.HedgeDelay, Timeout = self.Config.AttemptTimeout, Parallel = #urls})
-
+    local files, exact = self:_Collect(source)
     if not files then
         return nil
     end
@@ -3733,10 +3846,9 @@ function Features:_BuildIndex(source)
         return string.lower(a) < string.lower(b)
     end)
 
-    local index = {Files = {}, ByPath = {}, ByStem = {}, Folders = {}}
+    local index = {Files = {}, ByPath = {}, ByStem = {}, Folders = {}, Exact = exact}
     for _, rel in ipairs(files) do
-        local stripped = string.gsub(rel, "%.luau?$", "")
-        local key = string.lower(stripped)
+        local key = string.lower(Features._Strip(rel))
         if not index.ByPath[key] then
             index.ByPath[key] = rel
             index.Files[#index.Files + 1] = rel
@@ -3755,6 +3867,23 @@ function Features:_BuildIndex(source)
         end
     end
     return index
+end
+
+function Features:_Diff(index)
+    local added = {}
+    local first = self.Known == nil
+    local known = self.Known or {}
+    for _, rel in ipairs(index.Files) do
+        local key = string.lower(Features._Strip(rel))
+        if not known[key] then
+            known[key] = true
+            if not first then
+                added[#added + 1] = rel
+            end
+        end
+    end
+    self.Known = known
+    return added
 end
 
 function Features:_LoadIndex(force, maxWait)
@@ -3780,9 +3909,11 @@ function Features:_LoadIndex(force, maxWait)
             end
             self.IndexLoading = false
             if ok and index then
+                local added = self:_Diff(index)
                 self.Index = index
                 self.IndexFailed = 0
                 self.IndexStamp = os.clock()
+                self:_AutoLoad(added)
             else
                 if not ok then
                     Report("Feature index failed", index)
@@ -3800,6 +3931,18 @@ function Features:_LoadIndex(force, maxWait)
     return self.Index
 end
 
+function Features:_Fresh(maxAge)
+    local now = os.clock()
+    if self.Index and now - self.IndexStamp <= maxAge then
+        return self.Index
+    end
+    local cooled = self.IndexFailed == 0 or now - self.IndexFailed > self.Config.IndexCooldown
+    if self.Index and not cooled then
+        return self.Index
+    end
+    return self:_LoadIndex(true, self.Config.IndexWait) or self.Index
+end
+
 function Features:Warm()
     if self.Index or self.IndexLoading or self.Window.Destroyed then
         return
@@ -3809,6 +3952,85 @@ function Features:Warm()
     end)
 end
 
+-- // Features Watch
+function Features:_Watches(key)
+    if self.WatchAll then
+        return true
+    end
+    for folder in pairs(self.Watched) do
+        if string.sub(key, 1, #folder + 1) == folder .. "/" then
+            return true
+        end
+    end
+    return false
+end
+
+function Features:_AutoLoad(added)
+    if not added or #added == 0 or self.Window.Destroyed then
+        return
+    end
+    local jobs = {}
+    for _, rel in ipairs(added) do
+        local job = self:_Job(rel)
+        if not self.Loaded[job.Key] and not self.Loading[job.Key] and self:_Watches(job.Key) then
+            jobs[#jobs + 1] = job
+        end
+    end
+    if #jobs == 0 then
+        return
+    end
+    task.spawn(function()
+        local outcomes = self:_LoadJobs(jobs, nil, true)
+        for _, outcome in ipairs(outcomes) do
+            if not outcome.Success then
+                warn("[EcoHub] Feature failed: " .. tostring(outcome.Name) .. ": " .. tostring(outcome.Error))
+            end
+        end
+    end)
+end
+
+function Features:_Poll()
+    if self.IndexLoading or self.Window.Destroyed then
+        return
+    end
+    local index = self.Index
+    local stale = not index or not index.Exact
+    local head = self:_Head(self.Source)
+
+    if head then
+        if head ~= self.Head or stale then
+            local before = self.IndexStamp
+            self:_LoadIndex(true, self.Config.IndexWait)
+            if self.IndexStamp ~= before then
+                self.Head = head
+            end
+        end
+    elseif stale or os.clock() - self.IndexStamp >= self.Config.WatchBlind then
+        self:_LoadIndex(true, self.Config.IndexWait)
+    end
+end
+
+function Features:_StartWatch()
+    if self.Watching or self.Window.Destroyed or not self.Config.AutoWatch then
+        return
+    end
+    if not self.WatchAll and next(self.Watched) == nil then
+        return
+    end
+    self.Watching = true
+    task.spawn(function()
+        while not self.Window.Destroyed and self.Config.AutoWatch do
+            task.wait(self.Config.WatchInterval)
+            if self.Window.Destroyed then
+                break
+            end
+            pcall(self._Poll, self)
+        end
+        self.Watching = false
+    end)
+end
+
+-- // Features Resolve
 function Features:_Normalize(name)
     local text = string.gsub(tostring(name), "^%s+", "")
     text = string.gsub(text, "%s+$", "")
@@ -3819,36 +4041,46 @@ function Features:_Normalize(name)
     if prefix ~= "" and string.lower(string.sub(text, 1, #prefix)) == prefix then
         text = string.sub(text, #prefix + 1)
     end
-    text = string.gsub(text, "%.luau?$", "")
+    text = Features._Strip(text)
     return text
 end
 
 function Features:_Job(rel)
     local source = self.Source
-    local stripped = string.gsub(rel, "%.luau?$", "")
+    local stripped = Features._Strip(rel)
     local stamp = "?t=" .. tostring(os.time())
     return {
         Key = string.lower(stripped),
         Path = stripped,
         Name = string.match(stripped, "([^/]+)$") or stripped,
-        Urls = Source.Urls(source.Repo, source.Branch, source.Prefix .. rel, stamp)
+        Urls = Source.Urls(source.Repo, source.Branch, Features._Encode(source.Prefix .. rel), stamp)
     }
 end
 
-function Features:_Lookup(index, lowered)
-    local rel = index.ByPath[lowered] or index.ByStem[lowered]
-    if rel then
-        return {self:_Job(rel)}
+function Features:_Lookup(index, lowered, folderOnly)
+    if not folderOnly then
+        local rel = index.ByPath[lowered]
+        if rel then
+            return {self:_Job(rel)}
+        end
     end
     if index.Folders[lowered] then
         local jobs = {}
         local folder = lowered .. "/"
         for _, file in ipairs(index.Files) do
             if string.sub(string.lower(file), 1, #folder) == folder then
-                jobs[#jobs + 1] = self:_Job(file)
+                local job = self:_Job(file)
+                job.Folder = lowered
+                jobs[#jobs + 1] = job
             end
         end
         return jobs
+    end
+    if not folderOnly then
+        local rel = index.ByStem[lowered]
+        if rel then
+            return {self:_Job(rel)}
+        end
     end
     return nil
 end
@@ -3860,11 +4092,11 @@ function Features:_Resolve(name, final)
     if string.match(original, "^https?://") then
         local raw = Features._ToRaw(original)
         local clean = string.match(raw, "^[^%?#]+") or raw
-        local display = string.match(clean, "([^/]+)%.luau?$") or string.match(clean, "([^/]+)$") or clean
+        local display = string.match(Features._Strip(clean), "([^/]+)$") or clean
         local urls = {raw}
         local parsed = Source.Parse(clean)
-        if parsed and string.match(parsed.Path, "%.luau?$") then
-            local mirrors = Source.Urls(parsed.Repo, parsed.Branch, parsed.Path, "?t=" .. tostring(os.time()))
+        if parsed and Features._IsScript(parsed.Path) then
+            local mirrors = Source.Urls(parsed.Repo, parsed.Branch, Features._Encode(parsed.Path), "?t=" .. tostring(os.time()))
             for i = 2, #mirrors do
                 urls[#urls + 1] = mirrors[i]
             end
@@ -3881,7 +4113,14 @@ function Features:_Resolve(name, final)
 
     local index = self:_LoadIndex(false, final and self.Config.Timeout or self.Config.IndexWait)
     if index then
-        local jobs = self:_Lookup(index, lowered)
+        local jobs = self:_Lookup(index, lowered, trailing)
+        if jobs and jobs[1] and jobs[1].Folder then
+            local fresh = self:_Fresh(self.Config.FolderFresh)
+            if fresh and fresh ~= index then
+                index = fresh
+                jobs = self:_Lookup(index, lowered, trailing) or jobs
+            end
+        end
         if jobs then
             return jobs
         end
@@ -3890,7 +4129,7 @@ function Features:_Resolve(name, final)
         if now - self.IndexStamp > self.Config.IndexRefresh and cooled then
             local fresh = self:_LoadIndex(true, self.Config.IndexWait)
             if fresh and fresh ~= index then
-                jobs = self:_Lookup(fresh, lowered)
+                jobs = self:_Lookup(fresh, lowered, trailing)
                 if jobs then
                     return jobs
                 end
@@ -3905,8 +4144,8 @@ function Features:_Resolve(name, final)
 
     local source = self.Source
     local stamp = "?t=" .. tostring(os.time())
-    local lua = Source.Urls(source.Repo, source.Branch, source.Prefix .. clean .. ".lua", stamp)
-    local luau = Source.Urls(source.Repo, source.Branch, source.Prefix .. clean .. ".luau", stamp)
+    local lua = Source.Urls(source.Repo, source.Branch, Features._Encode(source.Prefix .. clean .. ".lua"), stamp)
+    local luau = Source.Urls(source.Repo, source.Branch, Features._Encode(source.Prefix .. clean .. ".luau"), stamp)
     local urls = {}
     for i = 1, #lua do
         urls[#urls + 1] = lua[i]
@@ -3922,6 +4161,7 @@ function Features:_Resolve(name, final)
     }}
 end
 
+-- // Features Download
 function Features:_Validate(body)
     if type(body) ~= "string" then
         return nil, "invalid response"
@@ -3990,6 +4230,7 @@ function Features:_Pump()
     while self.Running < self.Config.MaxParallel and #self.Queue > 0 do
         local future = table.remove(self.Queue, 1)
         self.Running = self.Running + 1
+        future.Started = os.clock()
         task.spawn(self._Download, self, future)
     end
 end
@@ -4006,6 +4247,7 @@ function Features:_Start(job, fresh)
     local future = {
         Job = job,
         Created = os.clock(),
+        Started = nil,
         Done = false,
         Body = nil,
         Chunk = nil,
@@ -4020,7 +4262,10 @@ end
 
 function Features:_Await(future)
     local limit = self.Config.Timeout * 3
-    while not future.Done and not self.Window.Destroyed and os.clock() - future.Created < limit do
+    while not future.Done and not self.Window.Destroyed do
+        if future.Started and os.clock() - future.Started > limit then
+            break
+        end
         task.wait(0.03)
     end
     if not future.Done and not future.Error then
@@ -4041,6 +4286,7 @@ function Features:_WaitElements()
     self.ElementsReady = true
 end
 
+-- // Features Run
 function Features:_Purge(key)
     for _, tab in ipairs(self.Window.Tabs) do
         for index = #tab.Elements, 1, -1 do
@@ -4162,6 +4408,9 @@ function Features:_LoadJobs(jobs, options, quiet)
     local duplicate = {}
 
     for i, job in ipairs(jobs) do
+        if job.Folder then
+            self.Watched[job.Folder] = true
+        end
         outcomes[i] = {Name = job.Name, Success = false}
         if first[job.Key] then
             duplicate[i] = first[job.Key]
@@ -4184,6 +4433,8 @@ function Features:_LoadJobs(jobs, options, quiet)
             end
         end
     end
+
+    self:_StartWatch()
 
     local futures = {}
     for position, i in ipairs(pending) do
@@ -4216,6 +4467,7 @@ function Features:_LoadJobs(jobs, options, quiet)
     return outcomes
 end
 
+-- // Features API
 function Features:Load(name, options)
     if self.Window.Destroyed then
         return false
@@ -4273,7 +4525,7 @@ function Features:LoadAll(options)
     if self.Window.Destroyed then
         return results
     end
-    local index = self:_LoadIndex()
+    local index = self:_Fresh(self.Config.FolderFresh) or self:_LoadIndex(false, self.Config.Timeout)
     if not index then
         Report("Feature index failed", "LoadAllFeatures needs the GitHub index, which could not be loaded")
         return results
@@ -4283,6 +4535,7 @@ function Features:LoadAll(options)
     for _, rel in ipairs(index.Files) do
         jobs[#jobs + 1] = self:_Job(rel)
     end
+    self.WatchAll = true
     local outcomes = self:_LoadJobs(jobs, options)
     for i, outcome in ipairs(outcomes) do
         results[jobs[i].Path] = outcome.Success
@@ -4367,7 +4620,7 @@ function Features:List()
         return names
     end
     for _, rel in ipairs(index.Files) do
-        names[#names + 1] = (string.gsub(rel, "%.luau?$", ""))
+        names[#names + 1] = Features._Strip(rel)
     end
     return names
 end
@@ -4390,6 +4643,10 @@ function Features:SetSource(url)
     self.IndexLoading = false
     self.IndexFailed = 0
     self.IndexStamp = 0
+    self.Known = nil
+    self.Head = nil
+    self.Watched = {}
+    self.WatchAll = false
     self.Downloads = {}
     return true
 end
