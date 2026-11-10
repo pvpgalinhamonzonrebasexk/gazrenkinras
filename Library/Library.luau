@@ -1475,6 +1475,73 @@ function Http.Fetch(urls, rounds)
     error(failure, 0)
 end
 
+function Http.Race(urls, validate, options)
+    options = options or {}
+    local delay = options.Delay or 1.2
+    local limit = options.Timeout or 20
+    local parallel = options.Parallel or 3
+    local total = #urls
+    local fatalLimit = math.min(2, total)
+    local state = {Done = false, Value = nil, Active = 0, Failures = 0, Missing = 0, Fatal = 0, Reason = nil}
+
+    local function attempt(url)
+        local ok, body = pcall(Http.Get, url)
+        state.Active = state.Active - 1
+        if state.Done then
+            return
+        end
+        if not ok then
+            state.Failures = state.Failures + 1
+            state.Reason = tostring(body)
+            if string.find(state.Reason, "404", 1, true) then
+                state.Missing = state.Missing + 1
+            end
+            return
+        end
+        local valid, value, reason, fatal = pcall(validate, body)
+        if valid and value then
+            state.Value = value
+            state.Done = true
+            return
+        end
+        state.Failures = state.Failures + 1
+        state.Reason = valid and tostring(reason or "invalid response") or tostring(value)
+        if valid and fatal then
+            state.Fatal = state.Fatal + 1
+        end
+    end
+
+    local started = 0
+    local lastStart = 0
+    local deadline = os.clock() + limit
+
+    while not state.Done do
+        local now = os.clock()
+        if now >= deadline or state.Fatal >= fatalLimit then
+            break
+        end
+        if started < total then
+            if state.Active < parallel and (state.Active == 0 or now - lastStart >= delay) then
+                started = started + 1
+                state.Active = state.Active + 1
+                lastStart = now
+                task.spawn(attempt, urls[started])
+            end
+        elseif state.Active == 0 then
+            break
+        end
+        task.wait(0.03)
+    end
+
+    local value = state.Value
+    state.Done = true
+    if value then
+        return value, nil, false
+    end
+    local gone = total > 0 and (state.Missing >= total or state.Fatal >= fatalLimit)
+    return nil, state.Reason or "download timed out", gone
+end
+
 -- // Tradutor Roblox
 local Roblox = {Translator = nil, Lang = nil, Loading = false, Cache = {}, Count = 0}
 Locale.Roblox = Roblox
@@ -1894,7 +1961,8 @@ function Source.Build(repo, branch, path)
         Raw = "https://raw.githubusercontent.com/" .. repo .. "/refs/heads/" .. branch .. "/" .. prefix,
         Cdn = "https://cdn.jsdelivr.net/gh/" .. repo .. "@" .. branch .. "/" .. prefix,
         Tree = "https://api.github.com/repos/" .. repo .. "/git/trees/" .. branch .. "?recursive=1",
-        List = "https://data.jsdelivr.com/v1/packages/gh/" .. repo .. "@" .. branch .. "?structure=flat"
+        List = "https://data.jsdelivr.com/v1/packages/gh/" .. repo .. "@" .. branch .. "?structure=flat",
+        Flat = "https://data.jsdelivr.com/v1/package/gh/" .. repo .. "@" .. branch .. "/flat"
     }
 end
 
@@ -1914,6 +1982,20 @@ function Source.Parse(url)
         return nil
     end
     return Source.Build(owner .. "/" .. repo, branch, path)
+end
+
+function Source.Urls(repo, branch, file, stamp)
+    stamp = stamp or ""
+    return {
+        "https://raw.githubusercontent.com/" .. repo .. "/refs/heads/" .. branch .. "/" .. file .. stamp,
+        "https://github.com/" .. repo .. "/raw/" .. branch .. "/" .. file .. stamp,
+        "https://raw.githack.com/" .. repo .. "/" .. branch .. "/" .. file,
+        "https://cdn.statically.io/gh/" .. repo .. "/" .. branch .. "/" .. file,
+        "https://cdn.jsdelivr.net/gh/" .. repo .. "@" .. branch .. "/" .. file,
+        "https://fastly.jsdelivr.net/gh/" .. repo .. "@" .. branch .. "/" .. file,
+        "https://gcore.jsdelivr.net/gh/" .. repo .. "@" .. branch .. "/" .. file,
+        "https://testingcf.jsdelivr.net/gh/" .. repo .. "@" .. branch .. "/" .. file
+    }
 end
 
 -- // Maid
@@ -3547,6 +3629,8 @@ function Palette:Close()
 end
 
 -- // Features
+local FEATURE_HEADER = "local Window, Library = ...; local Windows, Librarys = Window, Library; "
+
 local Features = {}
 Features.__index = Features
 
@@ -3556,19 +3640,30 @@ function Features.new(window)
     self.Loaded = {}
     self.Order = {}
     self.Loading = {}
+    self.Downloads = {}
+    self.Queue = {}
+    self.Running = 0
+    self.ElementsReady = false
     self.Index = nil
     self.IndexLoading = false
+    self.IndexToken = 0
     self.IndexFailed = 0
     self.IndexStamp = 0
     self.Source = Source.Build(Config.Repo, Config.Branch, Config.FeaturesPath)
     self.Config = {
         Retries = 3,
         MaxParallel = 4,
+        Parallel = 3,
         MaxSize = 1048576,
         Timeout = 45,
-        RunTimeout = 15,
-        LoadAttempts = 3,
-        IndexRefresh = 20
+        AttemptTimeout = 20,
+        HedgeDelay = 1.2,
+        RunTimeout = 8,
+        IndexRefresh = 20,
+        IndexCooldown = 15,
+        IndexWait = 8,
+        ElementsWait = 12,
+        PreloadTtl = 90
     }
     return self
 end
@@ -3617,21 +3712,20 @@ function Features._ParseFlat(body, prefix)
     return files
 end
 
-function Features:_BuildIndex()
-    local source = self.Source
-    local files = {}
-
-    local ok, body = pcall(Http.Fetch, {source.Tree}, 1)
-    if ok then
-        files = Features._ParseTree(body, source.Prefix)
-    end
-    if #files == 0 then
-        ok, body = pcall(Http.Fetch, {source.List}, 1)
-        if ok then
-            files = Features._ParseFlat(body, source.Prefix)
+function Features:_BuildIndex(source)
+    local urls = {source.Tree, source.List, source.Flat}
+    local files = Http.Race(urls, function(body)
+        local found = Features._ParseTree(body, source.Prefix)
+        if #found == 0 then
+            found = Features._ParseFlat(body, source.Prefix)
         end
-    end
-    if #files == 0 then
+        if #found == 0 then
+            return nil, "no feature files found"
+        end
+        return found
+    end, {Delay = self.Config.HedgeDelay, Timeout = self.Config.AttemptTimeout, Parallel = #urls})
+
+    if not files then
         return nil
     end
 
@@ -3663,37 +3757,56 @@ function Features:_BuildIndex()
     return index
 end
 
-function Features:_LoadIndex(force)
+function Features:_LoadIndex(force, maxWait)
     if self.Index and not force then
         return self.Index
     end
-    if self.IndexLoading then
-        local waited = 0
-        while self.IndexLoading and waited < self.Config.Timeout do
-            task.wait(0.05)
-            waited = waited + 0.05
+
+    if not self.IndexLoading then
+        local cooling = self.IndexFailed > 0 and os.clock() - self.IndexFailed < self.Config.IndexCooldown
+        if cooling and not force then
+            return self.Index
         end
-        return self.Index
-    end
-    if not force and self.IndexFailed > 0 and os.clock() - self.IndexFailed < 30 then
-        return nil
+
+        self.IndexToken = self.IndexToken + 1
+        local token = self.IndexToken
+        local source = self.Source
+        self.IndexLoading = true
+
+        task.spawn(function()
+            local ok, index = pcall(self._BuildIndex, self, source)
+            if self.IndexToken ~= token then
+                return
+            end
+            self.IndexLoading = false
+            if ok and index then
+                self.Index = index
+                self.IndexFailed = 0
+                self.IndexStamp = os.clock()
+            else
+                if not ok then
+                    Report("Feature index failed", index)
+                end
+                self.IndexFailed = os.clock()
+            end
+        end)
     end
 
-    self.IndexLoading = true
-    local ok, index = pcall(self._BuildIndex, self)
-    self.IndexLoading = false
-
-    if ok and index then
-        self.Index = index
-        self.IndexFailed = 0
-        self.IndexStamp = os.clock()
-    else
-        if not ok then
-            Report("Feature index failed", index)
-        end
-        self.IndexFailed = os.clock()
+    local started = os.clock()
+    local limit = maxWait or self.Config.Timeout
+    while self.IndexLoading and os.clock() - started < limit and not self.Window.Destroyed do
+        task.wait(0.05)
     end
     return self.Index
+end
+
+function Features:Warm()
+    if self.Index or self.IndexLoading or self.Window.Destroyed then
+        return
+    end
+    task.spawn(function()
+        self:_LoadIndex()
+    end)
 end
 
 function Features:_Normalize(name)
@@ -3718,7 +3831,7 @@ function Features:_Job(rel)
         Key = string.lower(stripped),
         Path = stripped,
         Name = string.match(stripped, "([^/]+)$") or stripped,
-        Urls = {source.Raw .. rel .. stamp, source.Cdn .. rel}
+        Urls = Source.Urls(source.Repo, source.Branch, source.Prefix .. rel, stamp)
     }
 end
 
@@ -3740,7 +3853,7 @@ function Features:_Lookup(index, lowered)
     return nil
 end
 
-function Features:_Resolve(name)
+function Features:_Resolve(name, final)
     local original = string.gsub(tostring(name), "^%s+", "")
     original = string.gsub(original, "%s+$", "")
 
@@ -3748,7 +3861,15 @@ function Features:_Resolve(name)
         local raw = Features._ToRaw(original)
         local clean = string.match(raw, "^[^%?#]+") or raw
         local display = string.match(clean, "([^/]+)%.luau?$") or string.match(clean, "([^/]+)$") or clean
-        return {{Key = string.lower(clean), Path = clean, Name = display, Urls = {raw}}}
+        local urls = {raw}
+        local parsed = Source.Parse(clean)
+        if parsed and string.match(parsed.Path, "%.luau?$") then
+            local mirrors = Source.Urls(parsed.Repo, parsed.Branch, parsed.Path, "?t=" .. tostring(os.time()))
+            for i = 2, #mirrors do
+                urls[#urls + 1] = mirrors[i]
+            end
+        end
+        return {{Key = string.lower(clean), Path = clean, Name = display, Urls = urls}}
     end
 
     local clean = self:_Normalize(original)
@@ -3756,47 +3877,54 @@ function Features:_Resolve(name)
         return nil, "empty feature name"
     end
     local lowered = string.lower(clean)
+    local trailing = string.sub(original, -1) == "/"
 
-    local index = self:_LoadIndex()
+    local index = self:_LoadIndex(false, final and self.Config.Timeout or self.Config.IndexWait)
     if index then
         local jobs = self:_Lookup(index, lowered)
         if jobs then
             return jobs
         end
-        if os.clock() - self.IndexStamp > self.Config.IndexRefresh then
-            local fresh = self:_LoadIndex(true)
-            if fresh then
+        local now = os.clock()
+        local cooled = self.IndexFailed == 0 or now - self.IndexFailed > self.Config.IndexCooldown
+        if now - self.IndexStamp > self.Config.IndexRefresh and cooled then
+            local fresh = self:_LoadIndex(true, self.Config.IndexWait)
+            if fresh and fresh ~= index then
                 jobs = self:_Lookup(fresh, lowered)
                 if jobs then
                     return jobs
                 end
             end
         end
-        if string.sub(original, -1) == "/" then
+        if trailing then
             return nil, "not found in " .. self.Source.Path
         end
-    end
-
-    if string.sub(original, -1) == "/" then
+    elseif trailing then
         return nil, "loading a folder needs the GitHub index"
     end
 
     local source = self.Source
     local stamp = "?t=" .. tostring(os.time())
+    local lua = Source.Urls(source.Repo, source.Branch, source.Prefix .. clean .. ".lua", stamp)
+    local luau = Source.Urls(source.Repo, source.Branch, source.Prefix .. clean .. ".luau", stamp)
     local urls = {}
-    for _, extension in ipairs({".lua", ".luau"}) do
-        urls[#urls + 1] = source.Raw .. clean .. extension .. stamp
+    for i = 1, #lua do
+        urls[#urls + 1] = lua[i]
+        urls[#urls + 1] = luau[i]
     end
-    for _, extension in ipairs({".lua", ".luau"}) do
-        urls[#urls + 1] = source.Cdn .. clean .. extension
-    end
-    return {{Key = lowered, Path = clean, Name = string.match(clean, "([^/]+)$") or clean, Urls = urls}}
+    return {{
+        Key = lowered,
+        Path = clean,
+        Name = string.match(clean, "([^/]+)$") or clean,
+        Urls = urls,
+        Guess = index == nil,
+        Origin = original
+    }}
 end
 
-function Features:_Download(job)
-    local ok, body = pcall(Http.Fetch, job.Urls, self.Config.Retries)
-    if not ok then
-        return nil, tostring(body)
+function Features:_Validate(body)
+    if type(body) ~= "string" then
+        return nil, "invalid response"
     end
     if #body > self.Config.MaxSize then
         return nil, "file is too large"
@@ -3808,42 +3936,109 @@ function Features:_Download(job)
     if string.find(head, "^%s*<!doctype html") or string.find(head, "^%s*<html") then
         return nil, "response is a web page, not a script"
     end
-    return body
+    local chunk, failure = loadstring(Util.Prepare(body, FEATURE_HEADER))
+    if not chunk then
+        return nil, "compile: " .. tostring(failure), true
+    end
+    return {Body = body, Chunk = chunk}
 end
 
-function Features:_DownloadAll(jobs)
-    local sources = {}
-    local failures = {}
-    local cursor = 0
-    local running = 0
-    local progress = os.clock()
-    local limit = math.max(1, math.min(self.Config.MaxParallel, #jobs))
+function Features:_Download(future)
+    local job = future.Job
+    local config = self.Config
+    local failure = "download timed out"
+    local missing = false
 
-    local function worker()
-        while not self.Window.Destroyed do
-            cursor = cursor + 1
-            local index = cursor
-            local job = jobs[index]
-            if not job then
-                break
+    local ok, err = pcall(function()
+        for round = 1, config.Retries do
+            if self.Window.Destroyed then
+                failure = "window was destroyed"
+                return
             end
-            local body, failure = self:_Download(job)
-            sources[index] = body or false
-            failures[index] = failure
-            progress = os.clock()
+            local value, reason, gone = Http.Race(job.Urls, function(body)
+                return self:_Validate(body)
+            end, {Delay = config.HedgeDelay, Timeout = config.AttemptTimeout, Parallel = config.Parallel})
+            if value then
+                future.Body = value.Body
+                future.Chunk = value.Chunk
+                return
+            end
+            failure = reason or failure
+            missing = gone
+            if gone then
+                return
+            end
+            if round < config.Retries then
+                task.wait(round * 0.5)
+            end
         end
-        running = running - 1
-    end
+    end)
 
-    for _ = 1, limit do
-        running = running + 1
-        task.spawn(worker)
+    if not ok then
+        failure = tostring(err)
     end
+    if not future.Chunk then
+        future.Error = tostring(failure)
+        future.Missing = missing
+    end
+    future.Done = true
+    self.Running = self.Running - 1
+    self:_Pump()
+end
 
-    while running > 0 and os.clock() - progress < self.Config.Timeout and not self.Window.Destroyed do
+function Features:_Pump()
+    while self.Running < self.Config.MaxParallel and #self.Queue > 0 do
+        local future = table.remove(self.Queue, 1)
+        self.Running = self.Running + 1
+        task.spawn(self._Download, self, future)
+    end
+end
+
+function Features:_Start(job, fresh)
+    local current = self.Downloads[job.Key]
+    if current and not fresh then
+        local age = os.clock() - current.Created
+        local failed = current.Done and not current.Chunk
+        if age < self.Config.PreloadTtl and not failed then
+            return current
+        end
+    end
+    local future = {
+        Job = job,
+        Created = os.clock(),
+        Done = false,
+        Body = nil,
+        Chunk = nil,
+        Error = nil,
+        Missing = false
+    }
+    self.Downloads[job.Key] = future
+    self.Queue[#self.Queue + 1] = future
+    self:_Pump()
+    return future
+end
+
+function Features:_Await(future)
+    local limit = self.Config.Timeout * 3
+    while not future.Done and not self.Window.Destroyed and os.clock() - future.Created < limit do
+        task.wait(0.03)
+    end
+    if not future.Done and not future.Error then
+        future.Error = self.Window.Destroyed and "window was destroyed" or "download timed out"
+    end
+    return future
+end
+
+function Features:_WaitElements()
+    if self.ElementsReady then
+        return
+    end
+    local registry = self.Window.Elements
+    local started = os.clock()
+    while registry and registry.Active > 0 and os.clock() - started < self.Config.ElementsWait and not self.Window.Destroyed do
         task.wait(0.05)
     end
-    return sources, failures
+    self.ElementsReady = true
 end
 
 function Features:_Purge(key)
@@ -3857,7 +4052,7 @@ function Features:_Purge(key)
     end
 end
 
-function Features:_Run(job, body)
+function Features:_Run(job, chunk)
     if self.Window.Destroyed then
         return false, "window was destroyed", "run"
     end
@@ -3866,7 +4061,6 @@ function Features:_Run(job, body)
     local late = false
     local ok = false
     local result = nil
-    local stage = "run"
 
     task.spawn(function()
         Util.Owners[coroutine.running()] = job.Key
@@ -3875,12 +4069,6 @@ function Features:_Run(job, body)
             env.Windows = window
             env.Library = Library
             env.Librarys = Library
-            local header = "local Window, Library = ...; local Windows, Librarys = Window, Library; "
-            local chunk, compileError = loadstring(Util.Prepare(body, header))
-            if not chunk then
-                stage = "compile"
-                error(compileError, 0)
-            end
             return chunk(window, Library)
         end)
         ok = success
@@ -3913,7 +4101,7 @@ function Features:_Run(job, body)
     else
         self:_Purge(job.Key)
     end
-    return ok, result, stage
+    return ok, result, "run"
 end
 
 function Features:_FindLoaded(name)
@@ -3937,39 +4125,36 @@ function Features:_FindLoaded(name)
     return nil
 end
 
-function Features:_Process(job, body, failure)
-    local attempts = self.Config.LoadAttempts
-    for attempt = 1, attempts do
-        if self.Window.Destroyed then
-            return false, "window was destroyed"
-        end
-        local missing = false
-        if not body then
-            body, failure = self:_Download(job)
-            missing = not body and string.find(tostring(failure), "404", 1, true) ~= nil
-        end
-        if body then
-            local ok, result, stage = self:_Run(job, body)
-            if ok then
+function Features:_Finish(job, future, options)
+    self:_Await(future)
+    if self.Downloads[job.Key] == future then
+        self.Downloads[job.Key] = nil
+    end
+
+    if not future.Chunk then
+        if job.Guess and job.Origin and not self.Window.Destroyed then
+            local again = self:_Resolve(job.Origin, true)
+            if again and #again > 0 and not again[1].Guess and again[1].Key ~= job.Key then
+                local outcomes = self:_LoadJobs(again, options, true)
+                for _, outcome in ipairs(outcomes) do
+                    if not outcome.Success then
+                        return false, outcome.Error
+                    end
+                end
                 return true
             end
-            failure = tostring(result)
-            if stage ~= "compile" then
-                return false, failure
-            end
-            body = nil
         end
-        if missing then
-            break
-        end
-        if attempt < attempts then
-            task.wait(attempt)
-        end
+        return false, future.Error
     end
-    return false, tostring(failure or "download timed out")
+
+    local ok, result = self:_Run(job, future.Chunk)
+    if ok then
+        return true
+    end
+    return false, tostring(result)
 end
 
-function Features:_LoadJobs(jobs, options)
+function Features:_LoadJobs(jobs, options, quiet)
     local reload = type(options) == "table" and options.Reload == true
     local outcomes = {}
     local pending = {}
@@ -3982,10 +4167,9 @@ function Features:_LoadJobs(jobs, options)
             duplicate[i] = first[job.Key]
         else
             first[job.Key] = i
-            local waited = 0
-            while self.Loading[job.Key] and waited < self.Config.Timeout do
+            local waited = os.clock()
+            while self.Loading[job.Key] and os.clock() - waited < self.Config.Timeout do
                 task.wait(0.05)
-                waited = waited + 0.05
             end
             if self.Loading[job.Key] then
                 outcomes[i].Error = "still loading"
@@ -4001,33 +4185,27 @@ function Features:_LoadJobs(jobs, options)
         end
     end
 
-    local list = {}
-    for _, i in ipairs(pending) do
-        list[#list + 1] = jobs[i]
+    local futures = {}
+    for position, i in ipairs(pending) do
+        futures[position] = self:_Start(jobs[i], reload)
     end
 
-    local sources, failures = {}, {}
-    if #list > 0 then
-        local downloaded, result, reasons = pcall(self._DownloadAll, self, list)
-        if downloaded then
-            sources, failures = result, reasons
-        else
-            for position = 1, #list do
-                failures[position] = tostring(result)
-            end
-        end
+    if #pending > 0 then
+        self:_WaitElements()
     end
 
     for position, i in ipairs(pending) do
         local job = jobs[i]
-        local handled, success, failure = pcall(self._Process, self, job, sources[position], failures[position])
+        local handled, success, failure = pcall(self._Finish, self, job, futures[position], options)
         self.Loading[job.Key] = nil
         if handled and success then
             outcomes[i].Success = true
         else
             local message = handled and failure or success
             outcomes[i].Error = tostring(message or "unknown error")
-            Report("Feature failed", job.Name .. ": " .. outcomes[i].Error)
+            if not quiet then
+                Report("Feature failed", job.Name .. ": " .. outcomes[i].Error)
+            end
         end
     end
 
@@ -4112,6 +4290,25 @@ function Features:LoadAll(options)
     return results
 end
 
+function Features:Preload(list)
+    if self.Window.Destroyed or type(list) ~= "table" then
+        return false
+    end
+    task.spawn(function()
+        for _, name in ipairs(list) do
+            local jobs = self:_Resolve(name)
+            if jobs then
+                for _, job in ipairs(jobs) do
+                    if not self.Loaded[job.Key] then
+                        self:_Start(job, false)
+                    end
+                end
+            end
+        end
+    end)
+    return true
+end
+
 function Features:Unload(name)
     local key = self:_FindLoaded(name)
     if not key then
@@ -4176,7 +4373,9 @@ function Features:List()
 end
 
 function Features:Refresh()
-    return self:_LoadIndex(true) ~= nil
+    local before = self.IndexStamp
+    self:_LoadIndex(true)
+    return self.IndexStamp ~= before
 end
 
 function Features:SetSource(url)
@@ -4187,8 +4386,11 @@ function Features:SetSource(url)
     end
     self.Source = source
     self.Index = nil
+    self.IndexToken = self.IndexToken + 1
+    self.IndexLoading = false
     self.IndexFailed = 0
     self.IndexStamp = 0
+    self.Downloads = {}
     return true
 end
 
@@ -5018,6 +5220,10 @@ function Window:LoadAllFeatures(options)
     return self.Features:LoadAll(options)
 end
 
+function Window:PreloadFeatures(list)
+    return self.Features:Preload(list)
+end
+
 function Window:UnloadFeature(name)
     return self.Features:Unload(name)
 end
@@ -5124,6 +5330,7 @@ function Library:CreateWindow(config)
     window.Gui.Enabled = true
     window.ToggleGui.Enabled = true
     window.Elements:Load()
+    window.Features:Warm()
     return window
 end
 
@@ -5149,6 +5356,7 @@ local FEATURE_METHODS = {
     "LoadFeature",
     "LoadFeatures",
     "LoadAllFeatures",
+    "PreloadFeatures",
     "UnloadFeature",
     "UnloadAllFeatures",
     "GetLoadedFeatures",
