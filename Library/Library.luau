@@ -3654,6 +3654,7 @@ function Features.new(window)
     self.Watched = {}
     self.WatchAll = false
     self.Watching = false
+    self.Active = {}
     self.Source = Source.Build(Config.Repo, Config.Branch, Config.FeaturesPath)
     self.Config = {
         Retries = 3,
@@ -3672,7 +3673,8 @@ function Features.new(window)
         PreloadTtl = 90,
         AutoWatch = true,
         WatchInterval = 20,
-        WatchBlind = 120
+        WatchBlind = 120,
+        ReloadGuard = 60
     }
     return self
 end
@@ -4298,6 +4300,44 @@ function Features:_Purge(key)
     end
 end
 
+function Features:_Count()
+    local counts = {}
+    for _, tab in ipairs(self.Window.Tabs) do
+        for _, element in ipairs(tab.Elements) do
+            if not element.Destroyed then
+                local owner = element.Owner or "?"
+                counts[owner] = (counts[owner] or 0) + 1
+            end
+        end
+    end
+    return counts
+end
+
+function Features:_Audit(job, before)
+    local window = self.Window
+    if window.Destroyed or Library.Window ~= window then
+        warn("[EcoHub] " .. tostring(job.Name) .. " replaced or destroyed the window while loading")
+        return
+    end
+    local after = self:_Count()
+    for owner, count in pairs(before) do
+        local left = after[owner] or 0
+        if owner ~= job.Key and left < count then
+            warn("[EcoHub] " .. tostring(job.Name) .. " removed " .. tostring(count - left) .. " element(s) of " .. tostring(owner))
+        end
+    end
+end
+
+function Features:Busy(limit)
+    local now = os.clock()
+    for key, started in pairs(self.Active) do
+        if now - started <= limit then
+            return key
+        end
+    end
+    return nil
+end
+
 function Features:_Run(job, chunk)
     if self.Window.Destroyed then
         return false, "window was destroyed", "run"
@@ -4307,6 +4347,9 @@ function Features:_Run(job, chunk)
     local late = false
     local ok = false
     local result = nil
+    local before = self:_Count()
+
+    self.Active[job.Key] = os.clock()
 
     task.spawn(function()
         Util.Owners[coroutine.running()] = job.Key
@@ -4320,6 +4363,7 @@ function Features:_Run(job, chunk)
         ok = success
         result = value
         finished = true
+        self.Active[job.Key] = nil
         if late and not success then
             Report("Feature failed", job.Name .. ": " .. tostring(value))
         end
@@ -4338,6 +4382,8 @@ function Features:_Run(job, chunk)
         ok = true
         result = nil
     end
+
+    self:_Audit(job, before)
 
     if ok then
         self.Loaded[job.Key] = {Name = job.Name, Path = job.Path, Key = job.Key}
@@ -5664,6 +5710,33 @@ local function removePrevious()
     env.EcoHubPanel = nil
     env.EcoHubElements = nil
     env.EcoHubLibrary = nil
+end
+
+local function reusePrevious()
+    local previous = env.EcoHubLibrary
+    if type(previous) ~= "table" then
+        return nil
+    end
+    local oldWindow = rawget(previous, "Window")
+    if type(oldWindow) ~= "table" or oldWindow.Destroyed then
+        return nil
+    end
+    local features = oldWindow.Features
+    if type(features) ~= "table" or type(features.Busy) ~= "function" then
+        return nil
+    end
+    local limit = type(oldWindow.FeatureConfig) == "table" and oldWindow.FeatureConfig.ReloadGuard or 60
+    local busy = features:Busy(limit)
+    if busy then
+        warn("[EcoHub] library reload ignored while feature " .. tostring(busy) .. " is loading")
+        return previous
+    end
+    return nil
+end
+
+local reused = reusePrevious()
+if reused then
+    return reused
 end
 
 removePrevious()
