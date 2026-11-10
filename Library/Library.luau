@@ -1,11 +1,3 @@
-do
-    local genv = getgenv and getgenv() or _G
-    local current = genv.EcoHubLibrary
-    if current and current.Window and not current.Window.Destroyed and not genv.EcoHubReload then
-        return current
-    end
-end
-
 -- // Serviços
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -2194,6 +2186,7 @@ function ElementRegistry:_LoadRound(files, optional)
     local loaded = 0
     local retryable = 0
     local progress = os.clock()
+    local finished = {}
 
     local function worker()
         while not self.Destroyed do
@@ -2203,8 +2196,10 @@ function ElementRegistry:_LoadRound(files, optional)
                 break
             end
             local ok, permanent, broken = self:_LoadFile(job.File, optional)
+            finished[job.Id] = true
             if ok then
                 loaded = loaded + 1
+                self.Files[job.Id] = true
                 self.Attempts[job.Id] = nil
             elseif permanent then
                 self.Files[job.Id] = "missing"
@@ -2230,6 +2225,13 @@ function ElementRegistry:_LoadRound(files, optional)
 
     while running > 0 and os.clock() - progress < Config.LoadTimeout and not self.Destroyed do
         task.wait(0.1)
+    end
+
+    for _, job in ipairs(queue) do
+        if not finished[job.Id] and self.Files[job.Id] == true then
+            self.Files[job.Id] = nil
+            retryable = retryable + 1
+        end
     end
     return loaded, #queue, retryable
 end
@@ -2336,6 +2338,20 @@ function ElementRegistry:_HasPending()
     return next(self.Pending) ~= nil
 end
 
+function ElementRegistry:_PendingNames()
+    local names = {}
+    for _, queue in pairs(self.Pending) do
+        for _, job in ipairs(queue) do
+            local name = tostring(job.Element.Type)
+            if not job.Element.Destroyed and not table.find(names, name) then
+                names[#names + 1] = name
+            end
+        end
+    end
+    table.sort(names)
+    return names
+end
+
 function ElementRegistry:_Watch()
     if self.Watching or self.Destroyed then
         return
@@ -2392,6 +2408,13 @@ function ElementRegistry:_Load(names, force, quiet)
             end
         end
 
+        if not self.Destroyed and self:_HasPending() then
+            local extra = self:_PendingNames()
+            if #extra > 0 then
+                self:_LoadRound(extra, true)
+            end
+        end
+
         self.Active = self.Active - 1
         if self.Destroyed then
             return
@@ -2414,6 +2437,11 @@ Element.__index = Element
 
 function Element.NameOf(elementType, options)
     return tostring(options.title or options.Title or options.name or options.Name or options.Text or options.Label or elementType)
+end
+
+function Element.KeyOf(name)
+    local key = string.gsub(tostring(name), "%d+%s*[dhms]%f[%A]", "#")
+    return key
 end
 
 function Element.new(contentSection, elementType, options)
@@ -2472,6 +2500,7 @@ function Element.new(contentSection, elementType, options)
 
     self.Type = elementType
     self.Name = name
+    self.Key = Element.KeyOf(name)
     self.Group = contentSection.Name
     self.Description = description
     self.SearchText = ""
@@ -2735,14 +2764,16 @@ function ContentSection:AddElement(elementType, options)
 
     local owner = Util.Owners[coroutine.running()]
     local name = Element.NameOf(elementType, options)
+    local key = Element.KeyOf(name)
+    local elements = self.Tab.Elements
     local order = nil
-    for _, existing in ipairs(self.Tab.Elements) do
-        if existing.Section == self and existing.Type == elementType and existing.Name == name
-            and existing.Owner == owner and not existing.Destroyed then
+    for index = #elements, 1, -1 do
+        local existing = elements[index]
+        if existing and not existing.Destroyed and existing.Section == self and existing.Type == elementType and existing.Key == key
+            and (existing.Owner == owner or existing.Owner == nil or owner == nil) then
             order = existing.Container.LayoutOrder
+            self.Used[existing.Name] = math.max((self.Used[existing.Name] or 1) - 1, 0)
             existing:Destroy()
-            self.Used[name] = math.max((self.Used[name] or 1) - 1, 0)
-            break
         end
     end
 
@@ -3528,13 +3559,16 @@ function Features.new(window)
     self.Index = nil
     self.IndexLoading = false
     self.IndexFailed = 0
+    self.IndexStamp = 0
     self.Source = Source.Build(Config.Repo, Config.Branch, Config.FeaturesPath)
     self.Config = {
         Retries = 3,
         MaxParallel = 4,
         MaxSize = 1048576,
         Timeout = 45,
-        RunTimeout = 15
+        RunTimeout = 15,
+        LoadAttempts = 3,
+        IndexRefresh = 20
     }
     return self
 end
@@ -3652,6 +3686,7 @@ function Features:_LoadIndex(force)
     if ok and index then
         self.Index = index
         self.IndexFailed = 0
+        self.IndexStamp = os.clock()
     else
         if not ok then
             Report("Feature index failed", index)
@@ -3687,6 +3722,24 @@ function Features:_Job(rel)
     }
 end
 
+function Features:_Lookup(index, lowered)
+    local rel = index.ByPath[lowered] or index.ByStem[lowered]
+    if rel then
+        return {self:_Job(rel)}
+    end
+    if index.Folders[lowered] then
+        local jobs = {}
+        local folder = lowered .. "/"
+        for _, file in ipairs(index.Files) do
+            if string.sub(string.lower(file), 1, #folder) == folder then
+                jobs[#jobs + 1] = self:_Job(file)
+            end
+        end
+        return jobs
+    end
+    return nil
+end
+
 function Features:_Resolve(name)
     local original = string.gsub(tostring(name), "^%s+", "")
     original = string.gsub(original, "%s+$", "")
@@ -3706,19 +3759,18 @@ function Features:_Resolve(name)
 
     local index = self:_LoadIndex()
     if index then
-        local rel = index.ByPath[lowered] or index.ByStem[lowered]
-        if rel then
-            return {self:_Job(rel)}
+        local jobs = self:_Lookup(index, lowered)
+        if jobs then
+            return jobs
         end
-        if index.Folders[lowered] then
-            local jobs = {}
-            local folder = lowered .. "/"
-            for _, file in ipairs(index.Files) do
-                if string.sub(string.lower(file), 1, #folder) == folder then
-                    jobs[#jobs + 1] = self:_Job(file)
+        if os.clock() - self.IndexStamp > self.Config.IndexRefresh then
+            local fresh = self:_LoadIndex(true)
+            if fresh then
+                jobs = self:_Lookup(fresh, lowered)
+                if jobs then
+                    return jobs
                 end
             end
-            return jobs
         end
         if string.sub(original, -1) == "/" then
             return nil, "not found in " .. self.Source.Path
@@ -3794,15 +3846,27 @@ function Features:_DownloadAll(jobs)
     return sources, failures
 end
 
+function Features:_Purge(key)
+    for _, tab in ipairs(self.Window.Tabs) do
+        for index = #tab.Elements, 1, -1 do
+            local element = tab.Elements[index]
+            if element and element.Owner == key then
+                element:Destroy()
+            end
+        end
+    end
+end
+
 function Features:_Run(job, body)
     if self.Window.Destroyed then
-        return false, "window was destroyed"
+        return false, "window was destroyed", "run"
     end
     local window = self.Window
     local finished = false
     local late = false
     local ok = false
     local result = nil
+    local stage = "run"
 
     task.spawn(function()
         Util.Owners[coroutine.running()] = job.Key
@@ -3814,6 +3878,7 @@ function Features:_Run(job, body)
             local header = "local Window, Library = ...; local Windows, Librarys = Window, Library; "
             local chunk, compileError = loadstring(Util.Prepare(body, header))
             if not chunk then
+                stage = "compile"
                 error(compileError, 0)
             end
             return chunk(window, Library)
@@ -3833,7 +3898,7 @@ function Features:_Run(job, body)
 
     if not finished then
         if window.Destroyed then
-            return false, "window was destroyed"
+            return false, "window was destroyed", "run"
         end
         late = true
         ok = true
@@ -3845,8 +3910,10 @@ function Features:_Run(job, body)
         if not table.find(self.Order, job.Key) then
             self.Order[#self.Order + 1] = job.Key
         end
+    else
+        self:_Purge(job.Key)
     end
-    return ok, result
+    return ok, result, stage
 end
 
 function Features:_FindLoaded(name)
@@ -3868,6 +3935,38 @@ function Features:_FindLoaded(name)
         end
     end
     return nil
+end
+
+function Features:_Process(job, body, failure)
+    local attempts = self.Config.LoadAttempts
+    for attempt = 1, attempts do
+        if self.Window.Destroyed then
+            return false, "window was destroyed"
+        end
+        local missing = false
+        if not body then
+            body, failure = self:_Download(job)
+            missing = not body and string.find(tostring(failure), "404", 1, true) ~= nil
+        end
+        if body then
+            local ok, result, stage = self:_Run(job, body)
+            if ok then
+                return true
+            end
+            failure = tostring(result)
+            if stage ~= "compile" then
+                return false, failure
+            end
+            body = nil
+        end
+        if missing then
+            break
+        end
+        if attempt < attempts then
+            task.wait(attempt)
+        end
+    end
+    return false, tostring(failure or "download timed out")
 end
 
 function Features:_LoadJobs(jobs, options)
@@ -3921,25 +4020,14 @@ function Features:_LoadJobs(jobs, options)
 
     for position, i in ipairs(pending) do
         local job = jobs[i]
-        local body = sources[position]
-        local handled, failure = pcall(function()
-            if body then
-                local ok, result = self:_Run(job, body)
-                if ok then
-                    outcomes[i].Success = true
-                else
-                    outcomes[i].Error = tostring(result)
-                    Report("Feature failed", job.Name .. ": " .. tostring(result))
-                end
-            else
-                outcomes[i].Error = failures[position] or "download timed out"
-                Report("Feature failed", job.Name .. ": " .. tostring(outcomes[i].Error))
-            end
-        end)
+        local handled, success, failure = pcall(self._Process, self, job, sources[position], failures[position])
         self.Loading[job.Key] = nil
-        if not handled then
-            outcomes[i].Error = tostring(failure)
-            Report("Feature failed", job.Name .. ": " .. tostring(failure))
+        if handled and success then
+            outcomes[i].Success = true
+        else
+            local message = handled and failure or success
+            outcomes[i].Error = tostring(message or "unknown error")
+            Report("Feature failed", job.Name .. ": " .. outcomes[i].Error)
         end
     end
 
@@ -4042,16 +4130,10 @@ function Features:Unload(name)
         if not ok then
             Report("Feature failed", "unload of " .. entry.Name .. ": " .. tostring(failure))
         end
+        env[entry.Name .. "Unload"] = nil
     end
 
-    for _, tab in ipairs(self.Window.Tabs) do
-        for i = #tab.Elements, 1, -1 do
-            local element = tab.Elements[i]
-            if element and element.Owner == key then
-                element:Destroy()
-            end
-        end
-    end
+    self:_Purge(key)
     return true
 end
 
@@ -4106,6 +4188,7 @@ function Features:SetSource(url)
     self.Source = source
     self.Index = nil
     self.IndexFailed = 0
+    self.IndexStamp = 0
     return true
 end
 
@@ -5094,17 +5177,32 @@ for _, method in ipairs(FEATURE_METHODS) do
 end
 
 -- // Inicialização
-if type(env.EcoHubDestroy) == "function" then
-    pcall(env.EcoHubDestroy)
-end
-for _, name in ipairs({"EcoHub", "EcoHubToggle", "EcoHubNotification"}) do
-    local old = PlayerGui:FindFirstChild(name)
-    if old then
-        old:Destroy()
+local function removePrevious()
+    local previous = env.EcoHubLibrary
+    if type(env.EcoHubDestroy) == "function" then
+        pcall(env.EcoHubDestroy)
     end
+    if type(previous) == "table" then
+        local oldWindow = rawget(previous, "Window")
+        if type(oldWindow) == "table" and not oldWindow.Destroyed and type(oldWindow.Destroy) == "function" then
+            pcall(oldWindow.Destroy, oldWindow)
+        end
+    end
+    for _, name in ipairs({"EcoHub", "EcoHubToggle", "EcoHubNotification"}) do
+        for _, child in ipairs(PlayerGui:GetChildren()) do
+            if child.Name == name then
+                pcall(child.Destroy, child)
+            end
+        end
+    end
+    env.EcoHubDestroy = nil
+    env.EcoHubPanel = nil
+    env.EcoHubElements = nil
+    env.EcoHubLibrary = nil
 end
 
-env.EcoHubReload = nil
+removePrevious()
+
 env.EcoHubLibrary = Library
 Icons.Load()
 
