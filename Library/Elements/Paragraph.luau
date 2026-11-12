@@ -74,8 +74,6 @@ Elements.Register("Paragraph", function(section, options)
         TILT_MIN = -15,
         TILT_MAX = 30,
         RESUME = 2,
-
-        PRELOAD = 1.2,
         UPDATE = 3,
         WORD_MAX = 30,
     }
@@ -1210,7 +1208,7 @@ Elements.Register("Paragraph", function(section, options)
         return nil
     end
 
-    function H.prepareHolder(source, temporary, token)
+    function H.prepareHolder(source, temporary)
         local clone = temporary and source or H.cloneSource(source)
         if not clone then return nil end
 
@@ -1260,7 +1258,7 @@ Elements.Register("Paragraph", function(section, options)
             return H.clonePrepared(CACHE.templates[cacheKey], tint)
         end
 
-        local holder, boxSize, isCharacter = H.prepareHolder(source, temporary, token)
+        local holder, boxSize, isCharacter = H.prepareHolder(source, temporary)
         if not holder then return nil end
 
         if cacheKey then
@@ -1480,16 +1478,6 @@ Elements.Register("Paragraph", function(section, options)
         return nil, H.thumbUrl(assetId, "Asset"), false
     end
 
-    function H.resolveImage(config)
-        local target = config.target
-        if config.type == "thumbnail" then
-            local id = H.assetId(target)
-            if not id then return nil, nil end
-            return H.thumbUrl(id, config.thumbType), id
-        end
-        return H.normalizeImage(target), H.assetId(target)
-    end
-
     function H.showImage(image, token, assetId, tint)
         if not image or image == "" then return end
         if S.destroyed or S.holoToken ~= token then return end
@@ -1515,8 +1503,6 @@ Elements.Register("Paragraph", function(section, options)
                 parts[#parts + 1] = "S" .. child.ShirtTemplate
             elseif child:IsA("Pants") then
                 parts[#parts + 1] = "P" .. child.PantsTemplate
-            elseif child:IsA("BodyColors") then
-                parts[#parts + 1] = "C" .. tostring(child.HeadColor3)
             end
         end
         table.sort(parts)
@@ -1823,7 +1809,6 @@ Elements.Register("Paragraph", function(section, options)
         local unchanged = previous ~= nil
             and updated ~= nil
             and previous.target == updated.target
-            and previous.type == updated.type
             and previous.live == updated.live
             and previous.nonce == updated.nonce
             and not H.idle()
@@ -1854,7 +1839,7 @@ Elements.Register("Paragraph", function(section, options)
                 if key and not CACHE.templates[key] then
                     local ok, source, _, temporary = pcall(H.detectAutomaticSource, target)
                     if ok and source then
-                        local built, holder, boxSize, isCharacter = pcall(H.prepareHolder, source, temporary, S.holoToken)
+                        local built, holder, boxSize, isCharacter = pcall(H.prepareHolder, source, temporary)
                         if built and holder then
                             CACHE.templates[key] = {
                                 template = holder,
@@ -1983,7 +1968,7 @@ Elements.Register("Paragraph", function(section, options)
                 return
             end
         end
-        S.status[#S.status + 1] = { name = name, value = value, max = tonumber(max)` }
+        S.status[#S.status + 1] = { name = name, value = value, max = tonumber(max) }
         local newIndex = #S.status
         S.rows[newIndex] = H.createStatRow(S.status[newIndex], newIndex)
         H.updateCount()
