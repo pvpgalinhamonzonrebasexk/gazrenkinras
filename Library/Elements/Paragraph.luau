@@ -1,3 +1,4 @@
+-- // Paragraph
 Elements.Register("Paragraph", function(section, options)
     options = type(options) == "table" and options or {}
 
@@ -58,6 +59,13 @@ Elements.Register("Paragraph", function(section, options)
         insert = game:GetService("InsertService"),
     }
 
+    local CACHE = {
+        templates = {},
+        images = {},
+        failed = {},
+        inflight = {},
+    }
+
     local fontBold = FONT_BOLD or Enum.Font.GothamBold
     local fontRegular = FONT or Enum.Font.Gotham
     local fontMedium = Enum.Font.GothamMedium
@@ -94,20 +102,20 @@ Elements.Register("Paragraph", function(section, options)
         TILT_MAX = 30,
         RESUME = 2,
 
-        ATTEMPTS = 3,
-        RETRY = 0.8,
-        PRELOAD = 10,
-        IMAGE_ALT = 3,
-        STABLE = 3,
-        STREAM = 2,
+        ATTEMPTS = 2,
+        RETRY = 0.2,
+        PRELOAD = 1.2,
+        IMAGE_ALT = 1.2,
+        STABLE = 0.6,
+        STREAM = 1,
         UPDATE = 3,
         WORD_MAX = 30,
         HIDDEN_ALPHA = 0.99,
     }
 
     local TI = {
-        FADE = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        BAR = TweenInfo.new(0.45, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+        FADE = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        BAR = TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
     }
 
     local S = {
@@ -128,7 +136,6 @@ Elements.Register("Paragraph", function(section, options)
         distance = 0,
         light = Vector3.new(0.3, -0.5, 1),
         signature = nil,
-        images = {},
         version = 0,
         reloadPending = false,
         status = {},
@@ -383,7 +390,6 @@ Elements.Register("Paragraph", function(section, options)
         Padding = UDim.new(0, 0),
     }, U.content)
 
-    -- 1. TOPO: Título, Descrição e Tag (Fora do Holograma)
     U.topInfo = H.new("Frame", {
         Name = "TopInfo",
         Size = UDim2.new(1, 0, 0, 0),
@@ -397,8 +403,7 @@ Elements.Register("Paragraph", function(section, options)
         PaddingBottom = UDim.new(0, K.PAD),
         PaddingLeft = UDim.new(0, K.PAD + 2),
         PaddingRight = UDim.new(0, K.PAD + 2),
-    }, U.topInfoPad)
-    U.topInfoPad.Parent = U.topInfo
+    }, U.topInfo)
 
     U.header = H.new("Frame", {
         Name = "Header",
@@ -505,7 +510,6 @@ Elements.Register("Paragraph", function(section, options)
         Visible = data.description ~= "",
     }, U.textFrame)
 
-    -- 2. MEIO: Área do Holograma (Mesma cor do Paragraph + Decoração de Borda)
     U.holoWrapper = H.new("Frame", {
         Name = "HologramWrapper",
         Size = UDim2.new(1, 0, 0, K.CARD_H),
@@ -530,7 +534,6 @@ Elements.Register("Paragraph", function(section, options)
     H.corner(U.holo, 10)
     H.stroke(U.holo, C.HoloBorder, 1, 0.25)
 
-    -- Gradiente igual ao do card para manter exatamente a mesma cor
     H.new("UIGradient", {
         Rotation = 90,
         Color = ColorSequence.new({
@@ -540,7 +543,6 @@ Elements.Register("Paragraph", function(section, options)
         }),
     }, U.holo)
 
-    -- Decoração de Borda (Cantoneiras / Brackets + Linhas de Grade Sutis)
     U.decor = H.new("Frame", {
         Name = "BorderDecor",
         Size = UDim2.new(1, 0, 1, 0),
@@ -548,7 +550,6 @@ Elements.Register("Paragraph", function(section, options)
         ZIndex = 4,
     }, U.holo)
 
-    -- Linha fina interna para profundidade
     local innerFrame = H.new("Frame", {
         Name = "InnerBorder",
         Size = UDim2.new(1, -8, 1, -8),
@@ -560,7 +561,6 @@ Elements.Register("Paragraph", function(section, options)
     H.corner(innerFrame, 7)
     H.stroke(innerFrame, C.CardStroke, 1, 0.55)
 
-    -- Cantoneiras (Corner Brackets)
     local function createBracket(name, anchor, pos, xDir, yDir)
         local holder = H.new("Frame", {
             Name = name,
@@ -599,7 +599,6 @@ Elements.Register("Paragraph", function(section, options)
     createBracket("BracketBL", Vector2.new(0, 1), UDim2.new(0, 6, 1, -6), 1, -1)
     createBracket("BracketBR", Vector2.new(1, 1), UDim2.new(1, -6, 1, -6), -1, -1)
 
-    -- Barras centrais decorativas nas bordas superior e inferior
     H.new("Frame", {
         Name = "TopTick",
         Size = UDim2.new(0, 36, 0, 2),
@@ -706,7 +705,6 @@ Elements.Register("Paragraph", function(section, options)
         ZIndex = 7,
     }, U.holo)
 
-    -- 3. BASE: Status / Barras de Progresso (Abaixo do Holograma)
     U.bottomInfo = H.new("Frame", {
         Name = "BottomInfo",
         Size = UDim2.new(1, 0, 0, 0),
@@ -822,7 +820,6 @@ Elements.Register("Paragraph", function(section, options)
         U.holoWrapper.Visible = hasHolo
         U.bottomInfo.Visible = hasStatus
 
-        -- Ajusta os paddings dinamicamente para manter o espaçamento limpo
         U.topInfoPad.PaddingBottom = UDim.new(0, (hasHolo or hasStatus) and 10 or K.PAD)
         U.holoWrapperPad.PaddingTop = UDim.new(0, hasHeader and 0 or K.PAD)
         U.holoWrapperPad.PaddingBottom = UDim.new(0, hasStatus and 10 or K.PAD)
@@ -1317,10 +1314,10 @@ Elements.Register("Paragraph", function(section, options)
             if S.destroyed or S.holoToken ~= token then
                 break
             end
-            if os.clock() - lastChange >= 0.6 then
+            if os.clock() - lastChange >= 0.25 then
                 break
             end
-            task.wait(0.2)
+            task.wait(0.08)
         end
         watcher:Disconnect()
     end
@@ -1359,21 +1356,58 @@ Elements.Register("Paragraph", function(section, options)
     end
 
     function H.preload(holder, token)
+        local assets = {}
+        for _, descendant in ipairs(holder:GetDescendants()) do
+            if descendant:IsA("MeshPart") then
+                if descendant.MeshId ~= "" then
+                    assets[#assets + 1] = descendant.MeshId
+                end
+                if descendant.TextureID ~= "" then
+                    assets[#assets + 1] = descendant.TextureID
+                end
+            elseif descendant:IsA("SpecialMesh") then
+                if descendant.MeshId ~= "" then
+                    assets[#assets + 1] = descendant.MeshId
+                end
+                if descendant.TextureId ~= "" then
+                    assets[#assets + 1] = descendant.TextureId
+                end
+            elseif descendant:IsA("Decal") or descendant:IsA("Texture") then
+                if descendant.Texture ~= "" then
+                    assets[#assets + 1] = descendant.Texture
+                end
+            elseif descendant:IsA("Shirt") and descendant.ShirtTemplate ~= "" then
+                assets[#assets + 1] = descendant.ShirtTemplate
+            elseif descendant:IsA("Pants") and descendant.PantsTemplate ~= "" then
+                assets[#assets + 1] = descendant.PantsTemplate
+            elseif descendant:IsA("ShirtGraphic") and descendant.Graphic ~= "" then
+                assets[#assets + 1] = descendant.Graphic
+            elseif descendant:IsA("SurfaceAppearance") then
+                if descendant.ColorMap ~= "" then assets[#assets + 1] = descendant.ColorMap end
+                if descendant.NormalMap ~= "" then assets[#assets + 1] = descendant.NormalMap end
+                if descendant.MetalnessMap ~= "" then assets[#assets + 1] = descendant.MetalnessMap end
+                if descendant.RoughnessMap ~= "" then assets[#assets + 1] = descendant.RoughnessMap end
+            end
+        end
+
+        if #assets == 0 then return end
+
         local finished = false
         task.spawn(function()
             pcall(function()
-                Svc.content:PreloadAsync({ holder })
+                Svc.content:PreloadAsync(assets)
             end)
             finished = true
         end)
+
         local started = os.clock()
         while not finished and os.clock() - started < K.PRELOAD do
             if S.destroyed or S.holoToken ~= token then return end
-            task.wait(0.1)
+            task.wait(0.03)
         end
     end
 
-    function H.buildHolder(source, tint, token, temporary)
+    function H.prepareHolder(source, temporary, token)
         if not temporary and not source:FindFirstChildOfClass("Humanoid") then
             H.waitStable(source, token)
         end
@@ -1389,7 +1423,6 @@ Elements.Register("Paragraph", function(section, options)
         end
 
         local parts, isCharacter = H.collectParts(holder)
-
         if not isCharacter then
             parts = H.dropInvisible(parts)
         end
@@ -1399,16 +1432,10 @@ Elements.Register("Paragraph", function(section, options)
             return nil
         end
 
-        H.tuneParts(parts, tint)
+        H.tuneParts(parts, nil)
 
         if isCharacter then
             H.resetPose(holder)
-        end
-
-        H.preload(holder, token)
-        if S.destroyed or S.holoToken ~= token then
-            holder:Destroy()
-            return nil
         end
 
         local boxCFrame, boxSize = H.measure(holder)
@@ -1419,6 +1446,53 @@ Elements.Register("Paragraph", function(section, options)
 
         holder.WorldPivot = boxCFrame
         holder:PivotTo(CFrame.new())
+        return holder, boxSize, isCharacter
+    end
+
+    function H.clonePrepared(entry, tint)
+        local clone = entry.template:Clone()
+        if tint then
+            for _, descendant in ipairs(clone:GetDescendants()) do
+                if descendant:IsA("BasePart") then
+                    descendant.Color = descendant.Color:Lerp(tint, 0.4)
+                end
+            end
+        end
+        return clone, entry.size, entry.isCharacter
+    end
+
+    function H.buildHolder(source, tint, token, temporary, cacheKey)
+        if cacheKey and CACHE.templates[cacheKey] then
+            return H.clonePrepared(CACHE.templates[cacheKey], tint)
+        end
+
+        local holder, boxSize, isCharacter = H.prepareHolder(source, temporary, token)
+        if not holder then return nil end
+
+        if cacheKey then
+            local template = holder:Clone()
+            CACHE.templates[cacheKey] = {
+                template = template,
+                size = boxSize,
+                isCharacter = isCharacter,
+            }
+            task.spawn(function()
+                pcall(Svc.content.PreloadAsync, Svc.content, { template })
+            end)
+        else
+            task.spawn(function()
+                H.preload(holder, token)
+            end)
+        end
+
+        if tint then
+            for _, descendant in ipairs(holder:GetDescendants()) do
+                if descendant:IsA("BasePart") then
+                    descendant.Color = descendant.Color:Lerp(tint, 0.4)
+                end
+            end
+        end
+
         return holder, boxSize, isCharacter
     end
 
@@ -1540,6 +1614,20 @@ Elements.Register("Paragraph", function(section, options)
         end
     end
 
+    function H.cacheKeyFor(target, kind)
+        if typeof(target) == "Instance" then
+            return target
+        end
+        local assetId = H.assetId(target)
+        if assetId then
+            return (kind or "any") .. ":" .. assetId
+        end
+        if type(target) == "string" or type(target) == "number" then
+            return (kind or "any") .. ":" .. tostring(target)
+        end
+        return nil
+    end
+
     function H.resolveSource(target, kind)
         if type(target) == "string" then
             local found = H.findByPath(target)
@@ -1589,6 +1677,10 @@ Elements.Register("Paragraph", function(section, options)
             return nil, nil, false
         end
 
+        if CACHE.failed[assetId] then
+            return nil, CACHE.images[assetId] or H.thumbUrl(assetId, "Asset"), false
+        end
+
         local objectsOk, objects = pcall(function()
             return game:GetObjects("rbxassetid://" .. assetId)
         end)
@@ -1600,6 +1692,7 @@ Elements.Register("Paragraph", function(section, options)
             local texture = H.findTexture(objects)
             H.destroyAll(objects)
             if texture and texture ~= "" then
+                CACHE.images[assetId] = texture
                 return nil, texture, false
             end
         end
@@ -1611,10 +1704,10 @@ Elements.Register("Paragraph", function(section, options)
             return meshPart, nil, true
         end
 
-        if kind == "model" then
-            return nil, H.thumbUrl(assetId, "Asset"), false
-        end
-        return nil, "rbxassetid://" .. assetId, false
+        CACHE.failed[assetId] = true
+        local thumb = kind == "model" and H.thumbUrl(assetId, "Asset") or ("rbxassetid://" .. assetId)
+        CACHE.images[assetId] = thumb
+        return nil, thumb, false
     end
 
     function H.resolveImage(config)
@@ -1654,7 +1747,7 @@ Elements.Register("Paragraph", function(section, options)
         end
 
         local key = "img:" .. id
-        local cached = S.images[key]
+        local cached = CACHE.images[key]
         if cached then
             return cached, id
         end
@@ -1671,7 +1764,7 @@ Elements.Register("Paragraph", function(section, options)
             end
         end
 
-        S.images[key] = resolved
+        CACHE.images[key] = resolved
         return resolved, id
     end
 
@@ -1688,7 +1781,7 @@ Elements.Register("Paragraph", function(section, options)
         local started = os.clock()
         while not U.fallback.IsLoaded and os.clock() - started < K.PRELOAD do
             if S.destroyed or S.holoToken ~= token then return end
-            task.wait(0.1)
+            task.wait(0.03)
         end
         if S.destroyed or S.holoToken ~= token then return end
 
@@ -1699,7 +1792,7 @@ Elements.Register("Paragraph", function(section, options)
                 started = os.clock()
                 while not U.fallback.IsLoaded and os.clock() - started < K.IMAGE_ALT do
                     if S.destroyed or S.holoToken ~= token then return end
-                    task.wait(0.1)
+                    task.wait(0.03)
                 end
                 if S.destroyed or S.holoToken ~= token then return end
             end
@@ -1755,7 +1848,7 @@ Elements.Register("Paragraph", function(section, options)
 
         local token = S.holoToken
         H.setBusy(token)
-        local ok, holder, size, isCharacter = pcall(H.buildHolder, source, config.tint, token, false)
+        local ok, holder, size, isCharacter = pcall(H.buildHolder, source, config.tint, token, false, nil)
         if S.busy == token then
             H.setBusy(nil)
         end
@@ -1779,7 +1872,7 @@ Elements.Register("Paragraph", function(section, options)
     function H.scheduleReload()
         if S.reloadPending or S.destroyed then return end
         S.reloadPending = true
-        task.delay(0.6, function()
+        task.delay(0.4, function()
             S.reloadPending = false
             if not S.destroyed then
                 pcall(H.poll)
@@ -1833,7 +1926,15 @@ Elements.Register("Paragraph", function(section, options)
             return
         end
 
-        local knownImage = S.images[config.target]
+        local cacheKey = not config.live and H.cacheKeyFor(config.target, config.type) or nil
+        if cacheKey and CACHE.templates[cacheKey] then
+            local holder, size, isCharacter = H.clonePrepared(CACHE.templates[cacheKey], config.tint)
+            H.setBusy(nil)
+            H.mountHolder(holder, size, isCharacter)
+            return
+        end
+
+        local knownImage = CACHE.images[config.target]
         if knownImage then
             H.setBusy(nil)
             U.fallback.ImageColor3 = config.tint and Color3.new(1, 1, 1):Lerp(config.tint, 0.5) or Color3.new(1, 1, 1)
@@ -1871,7 +1972,7 @@ Elements.Register("Paragraph", function(section, options)
                         signature = H.signature(source)
                     end
 
-                    local ok, holder, size, isCharacter = pcall(H.buildHolder, source, config.tint, token, temporary)
+                    local ok, holder, size, isCharacter = pcall(H.buildHolder, source, config.tint, token, temporary, cacheKey)
 
                     if not (ok and holder) and temporary then
                         pcall(source.Destroy, source)
@@ -1894,7 +1995,7 @@ Elements.Register("Paragraph", function(section, options)
                     fallback = image
                     local key = config.target
                     if type(key) == "number" or type(key) == "string" then
-                        S.images[key] = image
+                        CACHE.images[key] = image
                     end
                     break
                 end
@@ -2114,6 +2215,45 @@ Elements.Register("Paragraph", function(section, options)
         H.layout()
     end
 
+    function data:PreloadHolograms(targets, kind)
+        if S.destroyed or type(targets) ~= "table" then return end
+        task.spawn(function()
+            for _, target in ipairs(targets) do
+                if S.destroyed then return end
+                local resolvedKind = H.kind(kind)
+                local key = H.cacheKeyFor(target, resolvedKind)
+                if key and not CACHE.templates[key] then
+                    local ok, source, _, temporary = pcall(H.resolveSource, target, resolvedKind)
+                    if ok and source then
+                        local built, holder, boxSize, isCharacter = pcall(H.prepareHolder, source, temporary, S.holoToken)
+                        if built and holder then
+                            CACHE.templates[key] = {
+                                template = holder,
+                                size = boxSize,
+                                isCharacter = isCharacter,
+                            }
+                            pcall(Svc.content.PreloadAsync, Svc.content, { holder })
+                        elseif temporary then
+                            pcall(source.Destroy, source)
+                        end
+                    end
+                end
+                task.wait()
+            end
+        end)
+    end
+
+    function data:ClearHologramCache()
+        for _, entry in pairs(CACHE.templates) do
+            if entry.template then
+                pcall(entry.template.Destroy, entry.template)
+            end
+        end
+        table.clear(CACHE.templates)
+        table.clear(CACHE.images)
+        table.clear(CACHE.failed)
+    end
+
     function data:SetCorners(corners)
         if S.destroyed then return end
         local config = H.ensureHologram()
@@ -2147,8 +2287,14 @@ Elements.Register("Paragraph", function(section, options)
 
     function data:Refresh()
         if S.destroyed or not data.hologram then return end
+        local key = H.cacheKeyFor(data.hologram.target, data.hologram.type)
+        if key and CACHE.templates[key] then
+            pcall(CACHE.templates[key].template.Destroy, CACHE.templates[key].template)
+            CACHE.templates[key] = nil
+        end
         H.clearHologram()
-        S.images = {}
+        table.clear(CACHE.images)
+        table.clear(CACHE.failed)
         H.load()
     end
 
