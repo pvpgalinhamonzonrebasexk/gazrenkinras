@@ -25,31 +25,6 @@ Elements.Register("Paragraph", function(section, options)
         White = Color3.fromRGB(255, 255, 255),
     }
 
-    local REMOVABLE = {
-        Script = true, LocalScript = true, ModuleScript = true, Sound = true,
-        ForceField = true, BillboardGui = true, SurfaceGui = true, ParticleEmitter = true,
-        Trail = true, Beam = true, Highlight = true, SelectionBox = true,
-        PointLight = true, SpotLight = true, SurfaceLight = true, Smoke = true,
-        Fire = true, Sparkles = true, Atmosphere = true, Sky = true, PostEffect = true,
-    }
-
-    local KIND_MAP = {
-        character = "character", player = "character", user = "character", avatar = "character",
-        item = "model", asset = "model", model = "model", mesh = "model",
-        accessory = "model", hat = "model", tool = "model",
-        image = "image", texture = "image", icon = "image", decal = "image", img = "image",
-        thumbnail = "thumbnail", thumb = "thumbnail",
-    }
-
-    local THUMB_TYPES = {
-        asset = "Asset", avatar = "Avatar", bust = "AvatarBust", avatarbust = "AvatarBust",
-        headshot = "AvatarHeadShot", avatarheadshot = "AvatarHeadShot",
-        bundle = "BundleThumbnail", bundlethumbnail = "BundleThumbnail",
-        game = "GameIcon", gameicon = "GameIcon", gamepass = "GamePass",
-        badge = "BadgeIcon", badgeicon = "BadgeIcon", group = "GroupIcon", groupicon = "GroupIcon",
-        outfit = "Outfit", product = "DeveloperProduct", developerproduct = "DeveloperProduct",
-    }
-
     local Svc = {
         players = Players or game:GetService("Players"),
         input = UserInputService or game:GetService("UserInputService"),
@@ -62,8 +37,6 @@ Elements.Register("Paragraph", function(section, options)
     local CACHE = {
         templates = {},
         images = {},
-        failed = {},
-        inflight = {},
     }
 
     local fontBold = FONT_BOLD or Enum.Font.GothamBold
@@ -102,15 +75,9 @@ Elements.Register("Paragraph", function(section, options)
         TILT_MAX = 30,
         RESUME = 2,
 
-        ATTEMPTS = 2,
-        RETRY = 0.2,
         PRELOAD = 1.2,
-        IMAGE_ALT = 1.2,
-        STABLE = 0.6,
-        STREAM = 1,
         UPDATE = 3,
         WORD_MAX = 30,
-        HIDDEN_ALPHA = 0.99,
     }
 
     local TI = {
@@ -254,32 +221,6 @@ Elements.Register("Paragraph", function(section, options)
             or text:match("[?&]id=(%d+)")
     end
 
-    function H.kind(kind)
-        if type(kind) ~= "string" then return nil end
-        return KIND_MAP[kind:lower()]
-    end
-
-    function H.thumbType(value)
-        if type(value) ~= "string" then return "Asset" end
-        return THUMB_TYPES[value:lower()] or "Asset"
-    end
-
-    function H.thumbUrl(id, thumbType)
-        return string.format("rbxthumb://type=%s&id=%s&w=420&h=420", H.thumbType(thumbType), tostring(id))
-    end
-
-    function H.isChar(kind)
-        return kind == "character"
-    end
-
-    function H.isImage(kind)
-        return kind == "image"
-    end
-
-    function H.isAsset(kind)
-        return kind == "model" or kind == "image" or kind == "thumbnail"
-    end
-
     function H.number(value)
         local number = tonumber(value)
         if not number then return tostring(value) end
@@ -311,8 +252,8 @@ Elements.Register("Paragraph", function(section, options)
         local speed = tonumber(config.speed or config.Speed)
         return {
             target = config.target or config.Target,
-            type = H.kind(config.type or config.Type),
-            thumbType = H.thumbType(config.thumbType or config.thumbnailType or config.thumb),
+            type = config.type or config.Type,
+            thumbType = config.thumbType or config.thumbnailType or config.thumb or "Asset",
             corners = H.copy(config.corners or config.info),
             rotate = config.rotate == true or config.Rotate == true,
             speed = speed or K.SPEED,
@@ -896,19 +837,9 @@ Elements.Register("Paragraph", function(section, options)
 
     function H.thumbValue(value)
         if type(value) == "table" then
-            local id, kind
-            local asset = value.asset or value.Asset
-            local user = value.user or value.User
-            if asset ~= nil then
-                id, kind = H.assetId(asset), "Asset"
-            elseif user ~= nil then
-                id, kind = H.assetId(user), "AvatarHeadShot"
-            else
-                id = H.assetId(value.id or value.Id)
-                kind = H.thumbType(value.type or value.Type)
-            end
+            local id = H.assetId(value.asset or value.Asset or value.id or value.Id)
             if not id then return nil end
-            return H.thumbUrl(id, kind)
+            return string.format("rbxthumb://type=Asset&id=%s&w=420&h=420", tostring(id))
         end
         if type(value) == "number" or type(value) == "string" then
             return value
@@ -1225,7 +1156,7 @@ Elements.Register("Paragraph", function(section, options)
         for _, descendant in ipairs(model:GetDescendants()) do
             if descendant:IsA("BasePart") then
                 parts[#parts + 1] = descendant
-            elseif REMOVABLE[descendant.ClassName] or descendant:IsA("PostEffect") then
+            elseif descendant:IsA("Script") or descendant:IsA("LocalScript") or descendant:IsA("ModuleScript") or descendant:IsA("Sound") or descendant:IsA("ParticleEmitter") or descendant:IsA("Trail") or descendant:IsA("Beam") or descendant:IsA("Highlight") or descendant:IsA("Light") or descendant:IsA("PostEffect") then
                 descendant:Destroy()
             end
         end
@@ -1253,20 +1184,6 @@ Elements.Register("Paragraph", function(section, options)
         end
     end
 
-    function H.dropInvisible(parts)
-        local kept = {}
-        for _, part in ipairs(parts) do
-            if part.Parent then
-                if part.Transparency >= K.HIDDEN_ALPHA then
-                    part:Destroy()
-                else
-                    kept[#kept + 1] = part
-                end
-            end
-        end
-        return kept
-    end
-
     function H.measure(holder)
         local root = holder:FindFirstChild("HumanoidRootPart")
         if root and root:IsA("BasePart") then
@@ -1285,134 +1202,15 @@ Elements.Register("Paragraph", function(section, options)
         return boxCFrame, boxSize
     end
 
-    function H.waitStable(source, token)
-        if not workspace.StreamingEnabled or not source:IsDescendantOf(workspace) then
-            return
-        end
-
-        pcall(function()
-            local localPlayer = Svc.players.LocalPlayer
-            if localPlayer then
-                local position
-                if source:IsA("Model") then
-                    position = source:GetPivot().Position
-                elseif source:IsA("BasePart") then
-                    position = source.Position
-                end
-                if position then
-                    localPlayer:RequestStreamAroundAsync(position, K.STREAM)
-                end
-            end
-        end)
-
-        local lastChange = os.clock()
-        local watcher = source.DescendantAdded:Connect(function()
-            lastChange = os.clock()
-        end)
-        local started = os.clock()
-        while os.clock() - started < K.STABLE do
-            if S.destroyed or S.holoToken ~= token then
-                break
-            end
-            if os.clock() - lastChange >= 0.25 then
-                break
-            end
-            task.wait(0.08)
-        end
-        watcher:Disconnect()
-    end
-
     function H.cloneSource(source)
-        local changed = {}
-
-        local function force(instance)
-            if not instance.Archivable then
-                changed[#changed + 1] = instance
-                pcall(function()
-                    instance.Archivable = true
-                end)
-            end
-        end
-
-        force(source)
-        for _, descendant in ipairs(source:GetDescendants()) do
-            force(descendant)
-        end
-
         local ok, clone = pcall(function()
             return source:Clone()
         end)
-
-        for _, instance in ipairs(changed) do
-            pcall(function()
-                instance.Archivable = false
-            end)
-        end
-
-        if ok then
-            return clone
-        end
+        if ok then return clone end
         return nil
     end
 
-    function H.preload(holder, token)
-        local assets = {}
-        for _, descendant in ipairs(holder:GetDescendants()) do
-            if descendant:IsA("MeshPart") then
-                if descendant.MeshId ~= "" then
-                    assets[#assets + 1] = descendant.MeshId
-                end
-                if descendant.TextureID ~= "" then
-                    assets[#assets + 1] = descendant.TextureID
-                end
-            elseif descendant:IsA("SpecialMesh") then
-                if descendant.MeshId ~= "" then
-                    assets[#assets + 1] = descendant.MeshId
-                end
-                if descendant.TextureId ~= "" then
-                    assets[#assets + 1] = descendant.TextureId
-                end
-            elseif descendant:IsA("Decal") or descendant:IsA("Texture") then
-                if descendant.Texture ~= "" then
-                    assets[#assets + 1] = descendant.Texture
-                end
-            elseif descendant:IsA("Shirt") and descendant.ShirtTemplate ~= "" then
-                assets[#assets + 1] = descendant.ShirtTemplate
-            elseif descendant:IsA("Pants") and descendant.PantsTemplate ~= "" then
-                assets[#assets + 1] = descendant.PantsTemplate
-            elseif descendant:IsA("ShirtGraphic") and descendant.Graphic ~= "" then
-                assets[#assets + 1] = descendant.Graphic
-            elseif descendant:IsA("SurfaceAppearance") then
-                if descendant.ColorMap ~= "" then assets[#assets + 1] = descendant.ColorMap end
-                if descendant.NormalMap ~= "" then assets[#assets + 1] = descendant.NormalMap end
-                if descendant.MetalnessMap ~= "" then assets[#assets + 1] = descendant.MetalnessMap end
-                if descendant.RoughnessMap ~= "" then assets[#assets + 1] = descendant.RoughnessMap end
-            end
-        end
-
-        if #assets == 0 then return end
-
-        local finished = false
-        task.spawn(function()
-            pcall(function()
-                Svc.content:PreloadAsync(assets)
-            end)
-            finished = true
-        end)
-
-        local started = os.clock()
-        while not finished and os.clock() - started < K.PRELOAD do
-            if S.destroyed or S.holoToken ~= token then return end
-            task.wait(0.03)
-        end
-    end
-
     function H.prepareHolder(source, temporary, token)
-        if not temporary and not source:FindFirstChildOfClass("Humanoid") then
-            H.waitStable(source, token)
-        end
-        if S.destroyed or S.holoToken ~= token then return nil end
-
         local clone = temporary and source or H.cloneSource(source)
         if not clone then return nil end
 
@@ -1423,10 +1221,6 @@ Elements.Register("Paragraph", function(section, options)
         end
 
         local parts, isCharacter = H.collectParts(holder)
-        if not isCharacter then
-            parts = H.dropInvisible(parts)
-        end
-
         if #parts == 0 then
             holder:Destroy()
             return nil
@@ -1476,13 +1270,6 @@ Elements.Register("Paragraph", function(section, options)
                 size = boxSize,
                 isCharacter = isCharacter,
             }
-            task.spawn(function()
-                pcall(Svc.content.PreloadAsync, Svc.content, { template })
-            end)
-        else
-            task.spawn(function()
-                H.preload(holder, token)
-            end)
         end
 
         if tint then
@@ -1496,7 +1283,7 @@ Elements.Register("Paragraph", function(section, options)
         return holder, boxSize, isCharacter
     end
 
-    function H.resolveTarget(target, kind)
+    function H.resolveTarget(target)
         if typeof(target) == "Instance" then
             if target:IsA("Player") then
                 return target, target.UserId
@@ -1510,13 +1297,9 @@ Elements.Register("Paragraph", function(section, options)
             return nil, nil
         end
 
-        if H.isAsset(kind) then return nil, nil end
-
         if type(target) == "number" then
             local found = Svc.players:GetPlayerByUserId(target)
-            if found or H.isChar(kind) then
-                return found, target
-            end
+            if found then return found, target end
             return nil, nil
         end
 
@@ -1528,9 +1311,7 @@ Elements.Register("Paragraph", function(section, options)
             local number = tonumber(target)
             if number then
                 local found = Svc.players:GetPlayerByUserId(number)
-                if found or H.isChar(kind) then
-                    return found, number
-                end
+                if found then return found, number end
                 return nil, nil
             end
             for _, candidate in ipairs(Svc.players:GetPlayers()) do
@@ -1614,29 +1395,27 @@ Elements.Register("Paragraph", function(section, options)
         end
     end
 
-    function H.cacheKeyFor(target, kind)
+    function H.cacheKeyFor(target)
         if typeof(target) == "Instance" then
             return target
         end
         local assetId = H.assetId(target)
         if assetId then
-            return (kind or "any") .. ":" .. assetId
+            return "asset:" .. assetId
         end
         if type(target) == "string" or type(target) == "number" then
-            return (kind or "any") .. ":" .. tostring(target)
+            return "target:" .. tostring(target)
         end
         return nil
     end
 
-    function H.resolveSource(target, kind)
+    function H.detectAutomaticSource(target)
         if type(target) == "string" then
             local found = H.findByPath(target)
-            if found then
-                target = found
-            end
+            if found then target = found end
         end
 
-        local player, userId = H.resolveTarget(target, kind)
+        local player, userId = H.resolveTarget(target)
 
         if typeof(target) == "Instance" and not player then
             if target:IsA("Decal") or target:IsA("Texture") then
@@ -1668,17 +1447,12 @@ Elements.Register("Paragraph", function(section, options)
             return nil, nil, false
         end
 
-        if H.isChar(kind) then
-            return nil, nil, false
-        end
-
         local assetId = H.assetId(target)
         if not assetId then
-            return nil, nil, false
-        end
-
-        if CACHE.failed[assetId] then
-            return nil, CACHE.images[assetId] or H.thumbUrl(assetId, "Asset"), false
+            if typeof(target) == "Instance" then
+                return target, nil, false
+            end
+            return nil, H.normalizeImage(target), false
         end
 
         local objectsOk, objects = pcall(function()
@@ -1692,7 +1466,6 @@ Elements.Register("Paragraph", function(section, options)
             local texture = H.findTexture(objects)
             H.destroyAll(objects)
             if texture and texture ~= "" then
-                CACHE.images[assetId] = texture
                 return nil, texture, false
             end
         end
@@ -1704,68 +1477,17 @@ Elements.Register("Paragraph", function(section, options)
             return meshPart, nil, true
         end
 
-        CACHE.failed[assetId] = true
-        local thumb = kind == "model" and H.thumbUrl(assetId, "Asset") or ("rbxassetid://" .. assetId)
-        CACHE.images[assetId] = thumb
-        return nil, thumb, false
+        return nil, H.thumbUrl(assetId, "Asset"), false
     end
 
     function H.resolveImage(config)
         local target = config.target
-
         if config.type == "thumbnail" then
             local id = H.assetId(target)
             if not id then return nil, nil end
             return H.thumbUrl(id, config.thumbType), id
         end
-
-        if type(target) == "string" then
-            local found = H.findByPath(target)
-            if found then
-                target = found
-            end
-        end
-
-        if typeof(target) == "Instance" then
-            if target:IsA("Decal") or target:IsA("Texture") then
-                return target.Texture, nil
-            end
-            if target:IsA("ImageLabel") or target:IsA("ImageButton") then
-                return target.Image, nil
-            end
-            return nil, nil
-        end
-
-        local text = H.textOf(target)
-        if text:match("^rbxthumb://") or text:match("^rbxasset://") then
-            return text, H.assetId(text)
-        end
-
-        local id = H.assetId(text)
-        if not id then
-            return H.normalizeImage(text), nil
-        end
-
-        local key = "img:" .. id
-        local cached = CACHE.images[key]
-        if cached then
-            return cached, id
-        end
-
-        local resolved = "rbxassetid://" .. id
-        local objectsOk, objects = pcall(function()
-            return game:GetObjects("rbxassetid://" .. id)
-        end)
-        if objectsOk and type(objects) == "table" and #objects > 0 then
-            local texture = H.findTexture(objects)
-            H.destroyAll(objects)
-            if texture and texture ~= "" then
-                resolved = texture
-            end
-        end
-
-        CACHE.images[key] = resolved
-        return resolved, id
+        return H.normalizeImage(target), H.assetId(target)
     end
 
     function H.showImage(image, token, assetId, tint)
@@ -1777,26 +1499,6 @@ Elements.Register("Paragraph", function(section, options)
         U.fallback.Image = image
         U.fallback.Visible = true
         H.refreshLoading()
-
-        local started = os.clock()
-        while not U.fallback.IsLoaded and os.clock() - started < K.PRELOAD do
-            if S.destroyed or S.holoToken ~= token then return end
-            task.wait(0.03)
-        end
-        if S.destroyed or S.holoToken ~= token then return end
-
-        if not U.fallback.IsLoaded and assetId then
-            local alternative = H.thumbUrl(assetId, "Asset")
-            if alternative ~= image then
-                U.fallback.Image = alternative
-                started = os.clock()
-                while not U.fallback.IsLoaded and os.clock() - started < K.IMAGE_ALT do
-                    if S.destroyed or S.holoToken ~= token then return end
-                    task.wait(0.03)
-                end
-                if S.destroyed or S.holoToken ~= token then return end
-            end
-        end
 
         H.tween(U.fallback, TI.FADE, { ImageTransparency = K.IMAGE_ALPHA })
     end
@@ -1813,13 +1515,8 @@ Elements.Register("Paragraph", function(section, options)
                 parts[#parts + 1] = "S" .. child.ShirtTemplate
             elseif child:IsA("Pants") then
                 parts[#parts + 1] = "P" .. child.PantsTemplate
-            elseif child:IsA("ShirtGraphic") then
-                parts[#parts + 1] = "G" .. child.Graphic
             elseif child:IsA("BodyColors") then
-                parts[#parts + 1] = "C" .. tostring(child.HeadColor3) .. tostring(child.TorsoColor3) .. tostring(child.LeftArmColor3) .. tostring(child.RightArmColor3) .. tostring(child.LeftLegColor3) .. tostring(child.RightLegColor3)
-            elseif child:IsA("BasePart") and child.Name == "Head" then
-                local face = child:FindFirstChildOfClass("Decal")
-                parts[#parts + 1] = "H" .. (face and face.Texture or "")
+                parts[#parts + 1] = "C" .. tostring(child.HeadColor3)
             end
         end
         table.sort(parts)
@@ -1827,7 +1524,7 @@ Elements.Register("Paragraph", function(section, options)
     end
 
     function H.liveSource(config)
-        local player = H.resolveTarget(config.target, config.type)
+        local player = H.resolveTarget(config.target)
         if player then
             return player.Character
         end
@@ -1872,7 +1569,7 @@ Elements.Register("Paragraph", function(section, options)
     function H.scheduleReload()
         if S.reloadPending or S.destroyed then return end
         S.reloadPending = true
-        task.delay(0.4, function()
+        task.delay(0.3, function()
             S.reloadPending = false
             if not S.destroyed then
                 pcall(H.poll)
@@ -1887,7 +1584,7 @@ Elements.Register("Paragraph", function(section, options)
     function H.watchTarget(config)
         H.clearWatch()
         if not config or config.target == nil then return end
-        local player = H.resolveTarget(config.target, config.type)
+        local player = H.resolveTarget(config.target)
         if player then
             S.watch[#S.watch + 1] = player.CharacterAdded:Connect(H.scheduleReload)
             S.watch[#S.watch + 1] = player.CharacterAppearanceLoaded:Connect(H.scheduleReload)
@@ -1912,21 +1609,7 @@ Elements.Register("Paragraph", function(section, options)
             return
         end
 
-        if H.isImage(config.type) or config.type == "thumbnail" then
-            H.setBusy(token)
-            task.spawn(function()
-                local ok, image, assetId = pcall(H.resolveImage, config)
-                if ok and image and not S.destroyed and S.holoToken == token then
-                    H.showImage(image, token, assetId, config.tint)
-                end
-                if S.busy == token then
-                    H.setBusy(nil)
-                end
-            end)
-            return
-        end
-
-        local cacheKey = not config.live and H.cacheKeyFor(config.target, config.type) or nil
+        local cacheKey = not config.live and H.cacheKeyFor(config.target) or nil
         if cacheKey and CACHE.templates[cacheKey] then
             local holder, size, isCharacter = H.clonePrepared(CACHE.templates[cacheKey], config.tint)
             H.setBusy(nil)
@@ -1934,85 +1617,41 @@ Elements.Register("Paragraph", function(section, options)
             return
         end
 
-        local knownImage = CACHE.images[config.target]
-        if knownImage then
-            H.setBusy(nil)
-            U.fallback.ImageColor3 = config.tint and Color3.new(1, 1, 1):Lerp(config.tint, 0.5) or Color3.new(1, 1, 1)
-            U.fallback.ImageTransparency = K.IMAGE_ALPHA
-            U.fallback.Image = knownImage
-            U.fallback.Visible = true
-            H.refreshLoading()
-            return
-        end
-
         H.setBusy(token)
 
         task.spawn(function()
-            local mounted = false
-            local fallback = nil
+            local resolvedOk, source, image, temporary = pcall(H.detectAutomaticSource, config.target)
+            if not resolvedOk then
+                source, image, temporary = nil, nil, false
+            end
 
-            for attempt = 1, K.ATTEMPTS do
-                if S.destroyed or S.holoToken ~= token then break end
+            if S.destroyed or S.holoToken ~= token then
+                if temporary and source then pcall(source.Destroy, source) end
+                return
+            end
 
-                local resolvedOk, source, image, temporary = pcall(H.resolveSource, config.target, config.type)
-                if not resolvedOk then
-                    source, image, temporary = nil, nil, false
+            if source then
+                local signature = nil
+                if not temporary and H.liveSource(config) == source then
+                    signature = H.signature(source)
+                end
+
+                local ok, holder, size, isCharacter = pcall(H.buildHolder, source, config.tint, token, temporary, cacheKey)
+                if not (ok and holder) and temporary then
+                    pcall(source.Destroy, source)
                 end
 
                 if S.destroyed or S.holoToken ~= token then
-                    if temporary and source then
-                        pcall(source.Destroy, source)
-                    end
-                    break
+                    if ok and holder then holder:Destroy() end
+                    return
                 end
 
-                if source then
-                    local signature = nil
-                    if not temporary and H.liveSource(config) == source then
-                        signature = H.signature(source)
-                    end
-
-                    local ok, holder, size, isCharacter = pcall(H.buildHolder, source, config.tint, token, temporary, cacheKey)
-
-                    if not (ok and holder) and temporary then
-                        pcall(source.Destroy, source)
-                    end
-
-                    if S.destroyed or S.holoToken ~= token then
-                        if ok and holder then
-                            holder:Destroy()
-                        end
-                        break
-                    end
-
-                    if ok and holder then
-                        H.mountHolder(holder, size, isCharacter)
-                        S.signature = signature
-                        mounted = true
-                        break
-                    end
-                elseif image then
-                    fallback = image
-                    local key = config.target
-                    if type(key) == "number" or type(key) == "string" then
-                        CACHE.images[key] = image
-                    end
-                    break
+                if ok and holder then
+                    H.mountHolder(holder, size, isCharacter)
+                    S.signature = signature
                 end
-
-                if attempt < K.ATTEMPTS then
-                    task.wait(K.RETRY * attempt)
-                end
-            end
-
-            if not mounted and not S.destroyed and S.holoToken == token then
-                local assetId = H.assetId(config.target)
-                if not fallback and assetId and not H.isChar(config.type) then
-                    fallback = H.thumbUrl(assetId, "Asset")
-                end
-                if fallback then
-                    H.showImage(fallback, token, assetId, config.tint)
-                end
+            elseif image then
+                H.showImage(image, token, H.assetId(config.target), config.tint)
             end
 
             if S.busy == token then
@@ -2185,8 +1824,6 @@ Elements.Register("Paragraph", function(section, options)
             and updated ~= nil
             and previous.target == updated.target
             and previous.type == updated.type
-            and previous.thumbType == updated.thumbType
-            and previous.tint == updated.tint
             and previous.live == updated.live
             and previous.nonce == updated.nonce
             and not H.idle()
@@ -2196,34 +1833,26 @@ Elements.Register("Paragraph", function(section, options)
         H.layout()
     end
 
-    function data:SetTarget(target, kind, thumbType)
+    function data:SetTarget(target, kind)
         if S.destroyed then return end
         local config = H.ensureHologram()
         local previousTarget = config.target
-        local previousKind = config.type
-        local previousThumb = config.thumbType
         config.target = target
-        if kind ~= nil then
-            config.type = H.kind(kind)
-        end
-        if thumbType ~= nil then
-            config.thumbType = H.thumbType(thumbType)
-        end
-        if previousTarget ~= target or previousKind ~= config.type or previousThumb ~= config.thumbType or H.idle() then
+        if kind ~= nil then config.type = kind end
+        if previousTarget ~= target or H.idle() then
             H.load()
         end
         H.layout()
     end
 
-    function data:PreloadHolograms(targets, kind)
+    function data:PreloadHolograms(targets)
         if S.destroyed or type(targets) ~= "table" then return end
         task.spawn(function()
             for _, target in ipairs(targets) do
                 if S.destroyed then return end
-                local resolvedKind = H.kind(kind)
-                local key = H.cacheKeyFor(target, resolvedKind)
+                local key = H.cacheKeyFor(target)
                 if key and not CACHE.templates[key] then
-                    local ok, source, _, temporary = pcall(H.resolveSource, target, resolvedKind)
+                    local ok, source, _, temporary = pcall(H.detectAutomaticSource, target)
                     if ok and source then
                         local built, holder, boxSize, isCharacter = pcall(H.prepareHolder, source, temporary, S.holoToken)
                         if built and holder then
@@ -2232,7 +1861,6 @@ Elements.Register("Paragraph", function(section, options)
                                 size = boxSize,
                                 isCharacter = isCharacter,
                             }
-                            pcall(Svc.content.PreloadAsync, Svc.content, { holder })
                         elseif temporary then
                             pcall(source.Destroy, source)
                         end
@@ -2251,7 +1879,6 @@ Elements.Register("Paragraph", function(section, options)
         end
         table.clear(CACHE.templates)
         table.clear(CACHE.images)
-        table.clear(CACHE.failed)
     end
 
     function data:SetCorners(corners)
@@ -2287,14 +1914,13 @@ Elements.Register("Paragraph", function(section, options)
 
     function data:Refresh()
         if S.destroyed or not data.hologram then return end
-        local key = H.cacheKeyFor(data.hologram.target, data.hologram.type)
+        local key = H.cacheKeyFor(data.hologram.target)
         if key and CACHE.templates[key] then
             pcall(CACHE.templates[key].template.Destroy, CACHE.templates[key].template)
             CACHE.templates[key] = nil
         end
         H.clearHologram()
         table.clear(CACHE.images)
-        table.clear(CACHE.failed)
         H.load()
     end
 
@@ -2357,7 +1983,7 @@ Elements.Register("Paragraph", function(section, options)
                 return
             end
         end
-        S.status[#S.status + 1] = { name = name, value = value, max = tonumber(max) }
+        S.status[#S.status + 1] = { name = name, value = value, max = tonumber(max)` }
         local newIndex = #S.status
         S.rows[newIndex] = H.createStatRow(S.status[newIndex], newIndex)
         H.updateCount()
