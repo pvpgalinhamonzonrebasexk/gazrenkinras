@@ -1,4 +1,3 @@
--- // Paragraph
 Elements.Register("Paragraph", function(section, options)
     options = type(options) == "table" and options or {}
 
@@ -11,7 +10,8 @@ Elements.Register("Paragraph", function(section, options)
         CardStroke = Color3.fromRGB(40, 40, 48),
         Row = Color3.fromRGB(20, 20, 25),
         RowStroke = Color3.fromRGB(36, 36, 44),
-        HoloBg = Color3.fromRGB(9, 9, 12),
+        HoloBg = Color3.fromRGB(13, 13, 16),
+        HoloBorder = Color3.fromRGB(52, 52, 62),
         TextActive = Color3.fromRGB(247, 247, 250),
         TextDisabled = Color3.fromRGB(82, 82, 91),
         DescText = Color3.fromRGB(156, 156, 170),
@@ -383,126 +383,29 @@ Elements.Register("Paragraph", function(section, options)
         Padding = UDim.new(0, 0),
     }, U.content)
 
-    U.holo = H.new("Frame", {
-        Name = "Hologram",
-        Size = UDim2.new(1, 0, 0, K.CARD_H),
-        BackgroundColor3 = C.HoloBg,
-        BorderSizePixel = 0,
-        ClipsDescendants = true,
-        LayoutOrder = 1,
-        Visible = false,
-    }, U.content)
-
-    U.viewport = H.new("ViewportFrame", {
-        Name = "Viewport",
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        ImageTransparency = 0,
-        Ambient = Color3.fromRGB(205, 205, 215),
-        LightColor = Color3.fromRGB(255, 255, 255),
-        LightDirection = S.light,
-        ZIndex = 2,
-    }, U.holo)
-
-    U.camera = H.new("Camera", { FieldOfView = K.FOV }, U.viewport)
-    U.viewport.CurrentCamera = U.camera
-
-    U.fallback = H.new("ImageLabel", {
-        Name = "Fallback",
-        Size = UDim2.new(0.8, 0, 0.8, 0),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundTransparency = 1,
-        Image = "",
-        ImageTransparency = K.IMAGE_ALPHA,
-        ScaleType = Enum.ScaleType.Fit,
-        Visible = false,
-        ZIndex = 2,
-    }, U.holo)
-    H.new("UIAspectRatioConstraint", {
-        AspectRatio = 1,
-        AspectType = Enum.AspectType.FitWithinMaxSize,
-    }, U.fallback)
-
-    function H.cornerLabel(name, position, anchor, alignX, alignY, font, color)
-        return H.new("TextLabel", {
-            Name = name,
-            Size = UDim2.new(0.4, -(K.EDGE + 4), 0, 14),
-            AnchorPoint = anchor,
-            Position = position,
-            BackgroundTransparency = 1,
-            Text = "",
-            TextColor3 = color,
-            TextSize = K.CORNER,
-            Font = font,
-            TextXAlignment = alignX,
-            TextYAlignment = alignY,
-            TextTruncate = Enum.TextTruncate.AtEnd,
-            TextStrokeTransparency = 0.6,
-            TextStrokeColor3 = C.Black,
-            RichText = S.rich,
-            Visible = false,
-            ZIndex = 5,
-        }, U.holo)
-    end
-
-    U.corners = {
-        topLeft = H.cornerLabel("TopLeft", UDim2.new(0, K.EDGE, 0, K.EDGE), Vector2.new(0, 0), Enum.TextXAlignment.Left, Enum.TextYAlignment.Top, fontBold, C.TextActive),
-        topRight = H.cornerLabel("TopRight", UDim2.new(1, -K.EDGE, 0, K.EDGE), Vector2.new(1, 0), Enum.TextXAlignment.Right, Enum.TextYAlignment.Top, fontBold, C.Accent),
-        bottomLeft = H.cornerLabel("BottomLeft", UDim2.new(0, K.EDGE, 1, -K.EDGE), Vector2.new(0, 1), Enum.TextXAlignment.Left, Enum.TextYAlignment.Bottom, fontMedium, C.CornerText),
-        bottomRight = H.cornerLabel("BottomRight", UDim2.new(1, -K.EDGE, 1, -K.EDGE), Vector2.new(1, 1), Enum.TextXAlignment.Right, Enum.TextYAlignment.Bottom, fontMedium, C.DescText),
-    }
-
-    U.loading = H.new("TextLabel", {
-        Name = "Loading",
-        Size = UDim2.new(1, 0, 0, 14),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        BackgroundTransparency = 1,
-        Text = "Loading...",
-        TextColor3 = C.Muted,
-        TextSize = K.CORNER + 1,
-        Font = fontMedium,
-        Visible = false,
-        ZIndex = 4,
-    }, U.holo)
-
-    U.drag = H.new("TextButton", {
-        Name = "Drag",
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        Text = "",
-        AutoButtonColor = false,
-        Selectable = false,
-        ZIndex = 7,
-    }, U.holo)
-
-    U.info = H.new("Frame", {
-        Name = "Info",
+    -- 1. TOPO: Título, Descrição e Tag (Fora do Holograma)
+    U.topInfo = H.new("Frame", {
+        Name = "TopInfo",
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
-        LayoutOrder = 2,
+        LayoutOrder = 1,
         Visible = false,
     }, U.content)
-    H.new("UIListLayout", {
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, K.GAP),
-    }, U.info)
-    U.infoPad = H.new("UIPadding", {
+    U.topInfoPad = H.new("UIPadding", {
         PaddingTop = UDim.new(0, K.PAD),
         PaddingBottom = UDim.new(0, K.PAD),
         PaddingLeft = UDim.new(0, K.PAD + 2),
         PaddingRight = UDim.new(0, K.PAD + 2),
-    }, U.info)
+    }, U.topInfoPad)
+    U.topInfoPad.Parent = U.topInfo
 
     U.header = H.new("Frame", {
         Name = "Header",
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
-        LayoutOrder = 1,
-    }, U.info)
+    }, U.topInfo)
     U.headerConstraint = H.new("UISizeConstraint", { MinSize = Vector2.new(0, 0) }, U.header)
 
     U.thumbFrame = H.new("Frame", {
@@ -602,14 +505,229 @@ Elements.Register("Paragraph", function(section, options)
         Visible = data.description ~= "",
     }, U.textFrame)
 
+    -- 2. MEIO: Área do Holograma (Mesma cor do Paragraph + Decoração de Borda)
+    U.holoWrapper = H.new("Frame", {
+        Name = "HologramWrapper",
+        Size = UDim2.new(1, 0, 0, K.CARD_H),
+        BackgroundTransparency = 1,
+        LayoutOrder = 2,
+        Visible = false,
+    }, U.content)
+    U.holoWrapperPad = H.new("UIPadding", {
+        PaddingTop = UDim.new(0, 0),
+        PaddingBottom = UDim.new(0, K.PAD),
+        PaddingLeft = UDim.new(0, K.PAD + 2),
+        PaddingRight = UDim.new(0, K.PAD + 2),
+    }, U.holoWrapper)
+
+    U.holo = H.new("Frame", {
+        Name = "Hologram",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = C.Card,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+    }, U.holoWrapper)
+    H.corner(U.holo, 10)
+    H.stroke(U.holo, C.HoloBorder, 1, 0.25)
+
+    -- Gradiente igual ao do card para manter exatamente a mesma cor
+    H.new("UIGradient", {
+        Rotation = 90,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, C.CardTop),
+            ColorSequenceKeypoint.new(0.45, C.Card),
+            ColorSequenceKeypoint.new(1, C.Card),
+        }),
+    }, U.holo)
+
+    -- Decoração de Borda (Cantoneiras / Brackets + Linhas de Grade Sutis)
+    U.decor = H.new("Frame", {
+        Name = "BorderDecor",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        ZIndex = 4,
+    }, U.holo)
+
+    -- Linha fina interna para profundidade
+    local innerFrame = H.new("Frame", {
+        Name = "InnerBorder",
+        Size = UDim2.new(1, -8, 1, -8),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        ZIndex = 4,
+    }, U.decor)
+    H.corner(innerFrame, 7)
+    H.stroke(innerFrame, C.CardStroke, 1, 0.55)
+
+    -- Cantoneiras (Corner Brackets)
+    local function createBracket(name, anchor, pos, xDir, yDir)
+        local holder = H.new("Frame", {
+            Name = name,
+            Size = UDim2.fromOffset(14, 14),
+            AnchorPoint = anchor,
+            Position = pos,
+            BackgroundTransparency = 1,
+            ZIndex = 5,
+        }, U.decor)
+
+        H.new("Frame", {
+            Name = "H",
+            Size = UDim2.new(1, 0, 0, 2),
+            AnchorPoint = Vector2.new(xDir == 1 and 0 or 1, yDir == 1 and 0 or 1),
+            Position = UDim2.new(xDir == 1 and 0 or 1, 0, yDir == 1 and 0 or 1, 0),
+            BackgroundColor3 = C.Accent,
+            BackgroundTransparency = 0.2,
+            BorderSizePixel = 0,
+            ZIndex = 5,
+        }, holder)
+
+        H.new("Frame", {
+            Name = "V",
+            Size = UDim2.new(0, 2, 1, 0),
+            AnchorPoint = Vector2.new(xDir == 1 and 0 or 1, yDir == 1 and 0 or 1),
+            Position = UDim2.new(xDir == 1 and 0 or 1, 0, yDir == 1 and 0 or 1, 0),
+            BackgroundColor3 = C.Accent,
+            BackgroundTransparency = 0.2,
+            BorderSizePixel = 0,
+            ZIndex = 5,
+        }, holder)
+    end
+
+    createBracket("BracketTL", Vector2.new(0, 0), UDim2.new(0, 6, 0, 6), 1, 1)
+    createBracket("BracketTR", Vector2.new(1, 0), UDim2.new(1, -6, 0, 6), -1, 1)
+    createBracket("BracketBL", Vector2.new(0, 1), UDim2.new(0, 6, 1, -6), 1, -1)
+    createBracket("BracketBR", Vector2.new(1, 1), UDim2.new(1, -6, 1, -6), -1, -1)
+
+    -- Barras centrais decorativas nas bordas superior e inferior
+    H.new("Frame", {
+        Name = "TopTick",
+        Size = UDim2.new(0, 36, 0, 2),
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new(0.5, 0, 0, 0),
+        BackgroundColor3 = C.Accent,
+        BackgroundTransparency = 0.35,
+        BorderSizePixel = 0,
+        ZIndex = 5,
+    }, U.decor)
+
+    H.new("Frame", {
+        Name = "BottomTick",
+        Size = UDim2.new(0, 36, 0, 2),
+        AnchorPoint = Vector2.new(0.5, 1),
+        Position = UDim2.new(0.5, 0, 1, 0),
+        BackgroundColor3 = C.Accent,
+        BackgroundTransparency = 0.35,
+        BorderSizePixel = 0,
+        ZIndex = 5,
+    }, U.decor)
+
+    U.viewport = H.new("ViewportFrame", {
+        Name = "Viewport",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        ImageTransparency = 0,
+        Ambient = Color3.fromRGB(205, 205, 215),
+        LightColor = Color3.fromRGB(255, 255, 255),
+        LightDirection = S.light,
+        ZIndex = 2,
+    }, U.holo)
+
+    U.camera = H.new("Camera", { FieldOfView = K.FOV }, U.viewport)
+    U.viewport.CurrentCamera = U.camera
+
+    U.fallback = H.new("ImageLabel", {
+        Name = "Fallback",
+        Size = UDim2.new(0.8, 0, 0.8, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        Image = "",
+        ImageTransparency = K.IMAGE_ALPHA,
+        ScaleType = Enum.ScaleType.Fit,
+        Visible = false,
+        ZIndex = 2,
+    }, U.holo)
+    H.new("UIAspectRatioConstraint", {
+        AspectRatio = 1,
+        AspectType = Enum.AspectType.FitWithinMaxSize,
+    }, U.fallback)
+
+    function H.cornerLabel(name, position, anchor, alignX, alignY, font, color)
+        return H.new("TextLabel", {
+            Name = name,
+            Size = UDim2.new(0.4, -(K.EDGE + 8), 0, 14),
+            AnchorPoint = anchor,
+            Position = position,
+            BackgroundTransparency = 1,
+            Text = "",
+            TextColor3 = color,
+            TextSize = K.CORNER,
+            Font = font,
+            TextXAlignment = alignX,
+            TextYAlignment = alignY,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            TextStrokeTransparency = 0.6,
+            TextStrokeColor3 = C.Black,
+            RichText = S.rich,
+            Visible = false,
+            ZIndex = 6,
+        }, U.holo)
+    end
+
+    U.corners = {
+        topLeft = H.cornerLabel("TopLeft", UDim2.new(0, K.EDGE + 2, 0, K.EDGE), Vector2.new(0, 0), Enum.TextXAlignment.Left, Enum.TextYAlignment.Top, fontBold, C.TextActive),
+        topRight = H.cornerLabel("TopRight", UDim2.new(1, -(K.EDGE + 2), 0, K.EDGE), Vector2.new(1, 0), Enum.TextXAlignment.Right, Enum.TextYAlignment.Top, fontBold, C.Accent),
+        bottomLeft = H.cornerLabel("BottomLeft", UDim2.new(0, K.EDGE + 2, 1, -K.EDGE), Vector2.new(0, 1), Enum.TextXAlignment.Left, Enum.TextYAlignment.Bottom, fontMedium, C.CornerText),
+        bottomRight = H.cornerLabel("BottomRight", UDim2.new(1, -(K.EDGE + 2), 1, -K.EDGE), Vector2.new(1, 1), Enum.TextXAlignment.Right, Enum.TextYAlignment.Bottom, fontMedium, C.DescText),
+    }
+
+    U.loading = H.new("TextLabel", {
+        Name = "Loading",
+        Size = UDim2.new(1, 0, 0, 14),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        BackgroundTransparency = 1,
+        Text = "Loading...",
+        TextColor3 = C.Muted,
+        TextSize = K.CORNER + 1,
+        Font = fontMedium,
+        Visible = false,
+        ZIndex = 4,
+    }, U.holo)
+
+    U.drag = H.new("TextButton", {
+        Name = "Drag",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+        Selectable = false,
+        ZIndex = 7,
+    }, U.holo)
+
+    -- 3. BASE: Status / Barras de Progresso (Abaixo do Holograma)
+    U.bottomInfo = H.new("Frame", {
+        Name = "BottomInfo",
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        LayoutOrder = 3,
+        Visible = false,
+    }, U.content)
+    U.bottomInfoPad = H.new("UIPadding", {
+        PaddingTop = UDim.new(0, 0),
+        PaddingBottom = UDim.new(0, K.PAD),
+        PaddingLeft = UDim.new(0, K.PAD + 2),
+        PaddingRight = UDim.new(0, K.PAD + 2),
+    }, U.bottomInfo)
+
     U.stats = H.new("Frame", {
         Name = "Stats",
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
-        LayoutOrder = 2,
-        Visible = false,
-    }, U.info)
+    }, U.bottomInfo)
     H.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8) }, U.stats)
 
     U.statusHead = H.new("Frame", {
@@ -700,12 +818,18 @@ Elements.Register("Paragraph", function(section, options)
         local hasHeader = H.hasHeader()
         local hasStatus = H.hasStatus()
 
-        U.header.Visible = hasHeader
-        U.stats.Visible = hasStatus
-        U.info.Visible = hasHeader or hasStatus
-        U.holo.Visible = hasHolo
-        U.holo.Size = UDim2.new(1, 0, 0, K.CARD_H)
-        U.infoPad.PaddingTop = UDim.new(0, hasHolo and 10 or K.PAD)
+        U.topInfo.Visible = hasHeader
+        U.holoWrapper.Visible = hasHolo
+        U.bottomInfo.Visible = hasStatus
+
+        -- Ajusta os paddings dinamicamente para manter o espaçamento limpo
+        U.topInfoPad.PaddingBottom = UDim.new(0, (hasHolo or hasStatus) and 10 or K.PAD)
+        U.holoWrapperPad.PaddingTop = UDim.new(0, hasHeader and 0 or K.PAD)
+        U.holoWrapperPad.PaddingBottom = UDim.new(0, hasStatus and 10 or K.PAD)
+        U.bottomInfoPad.PaddingTop = UDim.new(0, (hasHeader or hasHolo) and 0 or K.PAD)
+
+        local extraPad = (hasHeader and 0 or K.PAD) + (hasStatus and 10 or K.PAD)
+        U.holoWrapper.Size = UDim2.new(1, 0, 0, K.CARD_H + extraPad)
 
         H.resize()
     end
