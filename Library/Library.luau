@@ -1,40 +1,88 @@
--- // Serviços
+-- // Github
+local Github = {
+    Repo = "pvpgalinhamonzonrebasexk/gazrenkinras",
+    Branch = "main"
+}
+
+Github.IconsUrl = "https://raw.githubusercontent.com/" .. Github.Repo .. "/refs/heads/" .. Github.Branch .. "/Assets/Icons.lua"
+Github.IconsCdn = "https://cdn.jsdelivr.net/gh/" .. Github.Repo .. "@" .. Github.Branch .. "/Assets/Icons.lua"
+
+Github.NotificationsUrl = "https://raw.githubusercontent.com/" .. Github.Repo .. "/refs/heads/" .. Github.Branch .. "/Templates/Documento/Notifications.md"
+
+Github.ElementsPath = "Library/Elements"
+Github.ElementsApi = "https://api.github.com/repos/" .. Github.Repo .. "/contents/" .. Github.ElementsPath .. "?ref=" .. Github.Branch
+Github.ElementsRaw = "https://raw.githubusercontent.com/" .. Github.Repo .. "/refs/heads/" .. Github.Branch .. "/" .. Github.ElementsPath .. "/"
+Github.ElementsCdn = "https://cdn.jsdelivr.net/gh/" .. Github.Repo .. "@" .. Github.Branch .. "/" .. Github.ElementsPath .. "/"
+Github.ElementsList = "https://data.jsdelivr.com/v1/packages/gh/" .. Github.Repo .. "@" .. Github.Branch .. "?structure=flat"
+
+Github.ThemesPath = "Themes"
+Github.ThemesApi = "https://api.github.com/repos/" .. Github.Repo .. "/contents/" .. Github.ThemesPath .. "?ref=" .. Github.Branch
+Github.ThemesRaw = "https://raw.githubusercontent.com/" .. Github.Repo .. "/refs/heads/" .. Github.Branch .. "/" .. Github.ThemesPath .. "/"
+Github.ThemesCdn = "https://cdn.jsdelivr.net/gh/" .. Github.Repo .. "@" .. Github.Branch .. "/" .. Github.ThemesPath .. "/"
+
+Github.FeaturesPath = "Features"
+
+local IconError = nil
+
+local function LoadIcons()
+    local Sources = { Github.IconsUrl, Github.IconsCdn }
+
+    for _, Url in ipairs(Sources) do
+        local Success, Result = pcall(function()
+            return loadstring(game:HttpGet(Url))()
+        end)
+
+        if Success and type(Result) == "table" and type(Result.assets) == "table" then
+            return Result.assets
+        end
+
+        local Reason = Success and "invalid icon file" or tostring(Result)
+        warn("[Ecohub] Icons: failed to load " .. Url .. " (" .. Reason .. ")")
+    end
+
+    IconError = "no icon source could be loaded"
+    return {}
+end
+
+local IconAssets = LoadIcons()
+
+local function GetIcon(Name)
+    if not Name then
+        return ""
+    end
+
+    local Asset = IconAssets["lucide-" .. Name] or IconAssets[Name]
+
+    if Asset then
+        return Asset
+    end
+
+    if string.find(Name, "rbxassetid://", 1, true) then
+        return Name
+    end
+
+    return ""
+end
+
+-- // Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
-local LocalizationService = game:GetService("LocalizationService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local LocalizationService = game:GetService("LocalizationService")
 
--- // Tema
-local Theme = {
-    Active = Color3.fromRGB(240, 240, 240),
-    Inactive = Color3.fromRGB(165, 165, 165),
-    Dim = Color3.fromRGB(115, 115, 115),
-    Accent = Color3.fromRGB(42, 42, 42),
-    Field = Color3.fromRGB(34, 34, 34),
-    Border = Color3.fromRGB(55, 55, 55),
-    BorderHover = Color3.fromRGB(88, 88, 88),
-    Palette = Color3.fromRGB(28, 28, 28),
-    Background = Color3.fromRGB(24, 24, 24),
-    Divider = Color3.fromRGB(50, 50, 50),
-    Subtitle = Color3.fromRGB(150, 150, 150),
-    Placeholder = Color3.fromRGB(110, 110, 110),
-    Text = Color3.fromRGB(230, 230, 230),
-    TabActive = Color3.fromRGB(255, 255, 255),
-    TabInactive = Color3.fromRGB(128, 128, 128),
-    TabHover = Color3.fromRGB(175, 175, 175)
-}
+local env = getgenv and getgenv() or _G
+local IsTouch = UserInputService.TouchEnabled
 
--- // Configurações
+local function GetPlayerGui()
+    local Player = Players.LocalPlayer
+    return Player and Player:FindFirstChildOfClass("PlayerGui")
+end
+
 local Config = {
-    Repo = "pvpgalinhamonzonrebasexk/gazrenkinras",
-    Branch = "main",
-    ElementsPath = "Library/Elements",
-    FeaturesPath = "Features",
     TweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     FlashInfo = TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-    DefaultSize = UDim2.fromOffset(620, 350),
     ToggleImage = "rbxassetid://77526194033506",
     LoadTimeout = 45,
     LoadRounds = 3,
@@ -46,10 +94,13 @@ local Config = {
     WatchRetries = 4,
     WatchDelay = 15,
     MaxParallel = 4,
-    MaxQuery = 48,
+    SaveFile = "Ecohub.json",
+    SaveDelay = 1,
+    AutoSaveInterval = 20,
     SidebarWidth = 180,
     TabHeight = 34,
     TabFillTransparency = 0.3,
+    TabHoverTransparency = 0.85,
     TabTween = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     TabPress = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     TabRelease = TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
@@ -57,370 +108,392 @@ local Config = {
     ScrollTween = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     ScrollHold = 0.9,
     ScrollWidth = 6,
-    SaveFile = "Ecohub.json",
-    SaveDelay = 1
+    RestoreFires = true,
+    ThemePrefetch = true,
+    ThemePrefetchLimit = 24
 }
 
-Config.ElementsApi = "https://api.github.com/repos/" .. Config.Repo .. "/contents/" .. Config.ElementsPath .. "?ref=" .. Config.Branch
-Config.ElementsRaw = "https://raw.githubusercontent.com/" .. Config.Repo .. "/refs/heads/" .. Config.Branch .. "/" .. Config.ElementsPath .. "/"
-Config.ElementsCdn = "https://cdn.jsdelivr.net/gh/" .. Config.Repo .. "@" .. Config.Branch .. "/" .. Config.ElementsPath .. "/"
-Config.ElementsList = "https://data.jsdelivr.com/v1/packages/gh/" .. Config.Repo .. "@" .. Config.Branch .. "?structure=flat"
-Config.IconsUrl = "https://raw.githubusercontent.com/" .. Config.Repo .. "/refs/heads/" .. Config.Branch .. "/Assets/Icons.lua"
-Config.IconsCdn = "https://cdn.jsdelivr.net/gh/" .. Config.Repo .. "@" .. Config.Branch .. "/Assets/Icons.lua"
-
-local ELEMENT_ALIASES = {toggle = "checkbox", colorpick = "colorpicker"}
-local ELEMENT_ICONS = {
+local ElementIcons = {
     button = "mouse-pointer-click",
     checkbox = "toggle-right",
+    toggle = "toggle-right",
     slider = "sliders-horizontal",
     dropdown = "chevrons-up-down",
     colorpicker = "palette",
     paragraph = "align-left"
 }
-local ELEMENT_DEFAULTS = {"Button", "Checkbox", "Toggle", "Slider", "Paragraph", "Dropdown", "ColorPicker"}
 
--- // Ambiente
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-local env = getgenv and getgenv() or _G
-local isTouch = UserInputService.TouchEnabled
+local ElementAliases = { toggle = "checkbox", colorpick = "colorpicker" }
+
+local ElementDefaults = { "Button", "Checkbox", "Toggle", "Slider", "Paragraph", "Dropdown", "ColorPicker" }
 
 -- // Util
 local Util = {}
 
-Util.Owners = setmetatable({}, {__mode = "k"})
+Util.Owners = setmetatable({}, { __mode = "k" })
 
-function Util.Create(className, props, parent)
-    local instance = Instance.new(className)
-    for property, value in pairs(props or {}) do
-        instance[property] = value
+function Util.Create(ClassName, Props, Parent)
+    local Object = Instance.new(ClassName)
+
+    for Property, Value in pairs(Props or {}) do
+        Object[Property] = Value
     end
-    if parent then
-        instance.Parent = parent
+
+    if Parent then
+        Object.Parent = Parent
     end
-    return instance
+
+    return Object
 end
 
-function Util.Corner(parent, radius)
-    return Util.Create("UICorner", {CornerRadius = UDim.new(0, radius)}, parent)
+function Util.Corner(Parent, Radius)
+    return Util.Create("UICorner", { CornerRadius = UDim.new(0, Radius) }, Parent)
 end
 
-function Util.Stroke(parent, color, thickness)
-    return Util.Create("UIStroke", {Color = color, Thickness = thickness}, parent)
+function Util.Stroke(Parent, Color, Thickness)
+    return Util.Create("UIStroke", { Color = Color, Thickness = Thickness }, Parent)
 end
 
-function Util.Padding(parent, top, bottom, left, right)
+function Util.Padding(Parent, Top, Bottom, Left, Right)
     return Util.Create("UIPadding", {
-        PaddingTop = UDim.new(0, top or 0),
-        PaddingBottom = UDim.new(0, bottom or 0),
-        PaddingLeft = UDim.new(0, left or 0),
-        PaddingRight = UDim.new(0, right or 0)
-    }, parent)
+        PaddingTop = UDim.new(0, Top or 0),
+        PaddingBottom = UDim.new(0, Bottom or 0),
+        PaddingLeft = UDim.new(0, Left or 0),
+        PaddingRight = UDim.new(0, Right or 0)
+    }, Parent)
 end
 
-function Util.List(parent, padding, extra)
-    local layout = Util.Create("UIListLayout", {
+function Util.List(Parent, Padding, Extra)
+    local Layout = Util.Create("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, padding or 0)
-    }, parent)
-    for property, value in pairs(extra or {}) do
-        layout[property] = value
+        Padding = UDim.new(0, Padding or 0)
+    }, Parent)
+
+    for Property, Value in pairs(Extra or {}) do
+        Layout[Property] = Value
     end
-    return layout
+
+    return Layout
 end
 
-function Util.Tween(instance, info, goals)
-    local tween = TweenService:Create(instance, info, goals)
-    tween:Play()
-    return tween
+function Util.Tween(Object, Info, Goals)
+    local Tween = TweenService:Create(Object, Info, Goals)
+    Tween:Play()
+    return Tween
 end
 
-function Util.GetViewport()
-    local camera = workspace.CurrentCamera
-    if camera then
-        return camera.ViewportSize
+function Util.Icon(Parent, Name, Size, Color)
+    local Image = GetIcon(Name)
+
+    if Image == "" then
+        Image = GetIcon("circle")
     end
-    return Vector2.new(1280, 720)
+
+    return Util.Create("ImageLabel", {
+        Name = "Icon",
+        Size = UDim2.fromOffset(Size, Size),
+        BackgroundTransparency = 1,
+        Image = Image,
+        ImageColor3 = Color
+    }, Parent)
 end
 
-function Util.IsPress(input)
-    return input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+function Util.IsPress(Input)
+    return Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch
 end
 
-function Util.IsMove(input)
-    return input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch
+function Util.IsMove(Input)
+    return Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch
 end
 
-function Util.ResolveKey(name)
-    local key = string.lower(tostring(name))
-    return ELEMENT_ALIASES[key] or key
+local FoldMap = {}
+
+for Base, Letters in pairs({ a = "àáâãäå", c = "ç", e = "èéêë", i = "ìíîï", n = "ñ", o = "òóôõö", u = "ùúûü", y = "ý" }) do
+    for _, Code in utf8.codes(Letters) do
+        FoldMap[utf8.char(Code)] = Base
+        FoldMap[utf8.char(Code - 32)] = Base
+    end
 end
 
-function Util.Contains(text, query)
-    local lowered = string.lower(tostring(text))
-    for word in string.gmatch(query, "%S+") do
-        if not string.find(lowered, word, 1, true) then
+FoldMap[utf8.char(255)] = "y"
+
+function Util.Fold(Text)
+    Text = string.lower(tostring(Text))
+
+    if string.find(Text, "\195", 1, true) then
+        Text = string.gsub(Text, "\195[\128-\191]", FoldMap)
+    end
+
+    return Text
+end
+
+function Util.Contains(Text, Query)
+    for Word in string.gmatch(Query, "%S+") do
+        if not string.find(Text, Word, 1, true) then
             return false
         end
     end
+
     return true
 end
 
-function Util.Prepare(source, header)
-    source = string.gsub(source, "^\239\187\191", "")
-    return header .. source
+function Util.ResolveKey(Name)
+    local Key = string.lower(tostring(Name))
+    return ElementAliases[Key] or Key
 end
 
-function Util.DeepEqual(a, b)
-    if a == b then return true end
-    if type(a) ~= "table" or type(b) ~= "table" then return false end
-    for key, value in pairs(a) do
-        if not Util.DeepEqual(value, b[key]) then return false end
-    end
-    for key in pairs(b) do
-        if a[key] == nil then return false end
-    end
-    return true
+function Util.Prepare(Source, Header)
+    Source = string.gsub(Source, "^\239\187\191", "")
+    return Header .. Source
 end
 
--- // ScrollArea
-function Util.ScrollArea(scroll)
-    scroll.ScrollBarThickness = 0
-    scroll.ScrollBarImageTransparency = 1
+-- // Http
+local Http = {}
 
-    local parent = scroll.Parent
-    local width = Config.ScrollWidth
+function Http.Get(Url)
+    local Failure = "request failed"
+    local Success, Body = pcall(game.HttpGet, game, Url)
 
-    local bar = Util.Create("Frame", {
-        Name = "ScrollArea",
-        AnchorPoint = scroll.AnchorPoint,
-        Position = scroll.Position,
-        Size = scroll.Size,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ZIndex = scroll.ZIndex + 5
-    }, parent)
+    if Success and type(Body) == "string" and Body ~= "" then
+        return Body
+    end
 
-    local track = Util.Create("Frame", {
-        Name = "Track",
-        AnchorPoint = Vector2.new(1, 0),
-        Position = UDim2.new(1, -2, 0, 2),
-        Size = UDim2.new(0, width + 2, 1, -4),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0
-    }, bar)
+    if not Success then
+        Failure = tostring(Body)
+    end
 
-    local thumb = Util.Create("Frame", {
-        Name = "Thumb",
-        AnchorPoint = Vector2.new(1, 0),
-        Position = UDim2.new(1, -1, 0, 0),
-        Size = UDim2.fromOffset(width, 24),
-        BackgroundColor3 = Theme.Inactive,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Active = false,
-        Visible = false
-    }, track)
-    Util.Corner(thumb, width / 2)
+    local Requester = nil
 
-    local shown = false
-    local overScroll = false
-    local overThumb = false
-    local dragging = false
-    local last = 0
+    if type(request) == "function" then
+        Requester = request
+    elseif type(http_request) == "function" then
+        Requester = http_request
+    elseif type(syn) == "table" and type(syn.request) == "function" then
+        Requester = syn.request
+    end
 
-    local function paint()
-        local target = 1
-        if shown then
-            target = (overThumb or dragging) and 0.2 or 0.55
+    if Requester and not string.find(Failure, "404", 1, true) then
+        local Sent, Response = pcall(Requester, { Url = Url, Method = "GET" })
+
+        if Sent and type(Response) == "table" then
+            local Status = Response.StatusCode or Response.Status
+
+            if type(Response.Body) == "string" and Response.Body ~= "" and (Response.Success or Status == 200) then
+                return Response.Body
+            end
+
+            Failure = "HTTP " .. tostring(Status)
+        elseif not Sent then
+            Failure = tostring(Response)
         end
-        Util.Tween(thumb, Config.ScrollTween, {BackgroundTransparency = target})
     end
 
-    local function reveal()
-        last = os.clock()
-        if shown then
+    error(Failure, 0)
+end
+
+function Http.Try(Urls, Rounds)
+    Rounds = Rounds or 2
+
+    local LastError = "not found"
+    local Retry = false
+
+    for Round = 1, Rounds do
+        Retry = false
+
+        for _, Url in ipairs(Urls) do
+            local Success, Result = pcall(Http.Get, Url)
+
+            if Success then
+                return Result
+            end
+
+            LastError = tostring(Result)
+
+            if not string.find(LastError, "404", 1, true) then
+                Retry = true
+            end
+        end
+
+        if not Retry or Round == Rounds then
+            break
+        end
+
+        task.wait(0.4 * Round)
+    end
+
+    return nil, LastError, not Retry
+end
+
+function Http.Fetch(Urls, Rounds)
+    local Body, Failure = Http.Try(Urls, Rounds)
+
+    if Body then
+        return Body
+    end
+
+    error(Failure, 0)
+end
+
+function Http.Race(urls, validate, options)
+    options = options or {}
+    local delay = options.Delay or 1.2
+    local limit = options.Timeout or 20
+    local parallel = options.Parallel or 3
+    local total = #urls
+    local fatalLimit = math.min(2, total)
+    local state = { Done = false, Value = nil, Active = 0, Failures = 0, Missing = 0, Fatal = 0, Reason = nil }
+
+    local function attempt(url)
+        local ok, body = pcall(Http.Get, url)
+        state.Active = state.Active - 1
+        if state.Done then
             return
         end
-        shown = true
-        thumb.Active = true
-        paint()
-        task.spawn(function()
-            while shown and thumb.Parent do
-                task.wait(0.15)
-                if not (overScroll or overThumb or dragging) and os.clock() - last > Config.ScrollHold then
-                    shown = false
-                    thumb.Active = false
-                    paint()
+        if not ok then
+            state.Failures = state.Failures + 1
+            state.Reason = tostring(body)
+            if string.find(state.Reason, "404", 1, true) then
+                state.Missing = state.Missing + 1
+            end
+            return
+        end
+        local valid, value, reason, fatal = pcall(validate, body)
+        if valid and value then
+            state.Value = value
+            state.Done = true
+            return
+        end
+        state.Failures = state.Failures + 1
+        state.Reason = valid and tostring(reason or "invalid response") or tostring(value)
+        if valid and fatal then
+            state.Fatal = state.Fatal + 1
+        end
+    end
+
+    local started = 0
+    local lastStart = 0
+    local deadline = os.clock() + limit
+
+    while not state.Done do
+        local now = os.clock()
+        if now >= deadline or state.Fatal >= fatalLimit then
+            break
+        end
+        if started < total then
+            if state.Active < parallel and (state.Active == 0 or now - lastStart >= delay) then
+                started = started + 1
+                state.Active = state.Active + 1
+                lastStart = now
+                task.spawn(attempt, urls[started])
+            end
+        elseif state.Active == 0 then
+            break
+        end
+        task.wait(0.03)
+    end
+
+    local value = state.Value
+    state.Done = true
+    if value then
+        return value, nil, false
+    end
+    local gone = total > 0 and (state.Missing >= total or state.Fatal >= fatalLimit)
+    return nil, state.Reason or "download timed out", gone
+end
+
+-- // Notifications
+local Notifications = { Module = (nil :: any), Loading = false, Failed = false, Queue = ({} :: { any }), Duration = 8, MaxText = 220, MaxQueue = 20 }
+
+function Notifications.Send(Options)
+    local Module = Notifications.Module
+
+    if Module then
+        pcall(Module.Notify, Options)
+        return
+    end
+
+    if Notifications.Failed then
+        return
+    end
+
+    if #Notifications.Queue < Notifications.MaxQueue then
+        table.insert(Notifications.Queue, Options)
+    end
+
+    Notifications.Load()
+end
+
+function Notifications.Load()
+    if Notifications.Module or Notifications.Loading or Notifications.Failed then
+        return
+    end
+
+    Notifications.Loading = true
+
+    task.spawn(function()
+        local Source, Failure = Http.Try({ Github.NotificationsUrl .. "?t=" .. tostring(os.time()) }, 3)
+        local Module = nil
+
+        if Source then
+            local Chunk, CompileError = loadstring(Source)
+
+            if Chunk then
+                local Ran, Result = pcall(Chunk)
+
+                if Ran and type(Result) == "table" then
+                    Module = Result
+                else
+                    Failure = tostring(Result)
                 end
+            else
+                Failure = tostring(CompileError)
             end
-        end)
-    end
+        end
 
-    local function update()
-        local view = scroll.AbsoluteSize.Y
-        local canvas = scroll.AbsoluteCanvasSize.Y
-        local room = track.AbsoluteSize.Y
-        local range = canvas - view
-        if range <= 1 or view <= 0 or room <= 0 then
-            thumb.Visible = false
+        Notifications.Loading = false
+
+        if not Module then
+            Notifications.Failed = true
+            Notifications.Queue = {}
+            warn("[Ecohub] Notifications failed: " .. tostring(Failure))
             return
         end
-        local height = math.clamp(room * view / canvas, 24, room)
-        local alpha = math.clamp(scroll.CanvasPosition.Y / range, 0, 1)
-        thumb.Size = UDim2.fromOffset(width, height)
-        thumb.Position = UDim2.new(1, -1, 0, alpha * (room - height))
-        thumb.Visible = true
-    end
 
-    local function mirror()
-        bar.AnchorPoint = scroll.AnchorPoint
-        bar.Position = scroll.Position
-        bar.Size = scroll.Size
-        update()
-    end
+        pcall(Module.SetSide, "Right")
+        pcall(Module.SetGroup, true)
 
-    for _, property in ipairs({"AnchorPoint", "Position", "Size"}) do
-        scroll:GetPropertyChangedSignal(property):Connect(mirror)
-    end
-    scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(update)
-    scroll:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(update)
-    track:GetPropertyChangedSignal("AbsoluteSize"):Connect(update)
-    scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
-        update()
-        reveal()
-    end)
-    if parent:IsA("GuiObject") then
-        parent:GetPropertyChangedSignal("Visible"):Connect(update)
-    end
+        Notifications.Module = Module
 
-    scroll.MouseEnter:Connect(function()
-        overScroll = true
-        reveal()
-    end)
-    scroll.MouseLeave:Connect(function()
-        overScroll = false
-        last = os.clock()
-    end)
-    scroll.MouseMoved:Connect(function()
-        if shown then
-            last = os.clock()
-        else
-            reveal()
+        local Queue = Notifications.Queue
+        Notifications.Queue = {}
+
+        for _, Options in ipairs(Queue) do
+            Notifications.Send(Options)
         end
     end)
-
-    thumb.MouseEnter:Connect(function()
-        overThumb = true
-        paint()
-    end)
-    thumb.MouseLeave:Connect(function()
-        overThumb = false
-        last = os.clock()
-        paint()
-    end)
-
-    thumb.InputBegan:Connect(function(input)
-        if not shown or not Util.IsPress(input) then
-            return
-        end
-        dragging = true
-        paint()
-        local startY = input.Position.Y
-        local startCanvas = scroll.CanvasPosition.Y
-        local moveConnection, endConnection
-
-        local function finish()
-            dragging = false
-            last = os.clock()
-            if moveConnection then
-                moveConnection:Disconnect()
-            end
-            if endConnection then
-                endConnection:Disconnect()
-            end
-            paint()
-        end
-
-        moveConnection = UserInputService.InputChanged:Connect(function(move)
-            if not Util.IsMove(move) then
-                return
-            end
-            local room = track.AbsoluteSize.Y
-            local travel = room - thumb.AbsoluteSize.Y
-            local range = scroll.AbsoluteCanvasSize.Y - scroll.AbsoluteSize.Y
-            if travel <= 0 or range <= 0 then
-                return
-            end
-            local delta = move.Position.Y - startY
-            scroll.CanvasPosition = Vector2.new(scroll.CanvasPosition.X, math.clamp(startCanvas + delta * range / travel, 0, range))
-        end)
-
-        endConnection = UserInputService.InputEnded:Connect(function(ended)
-            if Util.IsPress(ended) then
-                finish()
-            end
-        end)
-    end)
-
-    task.defer(update)
-    return bar
 end
 
--- // Json
-local Json = {}
+local function Report(Title, Detail, Kind)
+    local Message = tostring(Detail)
+    local Short = Message
 
-function Json.EncodeString(text)
-    text = string.gsub(text, "\\", "\\\\")
-    text = string.gsub(text, "\"", "\\\"")
-    text = string.gsub(text, "\n", "\\n")
-    text = string.gsub(text, "\r", "\\r")
-    text = string.gsub(text, "\t", "\\t")
-    return "\"" .. text .. "\""
+    warn("[Ecohub] " .. tostring(Title) .. ": " .. Message)
+
+    if #Short > Notifications.MaxText then
+        Short = string.sub(Short, 1, Notifications.MaxText) .. "..."
+    end
+
+    task.spawn(Notifications.Send, {
+        Title = tostring(Title),
+        Description = Short,
+        Type = Kind == "Warning" and "Warning" or "Error",
+        Duration = Notifications.Duration,
+        RichText = false
+    })
 end
 
-function Json.Encode(value, indent)
-    indent = indent or 0
-    local pad = string.rep("    ", indent)
-    local inner = string.rep("    ", indent + 1)
-
-    if type(value) == "table" then
-        local isArray = true
-        local count = 0
-        for key in pairs(value) do
-            count = count + 1
-            if type(key) ~= "number" then
-                isArray = false
-            end
-        end
-        if count == 0 then
-            return "{}"
-        end
-        if isArray then
-            local parts = {}
-            for i = 1, count do
-                parts[#parts + 1] = inner .. Json.Encode(value[i], indent + 1)
-            end
-            return "[\n" .. table.concat(parts, ",\n") .. "\n" .. pad .. "]"
-        end
-        local keys = {}
-        for key in pairs(value) do
-            keys[#keys + 1] = key
-        end
-        table.sort(keys, function(a, b)
-            return tostring(a) < tostring(b)
-        end)
-        local parts = {}
-        for _, key in ipairs(keys) do
-            parts[#parts + 1] = inner .. Json.EncodeString(tostring(key)) .. ": " .. Json.Encode(value[key], indent + 1)
-        end
-        return "{\n" .. table.concat(parts, ",\n") .. "\n" .. pad .. "}"
-    elseif type(value) == "string" then
-        return Json.EncodeString(value)
-    elseif type(value) == "number" or type(value) == "boolean" then
-        return tostring(value)
-    end
-    return "null"
+if IconError then
+    Report("Icons failed", IconError)
 end
 
 -- // Locale
@@ -429,23 +502,16 @@ local Locale = {
     Version = 0,
     States = {},
     Custom = {},
-    Records = setmetatable({}, {__mode = "k"}),
-    Roots = setmetatable({}, {__mode = "k"}),
+    Records = setmetatable({}, { __mode = "k" }),
+    Roots = setmetatable({}, { __mode = "k" }),
     Listeners = {},
     NextListener = 0
 }
 
-local TEXT_PROPERTIES = {TextLabel = "Text", TextButton = "Text", TextBox = "PlaceholderText"}
+local TEXT_PROPERTIES = { TextLabel = "Text", TextButton = "Text", TextBox = "PlaceholderText" }
 local WIDE_LETTERS = "[\195-\197\208-\219\224\227-\237]"
 
-local FOLD_MAP = {}
-for base, letters in pairs({a = "àáâãäå", c = "ç", e = "èéêë", i = "ìíîï", n = "ñ", o = "òóôõö", u = "ùúûü", y = "ý"}) do
-    for _, code in utf8.codes(letters) do
-        FOLD_MAP[utf8.char(code)] = base
-        FOLD_MAP[utf8.char(code - 32)] = base
-    end
-end
-FOLD_MAP[utf8.char(255)] = "y"
+Locale.Fold = Util.Fold
 
 function Locale.GetId()
     local player = Players.LocalPlayer
@@ -494,7 +560,7 @@ function Locale.Watch(maid)
     if player then
         maid:Connect(player:GetPropertyChangedSignal("LocaleId"), update)
     end
-    for _, name in ipairs({"RobloxLocaleId", "SystemLocaleId"}) do
+    for _, name in ipairs({ "RobloxLocaleId", "SystemLocaleId" }) do
         local ok, signal = pcall(function()
             return LocalizationService:GetPropertyChangedSignal(name)
         end)
@@ -542,14 +608,6 @@ function Locale.Upper(text)
     end))
 end
 
-function Locale.Fold(text)
-    text = string.lower(text)
-    if string.find(text, "\195", 1, true) then
-        text = string.gsub(text, "\195[\128-\191]", FOLD_MAP)
-    end
-    return text
-end
-
 function Locale.Adapt(source, translated)
     if not string.find(source, "%l") then
         if string.find(source, "%u") then
@@ -594,7 +652,7 @@ function Locale.State(lang)
         return nil
     end
 
-    state = {Index = index, Max = longest, Cache = {}, Miss = {}, MissCount = 0}
+    state = { Index = index, Max = longest, Cache = {}, Miss = {}, MissCount = 0 }
     Locale.States[lang] = state
     return state
 end
@@ -631,7 +689,7 @@ function Locale.Resolve(state, text, lang)
 
     local words = {}
     for first, _, after in string.gmatch(text, "()(%a[%w']*)()") do
-        words[#words + 1] = {first, after - 1}
+        words[#words + 1] = { first, after - 1 }
         if #words > 6 then
             return text
         end
@@ -817,7 +875,7 @@ function Locale.Bind(instance, property, transform)
         return
     end
 
-    local record = {Source = instance[property], Applied = nil, Transform = transform}
+    local record = { Source = instance[property], Applied = nil, Transform = transform }
     records[property] = record
     Locale.Paint(instance, property, record)
 
@@ -862,7 +920,7 @@ function Locale.Attach(root)
     if Locale.Roots[root] then
         return
     end
-    local entry = {Done = false}
+    local entry = { Done = false }
     Locale.Roots[root] = entry
     if Locale.IsActive() then
         Locale.Scan(root, entry)
@@ -900,650 +958,7 @@ function Locale.Refresh()
     end
 end
 
--- // Notificação
-local Notify = {
-    Config = {
-        GuiName = "EcoHubNotification",
-        Width = 320,
-        Margin = 20,
-        Radius = 10,
-        Duration = 6,
-        Icon = "rbxassetid://10747384394",
-        TitleSize = 16,
-        DescriptionSize = 14,
-        NameSize = 12,
-        Font = Enum.Font.Arcade,
-        TweenIn = TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-        TweenOut = TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
-        HoverInfo = TweenInfo.new(0.15),
-        PopInfo = TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-    },
-    Theme = {
-        Panel = Color3.fromRGB(14, 14, 17),
-        PanelTop = Color3.fromRGB(32, 32, 38),
-        Line = Color3.fromRGB(40, 40, 46),
-        Text = Color3.fromRGB(255, 255, 255),
-        Muted = Color3.fromRGB(150, 150, 162),
-        Error = Color3.fromRGB(255, 85, 85)
-    },
-    State = {Gui = nil, Container = nil, Item = nil}
-}
-
-function Notify.HiddenX()
-    return Notify.Config.Width + Notify.Config.Margin + 20
-end
-
-function Notify.Build()
-    local state = Notify.State
-    local config = Notify.Config
-    if state.Gui and state.Gui.Parent and state.Container and state.Container.Parent then
-        return
-    end
-    if state.Gui then
-        pcall(state.Gui.Destroy, state.Gui)
-    end
-    state.Item = nil
-    local old = PlayerGui:FindFirstChild(config.GuiName)
-    if old then
-        old:Destroy()
-    end
-    local gui = Util.Create("ScreenGui", {
-        Name = config.GuiName,
-        ResetOnSpawn = false,
-        IgnoreGuiInset = true,
-        DisplayOrder = 999999,
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    }, PlayerGui)
-    state.Gui = gui
-    state.Container = Util.Create("Frame", {
-        Name = "Container",
-        BackgroundTransparency = 1,
-        Position = UDim2.new(1, -(config.Width + config.Margin), 0, config.Margin),
-        Size = UDim2.new(0, config.Width, 1, -config.Margin * 2)
-    }, gui)
-end
-
-function Notify.Label(parent, text, size, color, wrapped, order)
-    return Util.Create("TextLabel", {
-        BackgroundTransparency = 1,
-        AutomaticSize = Enum.AutomaticSize.Y,
-        Size = UDim2.new(1, 0, 0, 0),
-        Text = text,
-        Visible = text ~= "",
-        Font = Notify.Config.Font,
-        TextSize = size,
-        TextColor3 = color,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top,
-        TextWrapped = wrapped,
-        TextTruncate = wrapped and Enum.TextTruncate.None or Enum.TextTruncate.AtEnd,
-        RichText = false,
-        LineHeight = 1.1,
-        LayoutOrder = order
-    }, parent)
-end
-
-function Notify.Start(item)
-    if item.Timer then
-        item.Timer:Cancel()
-    end
-    item.Fill.Size = UDim2.fromScale(1, 1)
-    local tween = TweenService:Create(item.Fill, TweenInfo.new(Notify.Config.Duration, Enum.EasingStyle.Linear), {
-        Size = UDim2.new(0, 0, 1, 0)
-    })
-    item.Timer = tween
-    tween.Completed:Connect(function(state)
-        if state == Enum.PlaybackState.Completed and item.Timer == tween then
-            Notify.Remove(item)
-        end
-    end)
-    tween:Play()
-    if item.Hover then
-        tween:Pause()
-    end
-end
-
-function Notify.Remove(item, instant)
-    if not item or item.Closed then
-        return
-    end
-    item.Closed = true
-    local state = Notify.State
-    if state.Item == item then
-        state.Item = nil
-    end
-    if item.Timer then
-        item.Timer:Cancel()
-        item.Timer = nil
-    end
-    if item.Tween then
-        item.Tween:Cancel()
-    end
-    local frame = item.Frame
-    if not frame.Parent then
-        return
-    end
-    if instant then
-        frame:Destroy()
-        return
-    end
-    local out = Util.Tween(frame, Notify.Config.TweenOut, {Position = UDim2.new(0, Notify.HiddenX(), 1, 0)})
-    out.Completed:Connect(function()
-        frame:Destroy()
-    end)
-end
-
-function Notify.Create(title, description, key)
-    local config = Notify.Config
-    local theme = Notify.Theme
-    local color = theme.Error
-    local white = Color3.new(1, 1, 1)
-    local black = Color3.new(0, 0, 0)
-    local radius = UDim.new(0, config.Radius)
-
-    local card = Util.Create("Frame", {
-        Name = "Notification",
-        AnchorPoint = Vector2.new(0, 1),
-        Position = UDim2.new(0, Notify.HiddenX(), 1, 0),
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundColor3 = white,
-        BackgroundTransparency = 0.03,
-        BorderSizePixel = 0
-    }, Notify.State.Container)
-    Util.Create("UISizeConstraint", {MinSize = Vector2.new(0, 64)}, card)
-    Util.Create("UICorner", {CornerRadius = radius}, card)
-    Util.Create("UIGradient", {Color = ColorSequence.new(theme.PanelTop, theme.Panel), Rotation = 90}, card)
-
-    local stroke = Util.Create("UIStroke", {
-        Color = white,
-        Thickness = 1,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    }, card)
-    Util.Create("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, color),
-            ColorSequenceKeypoint.new(0.6, color:Lerp(theme.Line, 0.75)),
-            ColorSequenceKeypoint.new(1, theme.Line)
-        })
-    }, stroke)
-
-    local glow = Util.Create("Frame", {
-        Name = "Glow",
-        BackgroundColor3 = color,
-        BorderSizePixel = 0,
-        Size = UDim2.fromScale(1, 1)
-    }, card)
-    Util.Create("UICorner", {CornerRadius = radius}, glow)
-    Util.Create("UIGradient", {
-        Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.76),
-            NumberSequenceKeypoint.new(0.55, 0.95),
-            NumberSequenceKeypoint.new(1, 1)
-        })
-    }, glow)
-
-    local hover = Util.Create("Frame", {
-        Name = "Hover",
-        BackgroundColor3 = white,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.fromScale(1, 1)
-    }, card)
-    Util.Create("UICorner", {CornerRadius = radius}, hover)
-
-    local iconFrame = Util.Create("Frame", {
-        Name = "Icon",
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundColor3 = white,
-        BackgroundTransparency = 0.8,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, 34, 0.5, 0),
-        Size = UDim2.fromOffset(32, 32)
-    }, card)
-    Util.Corner(iconFrame, 9)
-    Util.Create("UIGradient", {
-        Color = ColorSequence.new(color:Lerp(white, 0.25), color:Lerp(black, 0.35)),
-        Rotation = 45
-    }, iconFrame)
-    Util.Create("UIStroke", {
-        Color = color,
-        Thickness = 1,
-        Transparency = 0.55,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    }, iconFrame)
-    local iconScale = Util.Create("UIScale", {Scale = 0.4}, iconFrame)
-    Util.Create("ImageLabel", {
-        Name = "Image",
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundTransparency = 1,
-        Image = config.Icon,
-        ImageColor3 = color:Lerp(white, 0.35),
-        ScaleType = Enum.ScaleType.Fit,
-        Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(18, 18)
-    }, iconFrame)
-    Util.Tween(iconScale, config.PopInfo, {Scale = 1})
-
-    local column = Util.Create("Frame", {
-        Name = "Content",
-        BackgroundTransparency = 1,
-        AutomaticSize = Enum.AutomaticSize.Y,
-        Position = UDim2.new(0, 62, 0, 0),
-        Size = UDim2.new(1, -76, 0, 0)
-    }, card)
-    Util.List(column, 2)
-    Util.Padding(column, 12, 14, 0, 0)
-    Notify.Label(column, Locale.Upper(Locale.Translate("Error")), config.NameSize, color, false, 1).Name = "Name"
-    Notify.Label(column, title, config.TitleSize, theme.Text, true, 2).Name = "Title"
-    Notify.Label(column, description, config.DescriptionSize, theme.Muted, true, 3).Name = "Description"
-
-    local track = Util.Create("Frame", {
-        Name = "Track",
-        BackgroundTransparency = 1,
-        Visible = false,
-        Size = UDim2.new(1, 0, 0, 1)
-    }, card)
-    local fill = Util.Create("Frame", {
-        Name = "Fill",
-        BackgroundTransparency = 1,
-        Size = UDim2.fromScale(1, 1)
-    }, track)
-
-    local item = {
-        Frame = card,
-        Fill = fill,
-        Key = key,
-        Hover = false,
-        Closed = false,
-        Timer = nil,
-        Tween = nil
-    }
-
-    local button = Util.Create("TextButton", {
-        Name = "Click",
-        BackgroundTransparency = 1,
-        Text = "",
-        AutoButtonColor = false,
-        Size = UDim2.fromScale(1, 1),
-        ZIndex = 10
-    }, card)
-
-    button.Activated:Connect(function()
-        Notify.Remove(item)
-    end)
-
-    button.MouseEnter:Connect(function()
-        item.Hover = true
-        Util.Tween(hover, config.HoverInfo, {BackgroundTransparency = 0.94})
-        local tween = item.Timer
-        if tween and tween.PlaybackState == Enum.PlaybackState.Playing then
-            tween:Pause()
-        end
-    end)
-
-    button.MouseLeave:Connect(function()
-        item.Hover = false
-        Util.Tween(hover, config.HoverInfo, {BackgroundTransparency = 1})
-        local tween = item.Timer
-        if tween and tween.PlaybackState == Enum.PlaybackState.Paused then
-            tween:Play()
-        end
-    end)
-
-    return item
-end
-
-function Notify.Error(title, description)
-    title = title ~= nil and tostring(title) or ""
-    description = description ~= nil and tostring(description) or ""
-    if title == "" and description == "" then
-        return
-    end
-    Notify.Build()
-    local state = Notify.State
-    local key = title .. "\n" .. description
-    local current = state.Item
-    if current and not current.Closed then
-        if current.Key == key then
-            Notify.Start(current)
-            return
-        end
-        Notify.Remove(current, true)
-    end
-    local item = Notify.Create(title, description, key)
-    state.Item = item
-    item.Tween = Util.Tween(item.Frame, Notify.Config.TweenIn, {Position = UDim2.new(0, 0, 1, 0)})
-    Notify.Start(item)
-end
-
-function Notify.Destroy()
-    local state = Notify.State
-    if state.Item then
-        Notify.Remove(state.Item, true)
-    end
-    if state.Gui then
-        pcall(state.Gui.Destroy, state.Gui)
-    end
-    state.Gui = nil
-    state.Container = nil
-    state.Item = nil
-end
-
-local function Report(title, detail)
-    local message = tostring(detail)
-    warn("[EcoHub] " .. title .. ": " .. message)
-    pcall(Notify.Error, title, message)
-end
-
--- // Salvamento
-local Save = {Data = nil, Entry = nil, Key = nil, Name = nil, Dirty = false, Token = 0, Started = false}
-
-function Save.Read()
-    if Save.Data then
-        return Save.Data
-    end
-    local data = nil
-    if type(isfile) == "function" and type(readfile) == "function" then
-        local ok, body = pcall(function()
-            if isfile(Config.SaveFile) then
-                return readfile(Config.SaveFile)
-            end
-            return nil
-        end)
-        if ok and type(body) == "string" and body ~= "" then
-            local parsed, decoded = pcall(HttpService.JSONDecode, HttpService, body)
-            if parsed and type(decoded) == "table" then
-                data = decoded
-            end
-        end
-    end
-    data = data or {}
-    if type(data.Player) ~= "table" then
-        data.Player = {}
-    end
-    if type(data.Games) ~= "table" then
-        data.Games = {}
-    end
-    Save.Data = data
-    Save.Identify()
-    return data
-end
-
-function Save.Identify()
-    local player = Save.Data.Player
-    local info = {
-        Name = LocalPlayer.Name,
-        DisplayName = LocalPlayer.DisplayName,
-        UserId = LocalPlayer.UserId
-    }
-    local changed = false
-    for key, value in pairs(info) do
-        if player[key] ~= value then
-            player[key] = value
-            changed = true
-        end
-    end
-    if changed then
-        Save.Touch()
-    end
-end
-
-function Save.Find()
-    local data = Save.Read()
-    local placeId = tostring(game.PlaceId)
-    for name, entry in pairs(data.Games) do
-        if type(entry) == "table" and tostring(entry.PlaceId) == placeId then
-            return name, entry
-        end
-    end
-    return nil, nil
-end
-
-function Save.Class()
-    if Save.Entry then
-        return Save.Entry
-    end
-    local data = Save.Read()
-    local name, entry = Save.Find()
-    if not entry then
-        name = Save.Name or ("Place " .. tostring(game.PlaceId))
-        if data.Games[name] then
-            name = name .. " [" .. tostring(game.PlaceId) .. "]"
-        end
-        entry = {PlaceId = game.PlaceId, AutoSave = {}}
-        data.Games[name] = entry
-    end
-    if type(entry.AutoSave) ~= "table" then
-        entry.AutoSave = {}
-    end
-    entry.GameId = game.GameId
-    entry.LastPlayed = os.time()
-    Save.Key = name
-    Save.Entry = entry
-    Save.Touch()
-    return entry
-end
-
-function Save.Rename(name)
-    local entry = Save.Entry
-    if not entry or Save.Key == name then
-        return
-    end
-    local data = Save.Read()
-    if data.Games[name] and data.Games[name] ~= entry then
-        name = name .. " [" .. tostring(game.PlaceId) .. "]"
-        if Save.Key == name then
-            return
-        end
-    end
-    data.Games[Save.Key] = nil
-    data.Games[name] = entry
-    Save.Key = name
-    Save.Touch()
-end
-
-function Save.Init()
-    if Save.Started then
-        return
-    end
-    Save.Started = true
-    task.spawn(function()
-        local ok, info = pcall(function()
-            return MarketplaceService:GetProductInfo(game.PlaceId)
-        end)
-        if not ok or type(info) ~= "table" or type(info.Name) ~= "string" or info.Name == "" then
-            return
-        end
-        Save.Name = info.Name
-        Save.Rename(info.Name)
-    end)
-end
-
-function Save.Touch()
-    Save.Dirty = true
-    Save.Token = Save.Token + 1
-    local token = Save.Token
-    task.delay(Config.SaveDelay, function()
-        if Save.Token == token then
-            Save.Flush()
-        end
-    end)
-end
-
-function Save.Flush()
-    if not Save.Dirty or not Save.Data then
-        return
-    end
-    Save.Dirty = false
-    Save.Token = Save.Token + 1
-    if type(writefile) ~= "function" then
-        return
-    end
-    local ok, failure = pcall(function()
-        writefile(Config.SaveFile, Json.Encode(Save.Data))
-    end)
-    if not ok then
-        Report("Save failed", failure)
-    end
-end
-
-function Save.Get(key, default)
-    local value = Save.Class().AutoSave[tostring(key)]
-    if value == nil then
-        return default
-    end
-    return value
-end
-
-function Save.Set(key, value)
-    Save.Class().AutoSave[tostring(key)] = value
-    Save.Touch()
-end
-
-function Save.Delete(key)
-    Save.Class().AutoSave[tostring(key)] = nil
-    Save.Touch()
-end
-
--- // Http
-local Http = {}
-
-function Http.Get(url)
-    local failure = "request failed"
-    local ok, body = pcall(game.HttpGet, game, url)
-    if ok and type(body) == "string" and body ~= "" then
-        return body
-    end
-    if not ok then
-        failure = tostring(body)
-    end
-
-    local requester = nil
-    if type(request) == "function" then
-        requester = request
-    elseif type(http_request) == "function" then
-        requester = http_request
-    elseif type(syn) == "table" and type(syn.request) == "function" then
-        requester = syn.request
-    end
-
-    if requester and not string.find(failure, "404", 1, true) then
-        local sent, response = pcall(requester, {Url = url, Method = "GET"})
-        if sent and type(response) == "table" then
-            local status = response.StatusCode or response.Status
-            if type(response.Body) == "string" and response.Body ~= "" and (response.Success or status == 200) then
-                return response.Body
-            end
-            failure = "HTTP " .. tostring(status)
-        elseif not sent then
-            failure = tostring(response)
-        end
-    end
-    error(failure, 0)
-end
-
-function Http.Try(urls, rounds)
-    rounds = rounds or 2
-    local lastError = "not found"
-    local retry = false
-    for round = 1, rounds do
-        retry = false
-        for _, url in ipairs(urls) do
-            local ok, result = pcall(Http.Get, url)
-            if ok then
-                return result
-            end
-            lastError = tostring(result)
-            if not string.find(lastError, "404", 1, true) then
-                retry = true
-            end
-        end
-        if not retry or round == rounds then
-            break
-        end
-        task.wait(0.4 * round)
-    end
-    return nil, lastError, not retry
-end
-
-function Http.Fetch(urls, rounds)
-    local body, failure = Http.Try(urls, rounds)
-    if body then
-        return body
-    end
-    error(failure, 0)
-end
-
-function Http.Race(urls, validate, options)
-    options = options or {}
-    local delay = options.Delay or 1.2
-    local limit = options.Timeout or 20
-    local parallel = options.Parallel or 3
-    local total = #urls
-    local fatalLimit = math.min(2, total)
-    local state = {Done = false, Value = nil, Active = 0, Failures = 0, Missing = 0, Fatal = 0, Reason = nil}
-
-    local function attempt(url)
-        local ok, body = pcall(Http.Get, url)
-        state.Active = state.Active - 1
-        if state.Done then
-            return
-        end
-        if not ok then
-            state.Failures = state.Failures + 1
-            state.Reason = tostring(body)
-            if string.find(state.Reason, "404", 1, true) then
-                state.Missing = state.Missing + 1
-            end
-            return
-        end
-        local valid, value, reason, fatal = pcall(validate, body)
-        if valid and value then
-            state.Value = value
-            state.Done = true
-            return
-        end
-        state.Failures = state.Failures + 1
-        state.Reason = valid and tostring(reason or "invalid response") or tostring(value)
-        if valid and fatal then
-            state.Fatal = state.Fatal + 1
-        end
-    end
-
-    local started = 0
-    local lastStart = 0
-    local deadline = os.clock() + limit
-
-    while not state.Done do
-        local now = os.clock()
-        if now >= deadline or state.Fatal >= fatalLimit then
-            break
-        end
-        if started < total then
-            if state.Active < parallel and (state.Active == 0 or now - lastStart >= delay) then
-                started = started + 1
-                state.Active = state.Active + 1
-                lastStart = now
-                task.spawn(attempt, urls[started])
-            end
-        elseif state.Active == 0 then
-            break
-        end
-        task.wait(0.03)
-    end
-
-    local value = state.Value
-    state.Done = true
-    if value then
-        return value, nil, false
-    end
-    local gone = total > 0 and (state.Missing >= total or state.Fatal >= fatalLimit)
-    return nil, state.Reason or "download timed out", gone
-end
-
--- // Tradutor Roblox
-local Roblox = {Translator = nil, Lang = nil, Loading = false, Cache = {}, Count = 0}
+local Roblox = { Translator = nil, Lang = nil, Loading = false, Cache = {}, Count = 0 }
 Locale.Roblox = Roblox
 
 function Roblox.Load()
@@ -1587,7 +1002,7 @@ function Roblox.Get(text, lang)
         Roblox.Count = 0
     end
     Roblox.Count = Roblox.Count + 1
-    local ok, result = pcall(translator.Translate, translator, PlayerGui, text)
+    local ok, result = pcall(translator.Translate, translator, GetPlayerGui(), text)
     if ok and type(result) == "string" and result ~= "" and result ~= text then
         Roblox.Cache[text] = result
         return result
@@ -1596,7 +1011,6 @@ function Roblox.Get(text, lang)
     return nil
 end
 
--- // Tradução automática
 local Machine = {
     Cache = {},
     Queue = {},
@@ -1611,23 +1025,34 @@ local Machine = {
     SingleChars = 200,
     Waiting = false,
     Recovering = false,
-    Ready = false
+    Ready = false,
+    Saves = nil
 }
 Locale.Machine = Machine
 
-local MACHINE_CODES = {zh = "zh-CN", he = "iw", fil = "tl"}
-local MACHINE_HOSTS = {"translate.googleapis.com", "translate.google.com"}
+local MACHINE_CODES = { zh = "zh-CN", he = "iw", fil = "tl" }
+local MACHINE_HOSTS = { "translate.googleapis.com", "translate.google.com" }
 
 function Machine.Load()
     if Machine.Ready then
         return
     end
+    local saves = Machine.Saves
+    if not saves or not saves.Data then
+        return
+    end
     Machine.Ready = true
-    local data = Save.Read()
+    local data = saves.Data
     if type(data.Translations) ~= "table" then
         data.Translations = {}
     end
     Machine.Cache = data.Translations
+end
+
+function Machine.Attach(saves)
+    Machine.Saves = saves
+    Machine.Ready = false
+    Machine.Load()
 end
 
 function Machine.Trim(text)
@@ -1663,7 +1088,7 @@ end
 
 function Machine.Chunks(text)
     if #text <= 300 then
-        return {text}
+        return { text }
     end
     local chunks, current = {}, ""
     for sentence in string.gmatch(text, "[^%.!?\n]*[%.!?\n]*%s*") do
@@ -1781,7 +1206,9 @@ function Machine.Store(lang, key, result)
         Machine.Cache[lang] = bucket
     end
     bucket[key] = result
-    Save.Touch()
+    if Machine.Saves then
+        Machine.Saves:Queue()
+    end
     Machine.Schedule()
 end
 
@@ -1811,7 +1238,7 @@ function Machine.Take()
     if not first then
         return nil
     end
-    local jobs = {first}
+    local jobs = { first }
     if not Machine.Batchable(first) then
         return jobs, first.Lang
     end
@@ -1998,144 +1425,23 @@ function Source.Urls(repo, branch, file, stamp)
     }
 end
 
--- // Maid
-local Maid = {}
-Maid.__index = Maid
-
-function Maid.new()
-    return setmetatable({Tasks = {}}, Maid)
-end
-
-function Maid:Add(item)
-    self.Tasks[#self.Tasks + 1] = item
-    return item
-end
-
-function Maid:Connect(signal, callback)
-    return self:Add(signal:Connect(callback))
-end
-
-function Maid:Destroy()
-    for _, item in ipairs(self.Tasks) do
-        local kind = typeof(item)
-        if kind == "RBXScriptConnection" then
-            item:Disconnect()
-        elseif kind == "Instance" then
-            item:Destroy()
-        elseif kind == "function" then
-            pcall(item)
-        elseif kind == "table" and type(item.Destroy) == "function" then
-            pcall(item.Destroy, item)
-        end
-    end
-    table.clear(self.Tasks)
-end
-
--- // Icons
-local Icons = {Assets = env.EcoHubIcons, Pending = {}, Loading = false, Failed = -100, Retries = 0}
-
-function Icons.Apply(icon, name)
-    local assets = Icons.Assets
-    if not assets then
-        return
-    end
-    name = tostring(name or "circle")
-    local id = assets["lucide-" .. name] or assets[name] or assets["lucide-circle"] or assets["circle"]
-    if id then
-        icon.Image = id
-    end
-end
-
-function Icons.Create(parent, name, size, color)
-    local icon = Util.Create("ImageLabel", {
-        Name = "Icon",
-        Size = UDim2.fromOffset(size, size),
-        BackgroundTransparency = 1,
-        ImageColor3 = color
-    }, parent)
-    if Icons.Assets then
-        Icons.Apply(icon, name)
-    else
-        Icons.Pending[#Icons.Pending + 1] = {icon, name}
-        if not Icons.Loading and os.clock() - Icons.Failed > 10 then
-            Icons.Load()
-        end
-    end
-    return icon
-end
-
-function Icons.Flush()
-    local pending = Icons.Pending
-    Icons.Pending = {}
-    for _, item in ipairs(pending) do
-        if item[1].Parent then
-            Icons.Apply(item[1], item[2])
-        end
-    end
-end
-
-function Icons.Load()
-    if Icons.Assets or Icons.Loading then
-        return
-    end
-    Icons.Loading = true
-    task.spawn(function()
-        local failure = "unknown error"
-        for attempt = 1, 4 do
-            local ok, result = pcall(function()
-                return loadstring(Http.Fetch({Config.IconsUrl, Config.IconsCdn}, 1))()
-            end)
-            if ok and type(result) == "table" and type(result.assets) == "table" then
-                Icons.Assets = result.assets
-                Icons.Retries = 0
-                env.EcoHubIcons = result.assets
-                Icons.Loading = false
-                Icons.Flush()
-                return
-            end
-            failure = tostring(result)
-            task.wait(attempt)
-        end
-        Icons.Failed = os.clock()
-        Icons.Loading = false
-        Icons.Retries = Icons.Retries + 1
-        local alive = {}
-        for _, item in ipairs(Icons.Pending) do
-            if item[1].Parent then
-                alive[#alive + 1] = item
-            end
-        end
-        Icons.Pending = alive
-        Report("Icons failed", failure)
-        if Icons.Retries <= 5 then
-            task.delay(10 * Icons.Retries, function()
-                if not Icons.Assets and not Icons.Loading then
-                    Icons.Load()
-                end
-            end)
-        end
-    end)
-end
-
--- // Library
-local Library = {Window = nil, Locale = Locale}
-Library.__index = Library
-
 -- // ElementRegistry
 local ElementRegistry = {}
 ElementRegistry.__index = ElementRegistry
 
-local function bind(self, impl)
-    return function(first, ...)
-        if rawequal(first, self) then
-            return impl(self, ...)
+local function Bind(Self, Impl)
+    return function(First, ...)
+        if rawequal(First, Self) then
+            return Impl(Self, ...)
         end
-        return impl(self, first, ...)
+
+        return Impl(Self, First, ...)
     end
 end
 
 function ElementRegistry.new()
     local self = setmetatable({}, ElementRegistry)
+
     self.Registry = {}
     self.Pending = {}
     self.Files = {}
@@ -2146,10 +1452,11 @@ function ElementRegistry.new()
     self.Destroyed = false
     self.OnChanged = nil
 
-    self.Register = bind(self, ElementRegistry._Register)
-    self.Get = bind(self, ElementRegistry._Get)
-    self.List = bind(self, ElementRegistry._List)
-    self.Load = bind(self, ElementRegistry._Load)
+    self.Register = Bind(self, ElementRegistry._Register)
+    self.Get = Bind(self, ElementRegistry._Get)
+    self.List = Bind(self, ElementRegistry._List)
+    self.Load = Bind(self, ElementRegistry._Load)
+
     return self
 end
 
@@ -2159,1476 +1466,1432 @@ function ElementRegistry:_Changed()
     end
 end
 
-function ElementRegistry:_Register(name, builder, meta)
-    if self.Destroyed or type(name) ~= "string" or type(builder) ~= "function" then
+function ElementRegistry:_Register(Name, Builder, Meta)
+    if self.Destroyed or type(Name) ~= "string" or type(Builder) ~= "function" then
         return
     end
-    local key = Util.ResolveKey(name)
-    local frameless = key == "button"
-    if type(meta) == "table" and meta.Frameless ~= nil then
-        frameless = meta.Frameless and true or false
-    end
-    local entry = {Name = name, Builder = builder, Frameless = frameless}
-    self.Registry[key] = entry
 
-    local queue = self.Pending[key]
-    if queue then
-        self.Pending[key] = nil
-        for _, job in ipairs(queue) do
-            local element = job.Element
+    local Key = Util.ResolveKey(Name)
+    local Frameless = Key == "button"
+
+    if type(Meta) == "table" and Meta.Frameless ~= nil then
+        Frameless = Meta.Frameless and true or false
+    end
+
+    local Entry = { Name = Name, Builder = Builder, Frameless = Frameless }
+    self.Registry[Key] = Entry
+
+    local Queue = self.Pending[Key]
+
+    if Queue then
+        self.Pending[Key] = nil
+
+        for _, Job in ipairs(Queue) do
+            local Element = Job.Element
+
             task.spawn(function()
-                local ok, failure = pcall(element.Build, element, entry, job.Options)
-                if not ok then
-                    Report("Element failed", tostring(element.Type) .. ": " .. tostring(failure))
+                local Success, Failure = pcall(Element.Build, Element, Entry, Job.Options)
+
+                if not Success then
+                    Report("Element failed", tostring(Element.Type) .. ": " .. tostring(Failure))
                 end
             end)
         end
     end
+
     self:_Changed()
 end
 
-function ElementRegistry:_Get(name)
-    return self.Registry[Util.ResolveKey(name)]
+function ElementRegistry:_Get(Name)
+    return self.Registry[Util.ResolveKey(Name)]
 end
 
 function ElementRegistry:_List()
-    local names = {}
-    for _, entry in pairs(self.Registry) do
-        names[#names + 1] = entry.Name
+    local Names = {}
+
+    for _, Entry in pairs(self.Registry) do
+        table.insert(Names, Entry.Name)
     end
-    table.sort(names)
-    return names
+
+    table.sort(Names)
+    return Names
 end
 
-function ElementRegistry:Enqueue(key, element, options)
-    local queue = self.Pending[key]
-    if not queue then
-        queue = {}
-        self.Pending[key] = queue
+function ElementRegistry:Enqueue(Key, Element, Options)
+    local Queue = self.Pending[Key]
+
+    if not Queue then
+        Queue = {}
+        self.Pending[Key] = Queue
     end
-    queue[#queue + 1] = {Element = element, Options = options}
+
+    table.insert(Queue, { Element = Element, Options = Options })
+
     if self.Active == 0 then
         self:_Watch()
     end
 end
 
-function ElementRegistry:_RunChunk(source)
+function ElementRegistry:_RunChunk(Source)
     env.Elements = self
     env.Panel = self.Panel
-    local chunk, compileError = loadstring(Util.Prepare(source, "local Elements, Panel = ...; "))
-    if not chunk then
-        error(compileError, 0)
+
+    local Chunk, CompileError = loadstring(Util.Prepare(Source, "local Elements, Panel = ...; "))
+
+    if not Chunk then
+        error(CompileError, 0)
     end
-    return chunk(self, self.Panel)
+
+    return Chunk(self, self.Panel)
 end
 
-function ElementRegistry:_LoadFile(file, optional)
-    local names = {file}
-    if not string.match(file, "%.luau?$") then
-        names = {file .. ".lua", file .. ".luau"}
+function ElementRegistry:_LoadFile(File, Optional)
+    local Names = { File }
+
+    if not string.match(File, "%.luau?$") then
+        Names = { File .. ".lua", File .. ".luau" }
     end
 
-    local stamp = "?t=" .. tostring(os.time())
-    local urls = {}
-    for _, candidate in ipairs(names) do
-        urls[#urls + 1] = Config.ElementsRaw .. candidate .. stamp
-    end
-    for _, candidate in ipairs(names) do
-        urls[#urls + 1] = Config.ElementsCdn .. candidate
+    local Stamp = "?t=" .. tostring(os.time())
+    local Urls = {}
+
+    for _, Candidate in ipairs(Names) do
+        table.insert(Urls, Github.ElementsRaw .. Candidate .. Stamp)
     end
 
-    local source, failure, missing = Http.Try(urls, 2)
-    if not source then
-        if not optional then
-            Report("Element load failed", file .. ": " .. tostring(failure))
+    for _, Candidate in ipairs(Names) do
+        table.insert(Urls, Github.ElementsCdn .. Candidate)
+    end
+
+    local Source, Failure, Missing = Http.Try(Urls, 2)
+
+    if not Source then
+        if not Optional then
+            Report("Element load failed", File .. ": " .. tostring(Failure))
         end
-        return false, missing, false
+
+        return false, Missing, false
     end
 
-    local ran, result = pcall(self._RunChunk, self, source)
-    if not ran then
-        Report("Element load failed", file .. ": " .. tostring(result))
+    local Ran, Result = pcall(self._RunChunk, self, Source)
+
+    if not Ran then
+        Report("Element load failed", File .. ": " .. tostring(Result))
         return false, false, true
     end
+
     return true, false, false
 end
 
-function ElementRegistry:_LoadRound(files, optional)
-    local queue = {}
-    for _, file in ipairs(files) do
-        local id = string.lower((string.gsub(file, "%.luau?$", "")))
-        if not self.Files[id] then
-            self.Files[id] = true
-            queue[#queue + 1] = {File = file, Id = id}
+function ElementRegistry:_LoadRound(Files, Optional)
+    local Queue = {}
+
+    for _, File in ipairs(Files) do
+        local Id = string.lower((string.gsub(File, "%.luau?$", "")))
+
+        if not self.Files[Id] then
+            self.Files[Id] = true
+            table.insert(Queue, { File = File, Id = Id })
         end
     end
 
-    local cursor = 0
-    local running = 0
-    local loaded = 0
-    local retryable = 0
-    local progress = os.clock()
-    local finished = {}
+    local Cursor = 0
+    local Running = 0
+    local Loaded = 0
+    local Retryable = 0
+    local Progress = os.clock()
+    local Finished = {}
 
-    local function worker()
+    local function Worker()
         while not self.Destroyed do
-            cursor = cursor + 1
-            local job = queue[cursor]
-            if not job then
+            Cursor = Cursor + 1
+
+            local Job = Queue[Cursor]
+
+            if not Job then
                 break
             end
-            local ok, permanent, broken = self:_LoadFile(job.File, optional)
-            finished[job.Id] = true
-            if ok then
-                loaded = loaded + 1
-                self.Files[job.Id] = true
-                self.Attempts[job.Id] = nil
-            elseif permanent then
-                self.Files[job.Id] = "missing"
+
+            local Success, Permanent, Broken = self:_LoadFile(Job.File, Optional)
+            Finished[Job.Id] = true
+
+            if Success then
+                Loaded = Loaded + 1
+                self.Files[Job.Id] = true
+                self.Attempts[Job.Id] = nil
+            elseif Permanent then
+                self.Files[Job.Id] = "missing"
             else
-                local count = (self.Attempts[job.Id] or 0) + (broken and 1 or 0)
-                self.Attempts[job.Id] = count
-                if broken and count >= Config.LoadAttempts then
-                    self.Files[job.Id] = "broken"
+                local Count = (self.Attempts[Job.Id] or 0) + (Broken and 1 or 0)
+                self.Attempts[Job.Id] = Count
+
+                if Broken and Count >= Config.LoadAttempts then
+                    self.Files[Job.Id] = "broken"
                 else
-                    self.Files[job.Id] = nil
-                    retryable = retryable + 1
+                    self.Files[Job.Id] = nil
+                    Retryable = Retryable + 1
                 end
             end
-            progress = os.clock()
+
+            Progress = os.clock()
         end
-        running = running - 1
+
+        Running = Running - 1
     end
 
-    for _ = 1, math.min(Config.MaxParallel, #queue) do
-        running = running + 1
-        task.spawn(worker)
+    for _ = 1, math.min(Config.MaxParallel, #Queue) do
+        Running = Running + 1
+        task.spawn(Worker)
     end
 
-    while running > 0 and os.clock() - progress < Config.LoadTimeout and not self.Destroyed do
+    while Running > 0 and os.clock() - Progress < Config.LoadTimeout and not self.Destroyed do
         task.wait(0.1)
     end
 
-    for _, job in ipairs(queue) do
-        if not finished[job.Id] and self.Files[job.Id] == true then
-            self.Files[job.Id] = nil
-            retryable = retryable + 1
+    for _, Job in ipairs(Queue) do
+        if not Finished[Job.Id] and self.Files[Job.Id] == true then
+            self.Files[Job.Id] = nil
+            Retryable = Retryable + 1
         end
     end
-    return loaded, #queue, retryable
+
+    return Loaded, #Queue, Retryable
 end
 
-function ElementRegistry:_ParseApi(body)
-    local files = {}
-    local ok, list = pcall(HttpService.JSONDecode, HttpService, body)
-    if ok and type(list) == "table" then
-        for _, item in ipairs(list) do
-            if type(item) == "table" and item.type == "file" and type(item.name) == "string" then
-                if string.match(item.name, "%.luau?$") then
-                    files[#files + 1] = item.name
+function ElementRegistry:_ParseApi(Body)
+    local Files = {}
+    local Success, List = pcall(HttpService.JSONDecode, HttpService, Body)
+
+    if Success and type(List) == "table" then
+        for _, Item in ipairs(List) do
+            if type(Item) == "table" and Item.type == "file" and type(Item.name) == "string" then
+                if string.match(Item.name, "%.luau?$") then
+                    table.insert(Files, Item.name)
                 end
             end
         end
     end
-    table.sort(files)
-    return files
+
+    table.sort(Files)
+    return Files
 end
 
-function ElementRegistry:_ParseCdn(body)
-    local files = {}
-    local ok, data = pcall(HttpService.JSONDecode, HttpService, body)
-    if ok and type(data) == "table" and type(data.files) == "table" then
-        local prefix = "/" .. Config.ElementsPath .. "/"
-        for _, item in ipairs(data.files) do
-            local path = type(item) == "table" and item.name
-            if type(path) == "string" and string.sub(path, 1, #prefix) == prefix then
-                local name = string.sub(path, #prefix + 1)
-                if not string.find(name, "/", 1, true) and string.match(name, "%.luau?$") then
-                    files[#files + 1] = name
+function ElementRegistry:_ParseCdn(Body)
+    local Files = {}
+    local Success, Data = pcall(HttpService.JSONDecode, HttpService, Body)
+
+    if Success and type(Data) == "table" and type(Data.files) == "table" then
+        local Prefix = "/" .. Github.ElementsPath .. "/"
+
+        for _, Item in ipairs(Data.files) do
+            local Path = type(Item) == "table" and Item.name
+
+            if type(Path) == "string" and string.sub(Path, 1, #Prefix) == Prefix then
+                local Name = string.sub(Path, #Prefix + 1)
+
+                if not string.find(Name, "/", 1, true) and string.match(Name, "%.luau?$") then
+                    table.insert(Files, Name)
                 end
             end
         end
     end
-    table.sort(files)
-    return files
+
+    table.sort(Files)
+    return Files
 end
 
-function ElementRegistry:_ListFiles(names)
-    if type(names) == "table" then
-        local files = {}
-        for _, name in ipairs(names) do
-            files[#files + 1] = name
+function ElementRegistry:_ListFiles(Names)
+    if type(Names) == "table" then
+        local Files = {}
+
+        for _, Name in ipairs(Names) do
+            table.insert(Files, Name)
         end
-        return files, false
+
+        return Files, false
     end
 
-    local sources = {
-        {Config.ElementsApi, self._ParseApi},
-        {Config.ElementsList, self._ParseCdn}
+    local Sources = {
+        { Github.ElementsApi, self._ParseApi },
+        { Github.ElementsList, self._ParseCdn }
     }
-    for _, source in ipairs(sources) do
-        local ok, body = pcall(Http.Fetch, {source[1]}, 1)
-        if ok then
-            local files = source[2](self, body)
-            if #files > 0 then
-                return files, false
+
+    for _, Source in ipairs(Sources) do
+        local Success, Body = pcall(Http.Fetch, { Source[1] }, 1)
+
+        if Success then
+            local Files = Source[2](self, Body)
+
+            if #Files > 0 then
+                return Files, false
             end
         end
     end
 
-    local files = {}
-    for _, name in ipairs(ELEMENT_DEFAULTS) do
-        files[#files + 1] = name
+    local Files = {}
+
+    for _, Name in ipairs(ElementDefaults) do
+        table.insert(Files, Name)
     end
-    return files, true
+
+    return Files, true
 end
 
 function ElementRegistry:_WarnPending()
-    for key, queue in pairs(self.Pending) do
-        local alive = {}
-        for _, job in ipairs(queue) do
-            if not job.Element.Destroyed then
-                alive[#alive + 1] = job
-                if not job.Warned then
-                    job.Warned = true
-                    Report("Element missing", job.Element.Type .. " was not found in " .. Config.ElementsPath)
+    for Key, Queue in pairs(self.Pending) do
+        local Alive = {}
+
+        for _, Job in ipairs(Queue) do
+            if not Job.Element.Destroyed then
+                table.insert(Alive, Job)
+
+                if not Job.Warned then
+                    Job.Warned = true
+                    Report("Element missing", Job.Element.Type .. " was not found in " .. Github.ElementsPath)
                 end
             end
         end
-        if #alive > 0 then
-            self.Pending[key] = alive
+
+        if #Alive > 0 then
+            self.Pending[Key] = Alive
         else
-            self.Pending[key] = nil
+            self.Pending[Key] = nil
         end
     end
 end
 
 function ElementRegistry:_HasPending()
-    for key, queue in pairs(self.Pending) do
-        local alive = {}
-        for _, job in ipairs(queue) do
-            if not job.Element.Destroyed then
-                alive[#alive + 1] = job
+    for Key, Queue in pairs(self.Pending) do
+        local Alive = {}
+
+        for _, Job in ipairs(Queue) do
+            if not Job.Element.Destroyed then
+                table.insert(Alive, Job)
             end
         end
-        if #alive > 0 then
-            self.Pending[key] = alive
+
+        if #Alive > 0 then
+            self.Pending[Key] = Alive
         else
-            self.Pending[key] = nil
+            self.Pending[Key] = nil
         end
     end
+
     return next(self.Pending) ~= nil
 end
 
 function ElementRegistry:_PendingNames()
-    local names = {}
-    for _, queue in pairs(self.Pending) do
-        for _, job in ipairs(queue) do
-            local name = tostring(job.Element.Type)
-            if not job.Element.Destroyed and not table.find(names, name) then
-                names[#names + 1] = name
+    local Names = {}
+
+    for _, Queue in pairs(self.Pending) do
+        for _, Job in ipairs(Queue) do
+            local Name = tostring(Job.Element.Type)
+
+            if not Job.Element.Destroyed and not table.find(Names, Name) then
+                table.insert(Names, Name)
             end
         end
     end
-    table.sort(names)
-    return names
+
+    table.sort(Names)
+    return Names
 end
 
 function ElementRegistry:_Watch()
     if self.Watching or self.Destroyed then
         return
     end
+
     self.Watching = true
+
     task.spawn(function()
-        for attempt = 1, Config.WatchRetries do
-            task.wait(Config.WatchDelay * attempt)
+        for Attempt = 1, Config.WatchRetries do
+            task.wait(Config.WatchDelay * Attempt)
+
             if self.Destroyed or not self:_HasPending() then
                 break
             end
+
             if self.Active == 0 then
-                for id, state in pairs(self.Files) do
-                    if state == "missing" or state == "broken" then
-                        self.Files[id] = nil
+                for Id, State in pairs(self.Files) do
+                    if State == "missing" or State == "broken" then
+                        self.Files[Id] = nil
                     end
                 end
+
                 self.Attempts = {}
                 self:_Load(nil, false, true)
             end
         end
+
         self.Watching = false
     end)
 end
 
-function ElementRegistry:_Load(names, force, quiet)
-    names = names or env.EcoHubElementList
-    if force then
+function ElementRegistry:_Load(Names, Force, Quiet)
+    Names = Names or env.EcoHubElementList
+
+    if Force then
         self.Files = {}
         self.Attempts = {}
     end
-    self.Active = self.Active + 1
-    task.spawn(function()
-        local queued = 0
-        local loaded = 0
-        local files, optional = self:_ListFiles(names)
 
-        for round = 1, Config.LoadRounds do
+    self.Active = self.Active + 1
+
+    task.spawn(function()
+        local Queued = 0
+        local Loaded = 0
+        local Files, Optional = self:_ListFiles(Names)
+
+        for Round = 1, Config.LoadRounds do
             if self.Destroyed then
                 break
             end
-            local roundLoaded, roundQueued, retryable = self:_LoadRound(files, optional)
-            loaded = loaded + roundLoaded
-            queued = queued + roundQueued
 
-            local missing = next(self.Pending) ~= nil
-            if round == Config.LoadRounds or (retryable == 0 and not (optional and missing)) then
+            local RoundLoaded, RoundQueued, Retryable = self:_LoadRound(Files, Optional)
+            Loaded = Loaded + RoundLoaded
+            Queued = Queued + RoundQueued
+
+            local Missing = next(self.Pending) ~= nil
+
+            if Round == Config.LoadRounds or (Retryable == 0 and not (Optional and Missing)) then
                 break
             end
 
-            task.wait(Config.RetryDelay * round)
-            if optional and not self.Destroyed then
-                files, optional = self:_ListFiles(names)
+            task.wait(Config.RetryDelay * Round)
+
+            if Optional and not self.Destroyed then
+                Files, Optional = self:_ListFiles(Names)
             end
         end
 
         if not self.Destroyed and self:_HasPending() then
-            local extra = self:_PendingNames()
-            if #extra > 0 then
-                self:_LoadRound(extra, true)
+            local Extra = self:_PendingNames()
+
+            if #Extra > 0 then
+                self:_LoadRound(Extra, true)
             end
         end
 
         self.Active = self.Active - 1
+
         if self.Destroyed then
             return
         end
-        if queued > 0 and loaded == 0 and not quiet then
+
+        if Queued > 0 and Loaded == 0 and not Quiet then
             Report("Elements failed", "no elements could be loaded, check your connection or the repository")
         end
+
         if self.Active == 0 then
-            if not quiet then
+            if not Quiet then
                 self:_WarnPending()
             end
+
             self:_Watch()
         end
     end)
 end
 
--- // Element
-local Element = {}
-Element.__index = Element
+-- // Themes
+local Theme = {
+    Active = Color3.fromRGB(240, 240, 240),
+    Inactive = Color3.fromRGB(165, 165, 165),
+    Dim = Color3.fromRGB(115, 115, 115),
+    Accent = Color3.fromRGB(42, 42, 42),
+    Field = Color3.fromRGB(34, 34, 34),
+    Border = Color3.fromRGB(55, 55, 55),
+    BorderHover = Color3.fromRGB(88, 88, 88),
+    Palette = Color3.fromRGB(28, 28, 28),
+    Background = Color3.fromRGB(24, 24, 24),
+    Divider = Color3.fromRGB(50, 50, 50),
+    Subtitle = Color3.fromRGB(150, 150, 150),
+    Placeholder = Color3.fromRGB(110, 110, 110),
+    Text = Color3.fromRGB(230, 230, 230),
+    TabActive = Color3.fromRGB(255, 255, 255),
+    TabInactive = Color3.fromRGB(145, 145, 145),
+    TabHover = Color3.fromRGB(200, 200, 200),
+    GradientTop = Color3.fromRGB(38, 38, 38),
+    GradientBottom = Color3.fromRGB(25, 25, 25)
+}
 
-function Element.NameOf(elementType, options)
-    return tostring(options.title or options.Title or options.name or options.Name or options.Text or options.Label or elementType)
+local DefaultTheme = {}
+local ThemeKeys = {}
+
+for Key, Color in pairs(Theme) do
+    DefaultTheme[Key] = Color
+    table.insert(ThemeKeys, Key)
 end
 
-function Element.KeyOf(name)
-    local key = string.gsub(tostring(name), "%d+%s*[dhms]%f[%A]", "#")
-    return key
+table.sort(ThemeKeys)
+
+local Themes = { Extensions = { "lua", "luau", "json" }, Cache = {}, Files = {} }
+
+local ThemeProps = {
+    Frame = { "BackgroundColor3" },
+    CanvasGroup = { "BackgroundColor3" },
+    TextLabel = { "BackgroundColor3", "TextColor3" },
+    TextButton = { "BackgroundColor3", "TextColor3" },
+    TextBox = { "BackgroundColor3", "TextColor3", "PlaceholderColor3" },
+    ImageLabel = { "BackgroundColor3", "ImageColor3" },
+    ImageButton = { "BackgroundColor3", "ImageColor3" },
+    ViewportFrame = { "BackgroundColor3", "ImageColor3" },
+    ScrollingFrame = { "BackgroundColor3", "ScrollBarImageColor3" },
+    UIStroke = { "Color" }
+}
+
+local function Pack(Color)
+    return math.floor(Color.R * 255 + 0.5) * 65536 + math.floor(Color.G * 255 + 0.5) * 256 + math.floor(Color.B * 255 + 0.5)
 end
 
-function Element.new(contentSection, elementType, options)
-    local self = setmetatable({}, Element)
-    local tab = contentSection.Tab
-
-    local container = Util.Create("Frame", {
-        Name = elementType,
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-        BorderSizePixel = 0,
-        LayoutOrder = contentSection.Count,
-        Visible = false
-    }, contentSection.Holder)
-    Util.Corner(container, 8)
-    local constraint = Util.Create("UISizeConstraint", {MinSize = Vector2.new(0, 38)}, container)
-    Util.Create("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(44, 44, 44)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 28, 28))
-        }),
-        Rotation = 90
-    }, container)
-
-    local border = Util.Create("UIStroke", {Name = "Border", Color = Theme.Border, Thickness = 1}, container)
-    local flash = Util.Create("UIStroke", {Name = "Flash", Color = Theme.Active, Thickness = 1.5, Transparency = 1}, container)
-    local inset = Util.Create("UIPadding", {Name = "Inset"}, container)
-
-    local deco = Util.Create("Frame", {
-        Name = "Hover",
-        BackgroundColor3 = Theme.Active,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.fromScale(1, 1),
-        Visible = false
-    }, container)
-    Util.Corner(deco, 8)
-
-    if not isTouch then
-        container.MouseEnter:Connect(function()
-            Util.Tween(deco, Config.TweenInfo, {BackgroundTransparency = 0.94})
-            Util.Tween(border, Config.TweenInfo, {Color = Theme.BorderHover})
-        end)
-        container.MouseLeave:Connect(function()
-            Util.Tween(deco, Config.TweenInfo, {BackgroundTransparency = 1})
-            Util.Tween(border, Config.TweenInfo, {Color = Theme.Border})
-        end)
+local function ToColor(Value)
+    if typeof(Value) == "Color3" then
+        return Value
     end
 
-    local name = Element.NameOf(elementType, options)
-    local description = tostring(options.description or options.Description or "")
+    if type(Value) == "string" then
+        local Hex = string.match(Value, "^#?(%x%x%x%x%x%x)$")
 
-    local used = contentSection.Used
-    used[name] = (used[name] or 0) + 1
+        if Hex then
+            return Color3.fromRGB(
+                tonumber(string.sub(Hex, 1, 2), 16),
+                tonumber(string.sub(Hex, 3, 4), 16),
+                tonumber(string.sub(Hex, 5, 6), 16)
+            )
+        end
+    elseif type(Value) == "table" then
+        local R = tonumber(Value[1] or Value.R or Value.r)
+        local G = tonumber(Value[2] or Value.G or Value.g)
+        local B = tonumber(Value[3] or Value.B or Value.b)
 
-    self.Type = elementType
-    self.Name = name
-    self.Key = Element.KeyOf(name)
-    self.Group = contentSection.Name
-    self.Description = description
-    self.SearchText = ""
-    self.SearchVersion = -1
-    self.Tab = tab
-    self.Section = contentSection
-    self.Container = container
-    self.Constraint = constraint
-    self.Border = border
-    self.Flash = flash
-    self.Inset = inset
-    self.Deco = deco
-    self.Calls = {}
-    self.Built = false
-    self.Building = false
-    self.Destroyed = false
-    self.Instance = nil
-    self.Owner = nil
-    self.Registry = tab.Window.Elements
+        if R and G and B then
+            return Color3.fromRGB(R, G, B)
+        end
+    end
 
-    container.Name = name
-    return self
+    return nil
 end
 
-function Element:GetSearch()
-    if self.SearchVersion ~= Locale.Version then
-        self.SearchVersion = Locale.Version
-        local parts = {self.Name, self.Type, self.Group, self.Tab.Name, self.Description}
-        local text = table.concat(parts, " ")
-        if Locale.IsActive() then
-            for _, part in ipairs(parts) do
-                text = text .. " " .. Locale.Translate(part)
+local function BuildPalette(Colors)
+    Colors = Colors or DefaultTheme
+
+    local Palette = {}
+    local Used = {}
+
+    for _, Key in ipairs(ThemeKeys) do
+        local Color = Colors[Key] or DefaultTheme[Key]
+        local R = math.floor(Color.R * 255 + 0.5)
+        local G = math.floor(Color.G * 255 + 0.5)
+        local B = math.floor(Color.B * 255 + 0.5)
+        local Code = Pack(Color)
+        local Step = 0
+
+        while Used[Code] do
+            Step = Step + 1
+            Color = Color3.fromRGB(R, G, B + Step <= 255 and B + Step or B - Step)
+            Code = Pack(Color)
+        end
+
+        Used[Code] = true
+        Palette[Key] = Color
+    end
+
+    return Palette
+end
+
+local function RemapObject(Object, Map)
+    local Class = Object.ClassName
+    local Props = ThemeProps[Class]
+
+    if Props then
+        if not Object:GetAttribute("NoTheme") then
+            for _, Property in ipairs(Props) do
+                local Target = Map[Pack(Object[Property])]
+
+                if Target then
+                    Object[Property] = Target
+                end
             end
         end
-        self.SearchText = Locale.Fold(text)
-    end
-    return self.SearchText
-end
+    elseif Class == "UIGradient" then
+        local Keypoints = Object.Color.Keypoints
+        local Points = table.create(#Keypoints)
+        local Dirty = false
 
-function Element:ApplyFrame(frameless)
-    local pad = frameless and 0 or 5
-    local side = frameless and 0 or 12
-    self.Container.BackgroundTransparency = frameless and 1 or 0
-    self.Constraint.MinSize = Vector2.new(0, frameless and 0 or 38)
-    self.Border.Enabled = not frameless
-    self.Inset.PaddingTop = UDim.new(0, pad)
-    self.Inset.PaddingBottom = UDim.new(0, pad)
-    self.Inset.PaddingLeft = UDim.new(0, side)
-    self.Inset.PaddingRight = UDim.new(0, side)
-    self.Deco.Position = UDim2.fromOffset(-side, -pad)
-    self.Deco.Size = UDim2.new(1, side * 2, 1, pad * 2)
-    self.Deco.Visible = not frameless
-end
+        for Index, Point in ipairs(Keypoints) do
+            local Target = Map[Pack(Point.Value)]
 
-function Element:Attach(options)
-    local key = Util.ResolveKey(self.Type)
-    local entry = self.Registry.Registry[key]
-    if entry then
-        self:Build(entry, options)
-    else
-        self:ApplyFrame(key == "button")
-        self.Registry:Enqueue(key, self, options)
+            if Target then
+                Dirty = true
+            end
+
+            Points[Index] = ColorSequenceKeypoint.new(Point.Time, Target or Point.Value)
+        end
+
+        if Dirty then
+            Object.Color = ColorSequence.new(Points)
+        end
     end
 end
 
-function Element:Build(entry, options, attempt)
-    if self.Destroyed or self.Built or self.Building then
-        return
-    end
-    self.Building = true
-    attempt = attempt or 1
-    self:ApplyFrame(entry.Frameless)
+local function SplitFile(File)
+    local Name, Ext = string.match(File, "^(.+)%.(%w+)$")
 
-    local scope = {
-        frame = self.Container,
-        Panel = self.Registry.Panel,
-        Tab = self.Tab,
-        Section = self.Section,
-        Element = self,
-        Elements = self.Registry,
-        CreateIcon = Icons.Create
+    if Name then
+        Ext = string.lower(Ext)
+
+        for _, Allowed in ipairs(Themes.Extensions) do
+            if Allowed == Ext then
+                return Name, Ext
+            end
+        end
+    end
+
+    return nil
+end
+
+local function ListApi(Body)
+    local Files = {}
+    local Success, List = pcall(HttpService.JSONDecode, HttpService, Body)
+
+    if Success and type(List) == "table" then
+        for _, Item in ipairs(List) do
+            if type(Item) == "table" and Item.type == "file" and type(Item.name) == "string" then
+                table.insert(Files, Item.name)
+            end
+        end
+    end
+
+    return Files
+end
+
+local function ListCdn(Body)
+    local Files = {}
+    local Success, Data = pcall(HttpService.JSONDecode, HttpService, Body)
+
+    if Success and type(Data) == "table" and type(Data.files) == "table" then
+        local Prefix = "/" .. Github.ThemesPath .. "/"
+
+        for _, Item in ipairs(Data.files) do
+            local Path = type(Item) == "table" and Item.name
+
+            if type(Path) == "string" and string.sub(Path, 1, #Prefix) == Prefix then
+                local Name = string.sub(Path, #Prefix + 1)
+
+                if not string.find(Name, "/", 1, true) then
+                    table.insert(Files, Name)
+                end
+            end
+        end
+    end
+
+    return Files
+end
+
+function Themes.Names()
+    local Sources = {
+        { Github.ThemesApi, ListApi },
+        { Github.ElementsList, ListCdn }
     }
 
-    local existing = {}
-    for _, child in ipairs(self.Container:GetChildren()) do
-        existing[child] = true
-    end
+    for _, Source in ipairs(Sources) do
+        local Success, Body = pcall(Http.Fetch, { Source[1] }, 1)
 
-    local ok, result = pcall(entry.Builder, scope, options)
-    self.Building = false
-    if self.Destroyed then
-        return
-    end
-    if not ok then
-        for _, child in ipairs(self.Container:GetChildren()) do
-            if not existing[child] then
-                child:Destroy()
+        if Success then
+            local Names = {}
+            local Seen = {}
+
+            for _, File in ipairs(Source[2](Body)) do
+                local Name = SplitFile(File)
+
+                if Name and string.lower(Name) ~= "default" and not Seen[string.lower(Name)] then
+                    Seen[string.lower(Name)] = true
+                    Themes.Files[string.lower(Name)] = File
+                    table.insert(Names, Name)
+                end
+            end
+
+            if #Names > 0 then
+                table.sort(Names)
+                return Names
             end
         end
-        if attempt == Config.BuildRetries then
-            Report("Element failed", self.Type .. " failed, retrying later: " .. tostring(result))
+    end
+
+    return {}
+end
+
+function Themes.Fetch(Name)
+    local Files = {}
+    local Known = Themes.Files[string.lower(Name)]
+
+    if Known then
+        Files = { Known }
+    elseif SplitFile(Name) then
+        Files = { Name }
+    else
+        for _, Ext in ipairs(Themes.Extensions) do
+            table.insert(Files, Name .. "." .. Ext)
         end
-        if attempt < Config.BuildRetries + Config.BuildLateRetries then
-            local delay = attempt < Config.BuildRetries and 0.5 * attempt or Config.BuildLateDelay
-            task.delay(delay, function()
-                if not self.Destroyed and not self.Built then
-                    self:Build(entry, options, attempt + 1)
-                    self.Registry:_Changed()
+    end
+
+    local Stamp = "?t=" .. tostring(os.time())
+    local Urls = {}
+
+    for _, File in ipairs(Files) do
+        table.insert(Urls, Github.ThemesRaw .. HttpService:UrlEncode(File) .. Stamp)
+    end
+
+    for _, File in ipairs(Files) do
+        table.insert(Urls, Github.ThemesCdn .. HttpService:UrlEncode(File))
+    end
+
+    local Body, Failure = Http.Try(Urls, 2)
+
+    if not Body then
+        return nil, Failure
+    end
+
+    Body = (string.gsub(Body, "^\239\187\191", ""))
+
+    local Lead = string.match(Body, "^%s*(.)")
+
+    if Lead == "{" or Lead == "[" then
+        local Success, Data = pcall(HttpService.JSONDecode, HttpService, Body)
+
+        if Success then
+            return Data
+        end
+
+        return nil, tostring(Data)
+    end
+
+    local Chunk, CompileError = loadstring(Body)
+
+    if not Chunk then
+        return nil, tostring(CompileError)
+    end
+
+    local Success, Data = pcall(Chunk)
+
+    if not Success then
+        return nil, tostring(Data)
+    end
+
+    return Data
+end
+
+function Themes.Parse(Result)
+    if type(Result) ~= "table" then
+        return nil
+    end
+
+    local Source = type(Result.Colors) == "table" and Result.Colors or Result
+    local Lookup = {}
+
+    for _, Key in ipairs(ThemeKeys) do
+        Lookup[string.lower(Key)] = Key
+    end
+
+    local Colors = {}
+    local Count = 0
+
+    for Key, Value in pairs(Source) do
+        local Canonical = type(Key) == "string" and Lookup[string.lower(Key)]
+        local Color = Canonical and ToColor(Value)
+
+        if Color then
+            Colors[Canonical] = Color
+            Count = Count + 1
+        end
+    end
+
+    if Count == 0 then
+        return nil
+    end
+
+    return Colors
+end
+
+function Themes.Load(Name)
+    local Key = string.lower(Name)
+    local Cached = Themes.Cache[Key]
+
+    if Cached then
+        return Cached
+    end
+
+    local Result, Failure = Themes.Fetch(Name)
+    local Colors = Result and Themes.Parse(Result)
+
+    if not Colors then
+        return nil, Failure or "file has no valid colors"
+    end
+
+    Themes.Cache[Key] = Colors
+    return Colors
+end
+
+function Themes.Prefetch(Names, IsAlive)
+    if not Config.ThemePrefetch then
+        return
+    end
+
+    task.spawn(function()
+        for Index, Name in ipairs(Names) do
+            if Index > Config.ThemePrefetchLimit or (IsAlive and not IsAlive()) then
+                break
+            end
+
+            if not Themes.Cache[string.lower(Name)] then
+                pcall(Themes.Load, Name)
+                task.wait(0.15)
+            end
+        end
+    end)
+end
+
+-- // Saves
+local FileApi = {
+    Ready = type(isfile) == "function" and type(readfile) == "function" and type(writefile) == "function"
+}
+
+local Json = {}
+
+function Json.EncodeString(Text)
+    Text = string.gsub(Text, "\\", "\\\\")
+    Text = string.gsub(Text, "\"", "\\\"")
+    Text = string.gsub(Text, "\n", "\\n")
+    Text = string.gsub(Text, "\r", "\\r")
+    Text = string.gsub(Text, "\t", "\\t")
+    return "\"" .. Text .. "\""
+end
+
+function Json.Encode(Value, Indent)
+    Indent = Indent or 0
+
+    local Pad = string.rep("    ", Indent)
+    local Inner = string.rep("    ", Indent + 1)
+
+    if type(Value) == "table" then
+        local IsList = true
+        local Count = 0
+
+        for Key in pairs(Value) do
+            Count = Count + 1
+
+            if type(Key) ~= "number" then
+                IsList = false
+            end
+        end
+
+        if Count == 0 then
+            return "{}"
+        end
+
+        if IsList then
+            local Parts = {}
+
+            for Index = 1, Count do
+                Parts[#Parts + 1] = Inner .. Json.Encode(Value[Index], Indent + 1)
+            end
+
+            return "[\n" .. table.concat(Parts, ",\n") .. "\n" .. Pad .. "]"
+        end
+
+        local Keys = {}
+
+        for Key in pairs(Value) do
+            Keys[#Keys + 1] = Key
+        end
+
+        table.sort(Keys, function(A, B)
+            return tostring(A) < tostring(B)
+        end)
+
+        local Parts = {}
+
+        for _, Key in ipairs(Keys) do
+            Parts[#Parts + 1] = Inner .. Json.EncodeString(tostring(Key)) .. ": " .. Json.Encode(Value[Key], Indent + 1)
+        end
+
+        return "{\n" .. table.concat(Parts, ",\n") .. "\n" .. Pad .. "}"
+    elseif type(Value) == "string" then
+        return Json.EncodeString(Value)
+    elseif type(Value) == "number" or type(Value) == "boolean" then
+        return tostring(Value)
+    end
+
+    return "null"
+end
+
+local SaveManager = {}
+SaveManager.__index = SaveManager
+
+local BaseProfile = "AutoSave"
+
+local function IsArray(Table)
+    local Count = 0
+
+    for Key in pairs(Table) do
+        if type(Key) ~= "number" or Key < 1 or Key % 1 ~= 0 then
+            return false
+        end
+
+        Count = Count + 1
+    end
+
+    return Count == #Table
+end
+
+local function Encode(Value, Depth)
+    Depth = Depth or 0
+
+    local Kind = typeof(Value)
+
+    if Kind == "boolean" or Kind == "string" then
+        return Value
+    end
+
+    if Kind == "number" then
+        if Value ~= Value or Value == math.huge or Value == -math.huge then
+            return nil
+        end
+
+        return Value
+    end
+
+    if Kind == "Color3" then
+        return { __t = "Color3", v = Value:ToHex() }
+    end
+
+    if Kind == "EnumItem" then
+        return { __t = "Enum", v = tostring(Value) }
+    end
+
+    if Kind == "table" and Depth < 6 then
+        local Result: { [any]: any } = {}
+
+        if IsArray(Value) then
+            for _, Item in ipairs(Value) do
+                local Encoded = Encode(Item, Depth + 1)
+
+                if Encoded ~= nil then
+                    table.insert(Result, Encoded)
                 end
+            end
+        else
+            for Key, Item in pairs(Value) do
+                local Encoded = Encode(Item, Depth + 1)
+
+                if Encoded ~= nil then
+                    Result[tostring(Key)] = Encoded
+                end
+            end
+        end
+
+        return Result
+    end
+
+    return nil
+end
+
+local function Decode(Value, Depth)
+    if type(Value) ~= "table" then
+        return Value
+    end
+
+    Depth = Depth or 0
+
+    if Depth > 6 then
+        return nil
+    end
+
+    local Tag = Value.__t
+
+    if Tag == "Color3" then
+        return ToColor(Value.v)
+    end
+
+    if Tag == "Enum" then
+        local Kind, Name = string.match(tostring(Value.v), "^Enum%.([%w_]+)%.([%w_]+)$")
+
+        if Kind then
+            local Success, Item = pcall(function()
+                return Enum[Kind][Name]
             end)
+
+            if Success then
+                return Item
+            end
+        end
+
+        return nil
+    end
+
+    local Result = {}
+
+    for Key, Item in pairs(Value) do
+        Result[Key] = Decode(Item, Depth + 1)
+    end
+
+    return Result
+end
+
+function SaveManager.new(Path)
+    local self = setmetatable({}, SaveManager)
+
+    self.Path = Path
+    self.Entries = {}
+    self.Token = 0
+    self.Suspended = false
+    self.Destroyed = false
+    self.Warned = false
+    self.Data = nil
+    self.Game = nil
+    self.GameKey = nil
+    self.Active = BaseProfile
+    self.AutoEnabled = true
+    self.Last = nil
+
+    self:Read()
+    self:_Rename()
+
+    return self
+end
+
+function SaveManager:Read()
+    local Data = nil
+
+    if FileApi.Ready then
+        local Found, Exists = pcall(isfile, self.Path)
+
+        if Found and Exists then
+            local Opened, Body = pcall(readfile, self.Path)
+
+            if Opened and type(Body) == "string" and Body ~= "" then
+                local Parsed, Decoded = pcall(HttpService.JSONDecode, HttpService, Body)
+
+                if Parsed and type(Decoded) == "table" then
+                    Data = Decoded
+                else
+                    pcall(writefile, self.Path .. ".bak", Body)
+                    Report("Saves", self.Path .. " is corrupted, a copy was kept as " .. self.Path .. ".bak")
+                end
+            end
+        end
+    end
+
+    Data = Data or {}
+
+    if type(Data.Player) ~= "table" then
+        Data.Player = {}
+    end
+
+    if type(Data.Games) ~= "table" then
+        Data.Games = {}
+    end
+
+    if type(Data.Panel) ~= "table" then
+        Data.Panel = {}
+    end
+
+    self.Data = Data
+    self.AutoEnabled = Data.Panel.AutoSave ~= false
+
+    local Player = Players.LocalPlayer
+
+    if Player then
+        local Info = { Name = Player.Name, DisplayName = Player.DisplayName, UserId = Player.UserId }
+
+        for Key, Value in pairs(Info) do
+            Data.Player[Key] = Value
+        end
+    end
+
+    self:_Class()
+end
+
+function SaveManager:_Class()
+    local PlaceId = tostring(game.PlaceId)
+    local Games = self.Data.Games
+    local Key = nil
+    local Entry = nil
+
+    for Name, Item in pairs(Games) do
+        if type(Item) == "table" and tostring(Item.PlaceId) == PlaceId then
+            Key = Name
+            Entry = Item
+            break
+        end
+    end
+
+    if not Entry then
+        Key = "Place " .. PlaceId
+
+        if Games[Key] then
+            Key = Key .. " [" .. PlaceId .. "]"
+        end
+
+        Entry = { PlaceId = game.PlaceId, AutoSave = {} }
+        Games[Key] = Entry
+    end
+
+    if type(Entry.AutoSave) ~= "table" then
+        Entry.AutoSave = {}
+    end
+
+    if type(Entry.Profiles) ~= "table" then
+        Entry.Profiles = {}
+    end
+
+    Entry.GameId = game.GameId
+    Entry.LastPlayed = os.time()
+
+    local Active = Entry.Profile
+
+    if type(Active) ~= "string" or (Active ~= BaseProfile and type(Entry.Profiles[Active]) ~= "table") then
+        Active = BaseProfile
+    end
+
+    Entry.Profile = Active
+
+    self.Game = Entry
+    self.GameKey = Key
+    self.Active = Active
+
+    self:Queue()
+end
+
+function SaveManager:_Rename()
+    task.spawn(function()
+        local Success, Info = pcall(function()
+            return MarketplaceService:GetProductInfo(game.PlaceId)
+        end)
+
+        if self.Destroyed or not Success or type(Info) ~= "table" or type(Info.Name) ~= "string" or Info.Name == "" then
             return
         end
-        Report("Element failed", self.Type .. " could not be built: " .. tostring(result))
+
+        local Name = Info.Name
+        local Games = self.Data.Games
+
+        if self.GameKey == Name then
+            return
+        end
+
+        if Games[Name] and Games[Name] ~= self.Game then
+            Name = Name .. " [" .. tostring(game.PlaceId) .. "]"
+
+            if self.GameKey == Name then
+                return
+            end
+        end
+
+        Games[self.GameKey] = nil
+        Games[Name] = self.Game
+        self.GameKey = Name
+
+        self:Queue()
+    end)
+end
+
+function SaveManager:Values()
+    if self.Active == BaseProfile then
+        return self.Game.AutoSave
+    end
+
+    return self.Game.Profiles[self.Active]
+end
+
+function SaveManager:GetSetting(Key, Default)
+    local Value = self.Data.Panel[Key]
+
+    if Value == nil then
+        return Default
+    end
+
+    local Decoded = Decode(Value)
+
+    if Decoded == nil then
+        return Default
+    end
+
+    return Decoded
+end
+
+function SaveManager:SetSetting(Key, Value)
+    self.Data.Panel[Key] = Encode(Value)
+    self:Queue()
+end
+
+function SaveManager:GetAuto(Key, Default)
+    local Value = self.Game.AutoSave[tostring(Key)]
+
+    if Value == nil then
+        return Default
+    end
+
+    local Decoded = Decode(Value)
+
+    if Decoded == nil then
+        return Default
+    end
+
+    return Decoded
+end
+
+function SaveManager:SetAuto(Key, Value)
+    self.Game.AutoSave[tostring(Key)] = Encode(Value)
+    self:Queue()
+end
+
+function SaveManager:DeleteAuto(Key)
+    self.Game.AutoSave[tostring(Key)] = nil
+    self:Queue()
+end
+
+function SaveManager:Register(Flag, Getter, Setter)
+    if self.Destroyed or type(Flag) ~= "string" or type(Getter) ~= "function" or type(Setter) ~= "function" then
         return
     end
 
-    Locale.Attach(self.Container)
-    self.Container.Visible = true
-    self.Built = true
-    self.Instance = type(result) == "table" and result or {}
+    self.Entries[Flag] = { Get = Getter, Set = Setter }
 
-    local calls = self.Calls
-    self.Calls = {}
-    for _, call in ipairs(calls) do
-        local method = self.Instance[call.Name]
-        if type(method) == "function" then
-            pcall(method, self.Instance, table.unpack(call.Args, 1, call.Count))
+    local Stored = self:Values()[Flag]
+
+    if self.AutoEnabled and Stored ~= nil then
+        self:_Apply(Flag, Stored)
+    end
+end
+
+function SaveManager:Unregister(Flag)
+    self.Entries[Flag] = nil
+end
+
+function SaveManager:_Apply(Flag, Stored)
+    local Entry = self.Entries[Flag]
+    local Value = Decode(Stored)
+
+    if not Entry or Value == nil then
+        return
+    end
+
+    local WasSuspended = self.Suspended
+    self.Suspended = true
+
+    local Success, Failure = pcall(Entry.Set, Value, not Config.RestoreFires)
+
+    self.Suspended = WasSuspended
+
+    if not Success then
+        Report("Save restore failed", Flag .. ": " .. tostring(Failure))
+    end
+end
+
+function SaveManager:Apply()
+    local Values = self:Values()
+    local Flags = {}
+
+    for Flag in pairs(self.Entries) do
+        table.insert(Flags, Flag)
+    end
+
+    for _, Flag in ipairs(Flags) do
+        local Stored = Values[Flag]
+
+        if Stored ~= nil then
+            self:_Apply(Flag, Stored)
+        end
+    end
+
+    self:Queue()
+end
+
+function SaveManager:Collect()
+    if not self.AutoEnabled then
+        return
+    end
+
+    local Values = self:Values()
+
+    for Flag, Entry in pairs(self.Entries) do
+        local Success, Value = pcall(Entry.Get)
+
+        if Success then
+            Values[Flag] = Encode(Value)
         end
     end
 end
 
-function Element:Destroy()
+function SaveManager:Write()
     if self.Destroyed then
+        return false
+    end
+
+    self:Collect()
+
+    local Encoded, Body = pcall(Json.Encode, self.Data)
+
+    if not Encoded then
+        Report("Save failed", Body)
+        return false
+    end
+
+    if not FileApi.Ready then
+        if not self.Warned then
+            self.Warned = true
+            Report("Saves", "this executor has no file functions, nothing will be saved", "Warning")
+        end
+
+        return false
+    end
+
+    if Body == self.Last then
+        return true
+    end
+
+    local Written, Failure = pcall(writefile, self.Path, Body)
+
+    if not Written then
+        Report("Save failed", Failure)
+        return false
+    end
+
+    self.Last = Body
+
+    return true
+end
+
+function SaveManager:Queue()
+    if self.Destroyed or self.Suspended then
         return
     end
+
+    self.Token = self.Token + 1
+
+    local Token = self.Token
+
+    task.delay(Config.SaveDelay, function()
+        if not self.Destroyed and self.Token == Token then
+            self:Write()
+        end
+    end)
+end
+
+function SaveManager:Changed(Flag)
+    if self.AutoEnabled and self.Entries[Flag] then
+        self:Queue()
+    end
+end
+
+function SaveManager:Flush()
+    self.Token = self.Token + 1
+    return self:Write()
+end
+
+function SaveManager:SetAutoSave(State)
+    State = State and true or false
+
+    if State == self.AutoEnabled then
+        return
+    end
+
+    self.AutoEnabled = State
+    self.Data.Panel.AutoSave = State
+    self:Queue()
+end
+
+function SaveManager:ListProfiles()
+    local Names = {}
+
+    for Name, Profile in pairs(self.Game.Profiles) do
+        if type(Profile) == "table" then
+            table.insert(Names, Name)
+        end
+    end
+
+    table.sort(Names)
+    table.insert(Names, 1, BaseProfile)
+
+    return Names
+end
+
+function SaveManager:NextName()
+    local Index = 1
+
+    while self.Game.Profiles["Profile " .. Index] do
+        Index = Index + 1
+    end
+
+    return "Profile " .. Index
+end
+
+function SaveManager:SetProfile(Name)
+    if Name == self.Active or (Name ~= BaseProfile and type(self.Game.Profiles[Name]) ~= "table") then
+        return false
+    end
+
+    self:Write()
+
+    self.Active = Name
+    self.Game.Profile = Name
+
+    self:Apply()
+    return true
+end
+
+function SaveManager:CreateProfile(Name)
+    if type(Name) ~= "string" or Name == "" or Name == BaseProfile then
+        Name = self:NextName()
+    end
+
+    if self.Game.Profiles[Name] then
+        return nil
+    end
+
+    self:Collect()
+
+    local Copy = {}
+
+    for Flag, Stored in pairs(self:Values()) do
+        Copy[Flag] = Stored
+    end
+
+    self.Game.Profiles[Name] = Copy
+    self.Active = Name
+    self.Game.Profile = Name
+
+    self:Queue()
+    return Name
+end
+
+function SaveManager:DeleteProfile(Name)
+    if Name == BaseProfile or type(self.Game.Profiles[Name]) ~= "table" then
+        return false
+    end
+
+    self.Game.Profiles[Name] = nil
+
+    if self.Active == Name then
+        self.Active = BaseProfile
+        self.Game.Profile = BaseProfile
+        self:Apply()
+    else
+        self:Queue()
+    end
+
+    return true
+end
+
+function SaveManager:Destroy()
     self.Destroyed = true
-
-    local api = self.Instance
-    if api and type(api.Destroy) == "function" then
-        pcall(api.Destroy, api)
-    end
-
-    local index = table.find(self.Tab.Elements, self)
-    if index then
-        table.remove(self.Tab.Elements, index)
-    end
-    self.Container:Destroy()
-    self.Registry:_Changed()
-end
-
-function Element:CreateHandle()
-    local element = self
-    return setmetatable({Element = element}, {
-        __index = function(_, key)
-            if key == "Destroy" then
-                return function()
-                    element:Destroy()
-                end
-            end
-            if element.Destroyed then
-                return function() end
-            end
-            if element.Built then
-                local value = element.Instance[key]
-                if type(value) == "function" then
-                    return function(_, ...)
-                        return value(element.Instance, ...)
-                    end
-                end
-                return value
-            end
-            return function(_, ...)
-                element.Calls[#element.Calls + 1] = {Name = key, Args = {...}, Count = select("#", ...)}
-            end
-        end
-    })
-end
-
--- // ContentSection
-local ContentSection = {}
-
-ContentSection.__index = function(self, key)
-    local method = rawget(ContentSection, key)
-    if method ~= nil then
-        return method
-    end
-    if type(key) ~= "string" then
-        return nil
-    end
-    local elementName = string.match(key, "^Create(%u%w*)$") or string.match(key, "^Add(%u%w*)$")
-    if not elementName then
-        return nil
-    end
-    return function(section, options)
-        return section:AddElement(elementName, options)
-    end
-end
-
-function ContentSection.new(tab, name)
-    local self = setmetatable({}, ContentSection)
-    self.Name = name
-    self.Tab = tab
-    self.Count = 0
-    self.Used = {}
-
-    local frame = Util.Create("Frame", {
-        Name = name,
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-        LayoutOrder = #tab.Sections + 1
-    }, tab.Scroll)
-    Util.List(frame, 6)
-
-    local header = Util.Create("Frame", {
-        Name = "Header",
-        Size = UDim2.new(1, 0, 0, 16),
-        BackgroundTransparency = 1,
-        LayoutOrder = 0
-    }, frame)
-    Util.Padding(header, 0, 0, 2, 0)
-    Util.List(header, 6, {
-        FillDirection = Enum.FillDirection.Horizontal,
-        VerticalAlignment = Enum.VerticalAlignment.Center
-    })
-
-    local title = Util.Create("TextLabel", {
-        Name = "Title",
-        AutomaticSize = Enum.AutomaticSize.X,
-        Size = UDim2.new(0, 0, 1, 0),
-        BackgroundTransparency = 1,
-        Text = name,
-        TextColor3 = Theme.Active,
-        TextSize = 12,
-        Font = Enum.Font.SourceSansBold,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd,
-        LayoutOrder = 1
-    }, header)
-    Locale.Bind(title, "Text", Locale.Upper)
-
-    local holder = Util.Create("Frame", {
-        Name = "Holder",
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-        LayoutOrder = 1
-    }, frame)
-    Util.List(holder, 6)
-
-    self.Frame = frame
-    self.TitleLabel = title
-    self.Holder = holder
-    return self
-end
-
-function ContentSection:AddElement(elementType, options)
-    options = type(options) == "table" and options or {}
-    elementType = tostring(elementType)
-    self.Count = self.Count + 1
-
-    local owner = Util.Owners[coroutine.running()]
-    local name = Element.NameOf(elementType, options)
-    local key = Element.KeyOf(name)
-    local elements = self.Tab.Elements
-    local order = nil
-    for index = #elements, 1, -1 do
-        local existing = elements[index]
-        if existing and not existing.Destroyed and existing.Section == self and existing.Type == elementType and existing.Key == key
-            and (existing.Owner == owner or existing.Owner == nil or owner == nil) then
-            order = existing.Container.LayoutOrder
-            self.Used[existing.Name] = math.max((self.Used[existing.Name] or 1) - 1, 0)
-            existing:Destroy()
-        end
-    end
-
-    local element = Element.new(self, elementType, options)
-    element.Owner = owner
-    if order then
-        element.Container.LayoutOrder = order
-    end
-    self.Tab.Elements[#self.Tab.Elements + 1] = element
-    element:Attach(options)
-
-    self.Tab.Window:RefreshSearch()
-    return element:CreateHandle()
-end
-
-ContentSection.CreateElement = ContentSection.AddElement
-
-function ContentSection:SetTitle(text)
-    self.TitleLabel.Text = tostring(text)
-end
-
--- // Tab
-local Tab = {}
-Tab.__index = Tab
-
-function Tab.new(window, sideSection, name, iconName)
-    local self = setmetatable({}, Tab)
-    iconName = iconName or "circle"
-
-    self.Window = window
-    self.Section = sideSection
-    self.Name = name
-    self.IconName = iconName
-    self.Sections = {}
-    self.Elements = {}
-    self.SearchText = ""
-    self.SearchVersion = -1
-
-    local button = Util.Create("TextButton", {
-        Name = name,
-        Size = UDim2.new(1, 0, 0, Config.TabHeight),
-        BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        AutoButtonColor = false,
-        Text = "",
-        LayoutOrder = #sideSection.Tabs + 1
-    }, sideSection.Menu)
-    Util.Corner(button, 6)
-    local scale = Util.Create("UIScale", {Scale = 1}, button)
-
-    local icon = Icons.Create(button, iconName, 16, Theme.TabInactive)
-    icon.AnchorPoint = Vector2.new(0.5, 0.5)
-    icon.Position = UDim2.new(0, 18, 0.5, 0)
-    local iconScale = Util.Create("UIScale", {Scale = 1}, icon)
-
-    local label = Util.Create("TextLabel", {
-        Name = "Text",
-        Size = UDim2.new(1, -46, 1, 0),
-        Position = UDim2.new(0, 36, 0, 0),
-        BackgroundTransparency = 1,
-        Text = name,
-        TextColor3 = Theme.TabInactive,
-        TextSize = 14,
-        Font = Enum.Font.SourceSans,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd
-    }, button)
-    Locale.Bind(label, "Text")
-
-    local page = Util.Create("Frame", {
-        Name = name,
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        Visible = false
-    }, window.PageHolder)
-
-    local scroll = Util.Create("ScrollingFrame", {
-        Name = "Scroll",
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ScrollBarThickness = 0,
-        CanvasSize = UDim2.new(0, 0, 0, 0),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        ScrollingDirection = Enum.ScrollingDirection.Y
-    }, page)
-    Util.Padding(scroll, 4, 12, 12, 12)
-    Util.List(scroll, 14)
-    Util.ScrollArea(scroll)
-
-    self.Button = button
-    self.Icon = icon
-    self.Label = label
-    self.Scale = scale
-    self.IconScale = iconScale
-    self.Page = page
-    self.Scroll = scroll
-
-    local pressed = false
-    local function release()
-        if not pressed then
-            return
-        end
-        pressed = false
-        Util.Tween(scale, Config.TabRelease, {Scale = 1})
-    end
-
-    button.InputBegan:Connect(function(input)
-        if Util.IsPress(input) then
-            pressed = true
-            Util.Tween(scale, Config.TabPress, {Scale = 0.94})
-        end
-    end)
-    button.InputEnded:Connect(function(input)
-        if Util.IsPress(input) then
-            release()
-        end
-    end)
-    window.Maid:Connect(UserInputService.InputEnded, function(input)
-        if Util.IsPress(input) then
-            release()
-        end
-    end)
-    button.Activated:Connect(function()
-        self:Select()
-    end)
-    button.MouseEnter:Connect(function()
-        if isTouch or window.ActiveTab == self then
-            return
-        end
-        Util.Tween(label, Config.TabTween, {TextColor3 = Theme.TabHover})
-        Util.Tween(icon, Config.TabTween, {ImageColor3 = Theme.TabHover})
-    end)
-    button.MouseLeave:Connect(function()
-        release()
-        self:Style()
-    end)
-
-    return self
-end
-
-function Tab:GetSearch()
-    if self.SearchVersion ~= Locale.Version then
-        self.SearchVersion = Locale.Version
-        local text = self.Name .. " " .. self.Section.Name
-        if Locale.IsActive() then
-            text = text .. " " .. Locale.Translate(self.Name) .. " " .. Locale.Translate(self.Section.Name)
-        end
-        self.SearchText = Locale.Fold(text)
-    end
-    return self.SearchText
-end
-
-function Tab:Style()
-    local isActive = self.Window.ActiveTab == self
-    local color = isActive and Theme.TabActive or Theme.TabInactive
-    Util.Tween(self.Button, Config.TabTween, {BackgroundTransparency = isActive and Config.TabFillTransparency or 1})
-    Util.Tween(self.Label, Config.TabTween, {TextColor3 = color})
-    Util.Tween(self.Icon, Config.TabTween, {ImageColor3 = color})
-end
-
-function Tab:Pop()
-    self.IconScale.Scale = 0.65
-    Util.Tween(self.IconScale, Config.TabPop, {Scale = 1})
-    self.Button.BackgroundTransparency = 0.05
-end
-
-function Tab:Select()
-    self:Pop()
-    self.Window:SelectTab(self)
-    self:Style()
-end
-
-function Tab:CreateSection(name)
-    name = tostring(name or "Section")
-    for _, existing in ipairs(self.Sections) do
-        if existing.Name == name then
-            return existing
-        end
-    end
-    local section = ContentSection.new(self, name)
-    self.Sections[#self.Sections + 1] = section
-    return section
-end
-
-Tab.AddSection = Tab.CreateSection
-
--- // SideSection
-local SideSection = {}
-SideSection.__index = SideSection
-
-function SideSection.new(window, name)
-    local self = setmetatable({}, SideSection)
-    window.SectionOrder = window.SectionOrder + 1
-
-    self.Window = window
-    self.Name = name
-    self.Tabs = {}
-    self.Open = true
-    self.Token = 0
-
-    local frame = Util.Create("Frame", {
-        Name = name,
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-        LayoutOrder = window.SectionOrder
-    }, window.TabList)
-    Util.List(frame, 2)
-
-    local labelButton = Util.Create("TextButton", {
-        Name = "Label",
-        Size = UDim2.new(1, 0, 0, 24),
-        BackgroundTransparency = 1,
-        AutoButtonColor = false,
-        Text = name,
-        TextColor3 = Theme.Dim,
-        TextSize = 12,
-        Font = Enum.Font.SourceSansSemibold,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd,
-        LayoutOrder = 0
-    }, frame)
-    Util.Padding(labelButton, 0, 0, 10, 26)
-    Locale.Bind(labelButton, "Text")
-
-    local chevron = Icons.Create(labelButton, "chevron-down", 14, Theme.Dim)
-    chevron.AnchorPoint = Vector2.new(1, 0.5)
-    chevron.Position = UDim2.new(1, 18, 0.5, 0)
-
-    local menu = Util.Create("Frame", {
-        Name = "Menu",
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-        LayoutOrder = 1,
-        ClipsDescendants = true
-    }, frame)
-    Util.List(menu, 2)
-
-    self.Frame = frame
-    self.Menu = menu
-    self.Chevron = chevron
-
-    labelButton.Activated:Connect(function()
-        self:SetOpen(not self.Open)
-    end)
-
-    return self
-end
-
-function SideSection:_FullHeight()
-    return math.max(#self.Tabs * (Config.TabHeight + 2) - 2, 0)
-end
-
-function SideSection:SetOpen(state)
-    self.Open = state
-    Util.Tween(self.Chevron, Config.TweenInfo, {Rotation = state and 0 or -90})
-    self:_Animate()
-end
-
-function SideSection:_Animate()
-    local menu = self.Menu
-    local full = math.max(menu.AbsoluteSize.Y, self:_FullHeight())
-
-    self.Token = self.Token + 1
-    local token = self.Token
-    menu.AutomaticSize = Enum.AutomaticSize.None
-
-    if self.Open then
-        menu.Visible = true
-        local tween = Util.Tween(menu, Config.TweenInfo, {Size = UDim2.new(1, 0, 0, self:_FullHeight())})
-        tween.Completed:Connect(function()
-            if self.Token == token and self.Open then
-                menu.AutomaticSize = Enum.AutomaticSize.Y
-                menu.Size = UDim2.new(1, 0, 0, 0)
-            end
-        end)
-    else
-        menu.Size = UDim2.new(1, 0, 0, full)
-        local tween = Util.Tween(menu, Config.TweenInfo, {Size = UDim2.new(1, 0, 0, 0)})
-        tween.Completed:Connect(function()
-            if self.Token == token and not self.Open then
-                menu.Visible = false
-            end
-        end)
-    end
-end
-
-function SideSection:AddTab(tabName, iconName)
-    local tab = Tab.new(self.Window, self, tabName, iconName)
-    self.Tabs[#self.Tabs + 1] = tab
-    if self.Open then
-        self.Menu.Visible = true
-    end
-    self.Window:_RegisterTab(tab)
-    return tab.Page, tab
-end
-
--- // Palette
-local Palette = {}
-Palette.__index = Palette
-
-function Palette.new(window)
-    local self = setmetatable({}, Palette)
-    self.Window = window
-    self.IsOpen = false
-    self.Token = 0
-    self.RenderId = 0
-    self.Items = {}
-    self.Selected = 0
-    self:_Build()
-    return self
-end
-
-function Palette:_Build()
-    local main = self.Window.Main
-
-    local overlay = Util.Create("TextButton", {
-        Name = "PaletteOverlay",
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        AutoButtonColor = false,
-        Text = "",
-        Visible = false,
-        ZIndex = 20
-    }, main)
-    Util.Corner(overlay, 8)
-
-    local frame = Util.Create("Frame", {
-        Name = "PaletteFrame",
-        AnchorPoint = Vector2.new(0.5, 0),
-        Position = UDim2.new(0.5, 0, 0, 40),
-        Size = UDim2.new(1, -20, 0, 89),
-        BackgroundColor3 = Theme.Palette,
-        BorderSizePixel = 0,
-        Active = true,
-        Visible = false,
-        ClipsDescendants = true,
-        ZIndex = 21
-    }, main)
-    Util.Corner(frame, 10)
-    Util.Stroke(frame, Theme.Border, 1)
-    Util.Create("UISizeConstraint", {MaxSize = Vector2.new(340, math.huge)}, frame)
-    local scale = Util.Create("UIScale", {Scale = 0.96}, frame)
-
-    local inputRow = Util.Create("Frame", {
-        Name = "InputRow",
-        Size = UDim2.new(1, 0, 0, 40),
-        BackgroundTransparency = 1,
-        ClipsDescendants = true
-    }, frame)
-
-    local searchIcon = Icons.Create(inputRow, "search", 16, Theme.Dim)
-    searchIcon.AnchorPoint = Vector2.new(0, 0.5)
-    searchIcon.Position = UDim2.new(0, 12, 0.5, 0)
-
-    local input = Util.Create("TextBox", {
-        Name = "Input",
-        Size = UDim2.new(1, -76, 1, 0),
-        Position = UDim2.new(0, 36, 0, 0),
-        BackgroundTransparency = 1,
-        Text = "",
-        PlaceholderText = Locale.Translate("Search tabs and elements..."),
-        PlaceholderColor3 = Theme.Placeholder,
-        TextColor3 = Theme.Text,
-        TextSize = 14,
-        Font = Enum.Font.SourceSans,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        ClearTextOnFocus = false,
-        ClipsDescendants = true,
-        TextWrapped = false,
-        MultiLine = false
-    }, inputRow)
-
-    local close = Util.Create("TextButton", {
-        Name = "Close",
-        AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -8, 0.5, 0),
-        Size = UDim2.new(0, 28, 0, 28),
-        BackgroundColor3 = Theme.Accent,
-        BorderSizePixel = 0,
-        AutoButtonColor = false,
-        Text = ""
-    }, inputRow)
-    Util.Corner(close, 6)
-
-    local closeIcon = Icons.Create(close, "x", 14, Theme.Dim)
-    closeIcon.AnchorPoint = Vector2.new(0.5, 0.5)
-    closeIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
-
-    Util.Create("Frame", {
-        Name = "Divider",
-        Size = UDim2.new(1, 0, 0, 1),
-        Position = UDim2.new(0, 0, 0, 40),
-        BackgroundColor3 = Theme.Border,
-        BorderSizePixel = 0
-    }, frame)
-
-    local list = Util.Create("ScrollingFrame", {
-        Name = "List",
-        Size = UDim2.new(1, 0, 0, 48),
-        Position = UDim2.new(0, 0, 0, 41),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ScrollBarThickness = 0,
-        CanvasSize = UDim2.new(0, 0, 0, 0),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        ScrollingDirection = Enum.ScrollingDirection.Y,
-        ClipsDescendants = true
-    }, frame)
-    Util.Padding(list, 4, 4, 4, 4)
-    local layout = Util.List(list, 2)
-    Util.ScrollArea(list)
-
-    self.Overlay = overlay
-    self.Frame = frame
-    self.Scale = scale
-    self.Input = input
-    self.List = list
-    self.Layout = layout
-
-    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        self:_Resize()
-    end)
-    input:GetPropertyChangedSignal("Text"):Connect(function()
-        local text = input.Text
-        local clean = (string.gsub(text, "%c", " "))
-        local length = utf8.len(clean) or #clean
-        if length > Config.MaxQuery then
-            local cut = utf8.offset(clean, Config.MaxQuery + 1)
-            clean = cut and string.sub(clean, 1, cut - 1) or string.sub(clean, 1, Config.MaxQuery)
-        end
-        if clean ~= text then
-            input.Text = clean
-            return
-        end
-        if not self.IsOpen then
-            return
-        end
-        self.RenderId = self.RenderId + 1
-        local id = self.RenderId
-        task.delay(0.06, function()
-            if self.IsOpen and self.RenderId == id then
-                self:Render(self:_Query())
-            end
-        end)
-    end)
-    overlay.Activated:Connect(function()
-        self:Close()
-    end)
-    close.Activated:Connect(function()
-        self:Close()
-    end)
-    input.FocusLost:Connect(function(enterPressed)
-        if not enterPressed or not self.IsOpen then
-            return
-        end
-        local item = self.Items[self.Selected]
-        if item then
-            self:Activate(item)
-        end
-    end)
-end
-
-function Palette:_Resize()
-    local limit = math.clamp(self.Window.Main.AbsoluteSize.Y - 96, 96, 230)
-    local height = math.clamp(self.Layout.AbsoluteContentSize.Y + 8, 48, limit)
-    self.List.Size = UDim2.new(1, 0, 0, height)
-    self.Frame.Size = UDim2.new(1, -20, 0, 41 + height)
-end
-
-function Palette:_Query()
-    local text = Locale.Fold(self.Input.Text)
-    text = string.gsub(text, "^%s+", "")
-    text = string.gsub(text, "%s+$", "")
-    return text
-end
-
-function Palette:_Clear()
-    for _, child in ipairs(self.List:GetChildren()) do
-        if child:IsA("GuiObject") then
-            child:Destroy()
-        end
-    end
-    self.Items = {}
-    self.Selected = 0
-end
-
-function Palette:SetSelected(index, scroll)
-    local previous = self.Items[self.Selected]
-    if previous and previous.Button.Parent then
-        previous.Button.BackgroundTransparency = 1
-    end
-    self.Selected = index
-    local item = self.Items[index]
-    if not item then
-        return
-    end
-    item.Button.BackgroundTransparency = 0
-
-    if scroll then
-        local list = self.List
-        local current = list.CanvasPosition.Y
-        local top = item.Button.AbsolutePosition.Y - list.AbsolutePosition.Y + current
-        local bottom = top + item.Button.AbsoluteSize.Y
-        local view = list.AbsoluteSize.Y
-        if top < current then
-            list.CanvasPosition = Vector2.new(0, math.max(top - 28, 0))
-        elseif bottom > current + view then
-            list.CanvasPosition = Vector2.new(0, bottom - view + 4)
-        end
-    end
-end
-
-function Palette:Move(step)
-    local count = #self.Items
-    if count == 0 then
-        return
-    end
-    local nextIndex = self.Selected + step
-    if nextIndex > count then
-        nextIndex = 1
-    elseif nextIndex < 1 then
-        nextIndex = count
-    end
-    self:SetSelected(nextIndex, true)
-end
-
-function Palette:_FocusElement(element)
-    local container = element.Container
-    local scroll = element.Tab.Scroll
-    if not container.Parent then
-        return
-    end
-    local target = container.AbsolutePosition.Y - scroll.AbsolutePosition.Y + scroll.CanvasPosition.Y - 34
-    local limit = math.max(scroll.AbsoluteCanvasSize.Y - scroll.AbsoluteSize.Y, 0)
-    Util.Tween(scroll, Config.TweenInfo, {CanvasPosition = Vector2.new(0, math.clamp(target, 0, limit))})
-    element.Flash.Transparency = 0
-    Util.Tween(element.Flash, Config.FlashInfo, {Transparency = 1})
-end
-
-function Palette:Activate(item)
-    self:Close()
-    if item.Kind == "tab" then
-        self.Window:SelectTab(item.Tab)
-    else
-        self.Window:SelectTab(item.Element.Tab)
-        task.delay(0.05, function()
-            if not item.Element.Destroyed then
-                self:_FocusElement(item.Element)
-            end
-        end)
-    end
-end
-
-function Palette:_CreateHeading(order, text)
-    local label = Util.Create("TextLabel", {
-        Name = "Heading",
-        Size = UDim2.new(1, 0, 0, 24),
-        BackgroundTransparency = 1,
-        Text = text,
-        TextColor3 = Theme.Dim,
-        TextSize = 12,
-        Font = Enum.Font.SourceSansSemibold,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd,
-        LayoutOrder = order
-    }, self.List)
-    Util.Padding(label, 0, 0, 8, 8)
-end
-
-function Palette:_CreateSeparator(order)
-    Util.Create("Frame", {
-        Name = "Separator",
-        Size = UDim2.new(1, 0, 0, 1),
-        BackgroundColor3 = Theme.Border,
-        BorderSizePixel = 0,
-        LayoutOrder = order
-    }, self.List)
-end
-
-function Palette:_CreateRow(order, data)
-    local button = Util.Create("TextButton", {
-        Name = "Item",
-        Size = UDim2.new(1, 0, 0, isTouch and 36 or 32),
-        BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        AutoButtonColor = false,
-        Text = "",
-        ClipsDescendants = true,
-        LayoutOrder = order
-    }, self.List)
-    Util.Corner(button, 6)
-
-    local icon = Icons.Create(button, data.Icon, 16, Theme.Inactive)
-    icon.AnchorPoint = Vector2.new(0, 0.5)
-    icon.Position = UDim2.new(0, 8, 0.5, 0)
-
-    local hint = Util.Create("Frame", {
-        Name = "Hint",
-        AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -8, 0.5, 0),
-        Size = UDim2.new(0.4, 0, 0, 16),
-        BackgroundTransparency = 1,
-        ClipsDescendants = true
-    }, button)
-    Util.List(hint, 4, {
-        FillDirection = Enum.FillDirection.Horizontal,
-        HorizontalAlignment = Enum.HorizontalAlignment.Right,
-        VerticalAlignment = Enum.VerticalAlignment.Center
-    })
-
-    local trail = data.Trail
-    for i, part in ipairs(trail) do
-        Util.Create("TextLabel", {
-            Name = "Part" .. i,
-            AutomaticSize = Enum.AutomaticSize.X,
-            Size = UDim2.new(0, 0, 1, 0),
-            BackgroundTransparency = 1,
-            Text = tostring(part),
-            TextColor3 = Theme.Dim,
-            TextSize = 12,
-            Font = Enum.Font.SourceSans,
-            LayoutOrder = i * 2 - 1
-        }, hint)
-        if i < #trail then
-            local separator = Icons.Create(hint, "chevron-right", 12, Theme.Dim)
-            separator.Name = "Sep" .. i
-            separator.LayoutOrder = i * 2
-        end
-    end
-
-    Util.Create("TextLabel", {
-        Name = "Text",
-        Size = UDim2.new(0.6, -44, 1, 0),
-        Position = UDim2.new(0, 32, 0, 0),
-        BackgroundTransparency = 1,
-        Text = data.Name,
-        TextColor3 = Theme.Active,
-        TextSize = 14,
-        Font = Enum.Font.SourceSans,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd
-    }, button)
-
-    data.Button = button
-    self.Items[#self.Items + 1] = data
-    local index = #self.Items
-
-    button.MouseEnter:Connect(function()
-        self:SetSelected(index, false)
-    end)
-    button.Activated:Connect(function()
-        self:Activate(data)
-    end)
-end
-
-function Palette:Render(query)
-    self:_Clear()
-    local order = 0
-    local groups = 0
-
-    for _, section in ipairs(self.Window.SideSections) do
-        local sectionName = Locale.Translate(section.Name)
-        for _, tab in ipairs(section.Tabs) do
-            local tabName = Locale.Translate(tab.Name)
-            local tabMatch = query ~= "" and Util.Contains(tab:GetSearch(), query)
-            local rows = {}
-
-            if query == "" or tabMatch then
-                rows[#rows + 1] = {Kind = "tab", Name = tabName, Icon = tab.IconName, Trail = {sectionName}, Tab = tab}
-            end
-            for _, element in ipairs(tab.Elements) do
-                if element.Built and (query == "" or tabMatch or Util.Contains(element:GetSearch(), query)) then
-                    rows[#rows + 1] = {
-                        Kind = "element",
-                        Name = Locale.Translate(element.Name),
-                        Icon = ELEMENT_ICONS[Util.ResolveKey(element.Type)] or "box",
-                        Trail = {Locale.Translate(element.Group)},
-                        Element = element
-                    }
-                end
-            end
-
-            if #rows > 0 then
-                groups = groups + 1
-                if groups > 1 then
-                    order = order + 1
-                    self:_CreateSeparator(order)
-                end
-                order = order + 1
-                self:_CreateHeading(order, tabName)
-                for _, row in ipairs(rows) do
-                    order = order + 1
-                    self:_CreateRow(order, row)
-                end
-            end
-        end
-    end
-
-    if groups == 0 then
-        Util.Create("TextLabel", {
-            Name = "Empty",
-            Size = UDim2.new(1, 0, 0, 48),
-            BackgroundTransparency = 1,
-            Text = Locale.Translate("No results found."),
-            TextColor3 = Theme.Dim,
-            TextSize = 14,
-            Font = Enum.Font.SourceSans
-        }, self.List)
-    else
-        self:SetSelected(1, false)
-    end
-
-    self.List.CanvasPosition = Vector2.new(0, 0)
-    self:_Resize()
-end
-
-function Palette:Refresh()
-    if self.IsOpen then
-        self:Render(self:_Query())
-    end
-end
-
-function Palette:Open()
-    if self.IsOpen or not self.Window.Gui.Enabled then
-        return
-    end
-    self.IsOpen = true
-    self.Token = self.Token + 1
-    self.Input.Text = ""
-    self:Render("")
-
-    self.Overlay.Visible = true
-    self.Frame.Visible = true
-    self.Overlay.BackgroundTransparency = 1
-    self.Scale.Scale = 0.96
-    Util.Tween(self.Overlay, Config.TweenInfo, {BackgroundTransparency = 0.5})
-    Util.Tween(self.Scale, Config.TweenInfo, {Scale = 1})
-
-    task.defer(function()
-        if self.IsOpen then
-            self.Input:CaptureFocus()
-        end
-    end)
-end
-
-function Palette:Close()
-    if not self.IsOpen then
-        return
-    end
-    self.IsOpen = false
-    self.Token = self.Token + 1
-    self.RenderId = self.RenderId + 1
-    local token = self.Token
-
-    self.Input:ReleaseFocus()
-    Util.Tween(self.Scale, Config.TweenInfo, {Scale = 0.96})
-    local tween = Util.Tween(self.Overlay, Config.TweenInfo, {BackgroundTransparency = 1})
-    tween.Completed:Connect(function()
-        if self.Token == token and not self.IsOpen then
-            self.Overlay.Visible = false
-            self.Frame.Visible = false
-        end
-    end)
+    self.Entries = {}
 end
 
 -- // Features
+local Librarys = { Window = nil }
+
 local FEATURE_HEADER = "local Window, Library = ...; local Windows, Librarys = Window, Library; "
 
 local Features = {}
@@ -3655,7 +2918,7 @@ function Features.new(window)
     self.WatchAll = false
     self.Watching = false
     self.Active = {}
-    self.Source = Source.Build(Config.Repo, Config.Branch, Config.FeaturesPath)
+    self.Source = Source.Build(Github.Repo, Github.Branch, Github.FeaturesPath)
     self.Config = {
         Retries = 3,
         MaxParallel = 6,
@@ -3763,9 +3026,8 @@ function Features._Pinned(source, head)
     }
 end
 
--- // Features Index
 function Features:_Head(source)
-    local ok, body = pcall(Http.Fetch, {Features._Atom(source)}, 1)
+    local ok, body = pcall(Http.Fetch, { Features._Atom(source) }, 1)
     if not ok or type(body) ~= "string" then
         return nil
     end
@@ -3806,7 +3068,7 @@ function Features:_Collect(source)
     local prefix = source.Prefix
     local seed = {}
 
-    local ok, body = pcall(Http.Fetch, {source.Tree}, 2)
+    local ok, body = pcall(Http.Fetch, { source.Tree }, 2)
     if ok then
         local files, truncated, valid = Features._ParseAny(body, prefix)
         if valid and not truncated then
@@ -3828,7 +3090,7 @@ function Features:_Collect(source)
         end
     end
 
-    local found = self:_Gather({source.List, source.Flat}, prefix)
+    local found = self:_Gather({ source.List, source.Flat }, prefix)
     for _, rel in ipairs(seed) do
         found[#found + 1] = rel
     end
@@ -3848,7 +3110,7 @@ function Features:_BuildIndex(source)
         return string.lower(a) < string.lower(b)
     end)
 
-    local index = {Files = {}, ByPath = {}, ByStem = {}, Folders = {}, Exact = exact}
+    local index = { Files = {}, ByPath = {}, ByStem = {}, Folders = {}, Exact = exact }
     for _, rel in ipairs(files) do
         local key = string.lower(Features._Strip(rel))
         if not index.ByPath[key] then
@@ -3954,7 +3216,6 @@ function Features:Warm()
     end)
 end
 
--- // Features Watch
 function Features:_Watches(key)
     if self.WatchAll then
         return true
@@ -3985,7 +3246,7 @@ function Features:_AutoLoad(added)
         local outcomes = self:_LoadJobs(jobs, nil, true)
         for _, outcome in ipairs(outcomes) do
             if not outcome.Success then
-                warn("[EcoHub] Feature failed: " .. tostring(outcome.Name) .. ": " .. tostring(outcome.Error))
+                warn("[Ecohub] Feature failed: " .. tostring(outcome.Name) .. ": " .. tostring(outcome.Error))
             end
         end
     end)
@@ -4032,7 +3293,6 @@ function Features:_StartWatch()
     end)
 end
 
--- // Features Resolve
 function Features:_Normalize(name)
     local text = string.gsub(tostring(name), "^%s+", "")
     text = string.gsub(text, "%s+$", "")
@@ -4063,7 +3323,7 @@ function Features:_Lookup(index, lowered, folderOnly)
     if not folderOnly then
         local rel = index.ByPath[lowered]
         if rel then
-            return {self:_Job(rel)}
+            return { self:_Job(rel) }
         end
     end
     if index.Folders[lowered] then
@@ -4081,7 +3341,7 @@ function Features:_Lookup(index, lowered, folderOnly)
     if not folderOnly then
         local rel = index.ByStem[lowered]
         if rel then
-            return {self:_Job(rel)}
+            return { self:_Job(rel) }
         end
     end
     return nil
@@ -4095,7 +3355,7 @@ function Features:_Resolve(name, final)
         local raw = Features._ToRaw(original)
         local clean = string.match(raw, "^[^%?#]+") or raw
         local display = string.match(Features._Strip(clean), "([^/]+)$") or clean
-        local urls = {raw}
+        local urls = { raw }
         local parsed = Source.Parse(clean)
         if parsed and Features._IsScript(parsed.Path) then
             local mirrors = Source.Urls(parsed.Repo, parsed.Branch, Features._Encode(parsed.Path), "?t=" .. tostring(os.time()))
@@ -4103,7 +3363,7 @@ function Features:_Resolve(name, final)
                 urls[#urls + 1] = mirrors[i]
             end
         end
-        return {{Key = string.lower(clean), Path = clean, Name = display, Urls = urls}}
+        return { { Key = string.lower(clean), Path = clean, Name = display, Urls = urls } }
     end
 
     local clean = self:_Normalize(original)
@@ -4153,17 +3413,16 @@ function Features:_Resolve(name, final)
         urls[#urls + 1] = lua[i]
         urls[#urls + 1] = luau[i]
     end
-    return {{
+    return { {
         Key = lowered,
         Path = clean,
         Name = string.match(clean, "([^/]+)$") or clean,
         Urls = urls,
         Guess = index == nil,
         Origin = original
-    }}
+    } }
 end
 
--- // Features Download
 function Features:_Validate(body)
     if type(body) ~= "string" then
         return nil, "invalid response"
@@ -4182,7 +3441,7 @@ function Features:_Validate(body)
     if not chunk then
         return nil, "compile: " .. tostring(failure), true
     end
-    return {Body = body, Chunk = chunk}
+    return { Body = body, Chunk = chunk }
 end
 
 function Features:_Download(future)
@@ -4199,7 +3458,7 @@ function Features:_Download(future)
             end
             local value, reason, gone = Http.Race(job.Urls, function(body)
                 return self:_Validate(body)
-            end, {Delay = config.HedgeDelay, Timeout = config.AttemptTimeout, Parallel = config.Parallel})
+            end, { Delay = config.HedgeDelay, Timeout = config.AttemptTimeout, Parallel = config.Parallel })
             if value then
                 future.Body = value.Body
                 future.Chunk = value.Chunk
@@ -4288,7 +3547,6 @@ function Features:_WaitElements()
     self.ElementsReady = true
 end
 
--- // Features Run
 function Features:_Purge(key)
     for _, tab in ipairs(self.Window.Tabs) do
         for index = #tab.Elements, 1, -1 do
@@ -4315,15 +3573,15 @@ end
 
 function Features:_Audit(job, before)
     local window = self.Window
-    if window.Destroyed or Library.Window ~= window then
-        warn("[EcoHub] " .. tostring(job.Name) .. " replaced or destroyed the window while loading")
+    if window.Destroyed or Librarys.Window ~= window then
+        warn("[Ecohub] " .. tostring(job.Name) .. " replaced or destroyed the window while loading")
         return
     end
     local after = self:_Count()
     for owner, count in pairs(before) do
         local left = after[owner] or 0
         if owner ~= job.Key and left < count then
-            warn("[EcoHub] " .. tostring(job.Name) .. " removed " .. tostring(count - left) .. " element(s) of " .. tostring(owner))
+            warn("[Ecohub] " .. tostring(job.Name) .. " removed " .. tostring(count - left) .. " element(s) of " .. tostring(owner))
         end
     end
 end
@@ -4356,9 +3614,9 @@ function Features:_Run(job, chunk)
         local success, value = pcall(function()
             env.Window = window
             env.Windows = window
-            env.Library = Library
-            env.Librarys = Library
-            return chunk(window, Library)
+            env.Library = Librarys
+            env.Librarys = Librarys
+            return chunk(window, Librarys)
         end)
         ok = success
         result = value
@@ -4386,7 +3644,7 @@ function Features:_Run(job, chunk)
     self:_Audit(job, before)
 
     if ok then
-        self.Loaded[job.Key] = {Name = job.Name, Path = job.Path, Key = job.Key}
+        self.Loaded[job.Key] = { Name = job.Name, Path = job.Path, Key = job.Key }
         if not table.find(self.Order, job.Key) then
             self.Order[#self.Order + 1] = job.Key
         end
@@ -4457,7 +3715,7 @@ function Features:_LoadJobs(jobs, options, quiet)
         if job.Folder then
             self.Watched[job.Folder] = true
         end
-        outcomes[i] = {Name = job.Name, Success = false}
+        outcomes[i] = { Name = job.Name, Success = false }
         if first[job.Key] then
             duplicate[i] = first[job.Key]
         else
@@ -4513,7 +3771,6 @@ function Features:_LoadJobs(jobs, options, quiet)
     return outcomes
 end
 
--- // Features API
 function Features:Load(name, options)
     if self.Window.Destroyed then
         return false
@@ -4697,219 +3954,613 @@ function Features:SetSource(url)
     return true
 end
 
--- // Window
-local Window = {}
-Window.__index = Window
+-- // Windows
+-- // ScrollArea
+function Util.ScrollArea(scroll)
+    scroll.ScrollBarThickness = 0
+    scroll.ScrollBarImageTransparency = 1
 
-function Window.new(config)
-    local self = setmetatable({}, Window)
-    self.Maid = Maid.new()
-    self.Created = false
-    self.Destroyed = false
-    self.MinimizeKey = Enum.KeyCode.RightShift
+    local parent = scroll.Parent
+    local width = Config.ScrollWidth
+
+    local bar = Util.Create("Frame", {
+        Name = "ScrollArea",
+        AnchorPoint = scroll.AnchorPoint,
+        Position = scroll.Position,
+        Size = scroll.Size,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = scroll.ZIndex + 5
+    }, parent)
+
+    local track = Util.Create("Frame", {
+        Name = "Track",
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -2, 0, 2),
+        Size = UDim2.new(0, width + 2, 1, -4),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0
+    }, bar)
+
+    local thumb = Util.Create("Frame", {
+        Name = "Thumb",
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -1, 0, 0),
+        Size = UDim2.fromOffset(width, 24),
+        BackgroundColor3 = Theme.Inactive,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Active = false,
+        Visible = false
+    }, track)
+    Util.Corner(thumb, width / 2)
+
+    local shown = false
+    local overScroll = false
+    local overThumb = false
+    local dragging = false
+    local last = 0
+
+    local function paint()
+        local target = 1
+
+        if shown then
+            target = (overThumb or dragging) and 0.2 or 0.55
+        end
+
+        Util.Tween(thumb, Config.ScrollTween, { BackgroundTransparency = target })
+    end
+
+    local function reveal()
+        last = os.clock()
+
+        if shown then
+            return
+        end
+
+        shown = true
+        thumb.Active = true
+        paint()
+
+        task.spawn(function()
+            while shown and thumb.Parent do
+                task.wait(0.15)
+
+                if not (overScroll or overThumb or dragging) and os.clock() - last > Config.ScrollHold then
+                    shown = false
+                    thumb.Active = false
+                    paint()
+                end
+            end
+        end)
+    end
+
+    local function update()
+        local view = scroll.AbsoluteSize.Y
+        local canvas = scroll.AbsoluteCanvasSize.Y
+        local room = track.AbsoluteSize.Y
+        local range = canvas - view
+
+        if range <= 1 or view <= 0 or room <= 0 then
+            thumb.Visible = false
+            return
+        end
+
+        local height = math.clamp(room * view / canvas, 24, room)
+        local alpha = math.clamp(scroll.CanvasPosition.Y / range, 0, 1)
+
+        thumb.Size = UDim2.fromOffset(width, height)
+        thumb.Position = UDim2.new(1, -1, 0, alpha * (room - height))
+        thumb.Visible = true
+    end
+
+    local function mirror()
+        bar.AnchorPoint = scroll.AnchorPoint
+        bar.Position = scroll.Position
+        bar.Size = scroll.Size
+        update()
+    end
+
+    for _, property in ipairs({ "AnchorPoint", "Position", "Size" }) do
+        scroll:GetPropertyChangedSignal(property):Connect(mirror)
+    end
+
+    scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(update)
+    scroll:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(update)
+    track:GetPropertyChangedSignal("AbsoluteSize"):Connect(update)
+    scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+        update()
+        reveal()
+    end)
+
+    if parent:IsA("GuiObject") then
+        parent:GetPropertyChangedSignal("Visible"):Connect(update)
+    end
+
+    scroll.MouseEnter:Connect(function()
+        overScroll = true
+        reveal()
+    end)
+
+    scroll.MouseLeave:Connect(function()
+        overScroll = false
+        last = os.clock()
+    end)
+
+    scroll.MouseMoved:Connect(function()
+        if shown then
+            last = os.clock()
+        else
+            reveal()
+        end
+    end)
+
+    thumb.MouseEnter:Connect(function()
+        overThumb = true
+        paint()
+    end)
+
+    thumb.MouseLeave:Connect(function()
+        overThumb = false
+        last = os.clock()
+        paint()
+    end)
+
+    thumb.InputBegan:Connect(function(input)
+        if not shown or not Util.IsPress(input) then
+            return
+        end
+
+        dragging = true
+        paint()
+
+        local startY = input.Position.Y
+        local startCanvas = scroll.CanvasPosition.Y
+        local moveConnection
+        local endConnection
+
+        local function finish()
+            dragging = false
+            last = os.clock()
+
+            if moveConnection then
+                moveConnection:Disconnect()
+            end
+
+            if endConnection then
+                endConnection:Disconnect()
+            end
+
+            paint()
+        end
+
+        moveConnection = UserInputService.InputChanged:Connect(function(move)
+            if not Util.IsMove(move) then
+                return
+            end
+
+            local room = track.AbsoluteSize.Y
+            local travel = room - thumb.AbsoluteSize.Y
+            local range = scroll.AbsoluteCanvasSize.Y - scroll.AbsoluteSize.Y
+
+            if travel <= 0 or range <= 0 then
+                return
+            end
+
+            local delta = move.Position.Y - startY
+            scroll.CanvasPosition = Vector2.new(scroll.CanvasPosition.X, math.clamp(startCanvas + delta * range / travel, 0, range))
+        end)
+
+        endConnection = UserInputService.InputEnded:Connect(function(ended)
+            if Util.IsPress(ended) then
+                finish()
+            end
+        end)
+    end)
+
+    task.defer(update)
+    return bar
+end
+
+local Windows = {}
+Windows.__index = Windows
+Windows.Font = Enum.Font.Gotham
+
+local function ClampPosition(Position, Pad)
+    local Camera = workspace.CurrentCamera
+    local View = Camera and Camera.ViewportSize or Vector2.new(1920, 1080)
+    local X = math.clamp(Position.X.Scale * View.X + Position.X.Offset, 0, math.max(View.X - Pad.X, 0))
+    local Y = math.clamp(Position.Y.Scale * View.Y + Position.Y.Offset, 0, math.max(View.Y - Pad.Y, 0))
+
+    return UDim2.fromOffset(X, Y)
+end
+
+local function ToUDim2(Value)
+    if type(Value) == "table" and type(Value[1]) == "number" and type(Value[2]) == "number" and type(Value[3]) == "number" and type(Value[4]) == "number" then
+        return UDim2.new(Value[1], Value[2], Value[3], Value[4])
+    end
+
+    return nil
+end
+
+local function FromUDim2(Position)
+    return { Position.X.Scale, Position.X.Offset, Position.Y.Scale, Position.Y.Offset }
+end
+
+local function ResolveSize(Value)
+    if typeof(Value) ~= "UDim2" then
+        return UDim2.fromOffset(620, 350)
+    end
+
+    local Width = Value.X.Scale == 0 and math.max(Value.X.Offset, 420) or Value.X.Offset
+    local Height = Value.Y.Scale == 0 and math.max(Value.Y.Offset, 260) or Value.Y.Offset
+
+    return UDim2.new(Value.X.Scale, Width, Value.Y.Scale, Height)
+end
+
+function Windows.new(Options)
+    Options = type(Options) == "table" and Options or {}
+
+    local Previous = env.EcoHubPanel
+
+    if type(Previous) == "table" and type(Previous.Destroy) == "function" then
+        pcall(Previous.Destroy, Previous)
+    end
+
+    local self = setmetatable({}, Windows)
+
+    self.Name = "Ecohub"
+    self.Title = tostring(Options.Title or "Ecohub")
+    self.Subtitle = tostring(Options.SubTitle or Options.Subtitle or "Panel")
+    self.Size = ResolveSize(Options.Size)
+    self.ToggleKey = typeof(Options.MinimizeKey) == "EnumItem" and Options.MinimizeKey or Enum.KeyCode.RightShift
+    self.KeyLocked = typeof(Options.MinimizeKey) == "EnumItem"
+    self.MaxQuery = 48
+    self.Query = ""
+    self.Visible = true
+    self.Connections = {}
+    self.SearchChanged = Instance.new("BindableEvent")
+
+    self.SearchOpen = false
+    self.SearchRenderId = 0
+    self.SearchItems = {}
+    self.SearchSelected = 0
+
+    self.SettingsOpen = false
+    self.SettingsSections = {}
+
+    self.Theme = Theme
+    self.ThemeName = "Default"
+    self.ThemeToken = 0
+
+    self.SectionOrder = 0
     self.SideSections = {}
     self.SideSectionsByName = {}
     self.Tabs = {}
     self.ActiveTab = nil
-    self.SectionOrder = 0
-    self.SidebarWidth = Config.SidebarWidth
+
+    self.Elements = nil
+
+    self.Util = Util
+    self.Config = Config
+    self.GetIcon = GetIcon
+    self.Report = Report
+    self.IsTouch = IsTouch
+    self.Destroyed = false
+    self.Crumbs = nil
     self.Features = Features.new(self)
     self.FeatureConfig = self.Features.Config
-    self.Locale = Locale
-    self.Crumbs = nil
 
-    Save.Init()
-    Locale.Watch(self.Maid)
-    Roblox.Load()
-    self:_BuildMain()
-    self:_BuildPanel()
-    self.Palette = Palette.new(self)
-    self.Maid:Add(Locale.OnChange(function()
-        self:_Relocalize()
-    end))
-    self:_BuildToggle()
-    self:_Guard(self.Gui)
-    self:_Guard(self.ToggleGui)
-    self:_BindInput()
-    self:_MakeDraggable(self.Dashboard, self.Main)
-    self:_MakeDraggable(self.Header, self.Main)
-    self:_BindResize()
-    self:_BindToggleDrag()
-    self:Configure(config)
-    self:_RestoreSize()
+    self.Saves = SaveManager.new(Config.SaveFile)
+    Machine.Attach(self.Saves)
+    self:_BuildPanelApi()
+    self:_LoadSaved()
+
+    local Success, Result = pcall(function()
+        self:_Build()
+        self:_BuildElements()
+        self:_BuildSearch()
+        self:_BuildSettings()
+        self:_BuildToggle()
+        self:_BindSearch()
+        self:_BindSearchKeys()
+        self:_BindSettings()
+        self:_BindDrag()
+        self:_BindToggle()
+        self:_BindToggleDrag()
+        self:_BuildThemeSettings()
+        self:_BuildSaveSettings()
+        self:_RestorePositions()
+        self:_BindAutoSave()
+        self:_BindLocale()
+    end)
+
+    if not Success then
+        Report("Window failed", Result)
+        self:Destroy()
+        return nil
+    end
+
     return self
 end
 
-function Window:_Relocalize()
-    if self.Destroyed then
-        return
-    end
-    self.SearchButton.Text = Locale.Translate("Search...")
-    self.Palette.Input.PlaceholderText = Locale.Translate("Search tabs and elements...")
-    if self.Crumbs then
-        self:_SetBreadcrumb(self.Crumbs)
-    end
-    self:RefreshSearch()
-end
+function Windows:_BuildPanelApi()
+    local Window = self
 
-function Window:_Guard(gui)
-    self.Maid:Connect(gui.AncestryChanged, function()
-        if self.Destroyed or gui.Parent then
-            return
+    local function Unwrap(Owner, First, Second, Third)
+        if rawequal(First, Owner) then
+            return Second, Third
         end
-        task.defer(function()
-            if self.Destroyed or gui.Parent then
-                return
-            end
-            pcall(function()
-                gui.Parent = PlayerGui
-            end)
-        end)
-    end)
+
+        return First, Second
+    end
+
+    self.CreateIcon = Util.Icon
+
+    self.Locale = Locale
+
+    self.Error = function(First, Second, Third)
+        local Title, Detail = Unwrap(Window, First, Second, Third)
+        Report(tostring(Title or "Error"), tostring(Detail or ""))
+    end
+
+    local SaveApi = {}
+
+    function SaveApi.Get(First, Second, Third)
+        local Key, Default = Unwrap(SaveApi, First, Second, Third)
+
+        if not Window.Saves then
+            return Default
+        end
+
+        return Window.Saves:GetAuto(Key, Default)
+    end
+
+    function SaveApi.Set(First, Second, Third)
+        local Key, Value = Unwrap(SaveApi, First, Second, Third)
+
+        if Window.Saves then
+            Window.Saves:SetAuto(Key, Value)
+        end
+    end
+
+    function SaveApi.Delete(First, Second)
+        local Key = Unwrap(SaveApi, First, Second)
+
+        if Window.Saves then
+            Window.Saves:DeleteAuto(Key)
+        end
+    end
+
+    self.Save = SaveApi
 end
 
-function Window:_BuildMain()
-    local gui = Util.Create("ScreenGui", {
-        Name = "EcoHub",
+function Windows:_LoadSaved()
+    local KeyName = self.Saves:GetSetting("ToggleKey")
+
+    if not self.KeyLocked and type(KeyName) == "string" then
+        local Success, Key = pcall(function()
+            return Enum.KeyCode[KeyName]
+        end)
+
+        if Success and Key then
+            self.ToggleKey = Key
+        end
+    end
+
+    local Name = self.Saves:GetSetting("Theme", "Default")
+    local Colors = Themes.Parse(self.Saves:GetSetting("ThemeColors"))
+
+    if type(Name) == "string" and string.lower(Name) ~= "default" and Colors then
+        for Key, Color in pairs(BuildPalette(Colors)) do
+            Theme[Key] = Color
+        end
+
+        self.ThemeName = Name
+    end
+end
+
+function Windows:_SavePosition(Key, Position)
+    if self.Saves then
+        self.Saves:SetSetting(Key, FromUDim2(Position))
+    end
+end
+
+function Windows:_RestorePositions()
+    local WindowPosition = ToUDim2(self.Saves:GetSetting("WindowPosition"))
+    local TogglePosition = ToUDim2(self.Saves:GetSetting("TogglePosition"))
+
+    if WindowPosition then
+        self.Window.Position = ClampPosition(WindowPosition, Vector2.zero)
+    end
+
+    if TogglePosition then
+        self.ToggleButton.Position = ClampPosition(TogglePosition, Vector2.new(48, 48))
+    end
+end
+
+function Windows:_Build()
+    local PlayerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+    local Old = PlayerGui:FindFirstChild(self.Name)
+
+    if Old then
+        Old:Destroy()
+    end
+
+    self.Gui = Util.Create("ScreenGui", {
+        Name = self.Name,
         ResetOnSpawn = false,
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-        Enabled = false
+        IgnoreGuiInset = true,
+        DisplayOrder = 100,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     }, PlayerGui)
 
-    local main = Util.Create("Frame", {
-        Name = "MainFrame",
-        Size = UDim2.new(0, 580, 0, 350),
-        Position = UDim2.new(0.5, -290, 0.5, -175),
-        BackgroundColor3 = Theme.Background,
-        BorderSizePixel = 0,
-        Active = true
-    }, gui)
-    Util.Corner(main, 8)
-    Util.Stroke(main, Theme.Border, 1)
+    table.insert(self.Connections, self.Gui.Destroying:Connect(function()
+        self:Destroy()
+    end))
 
-    local content = Util.Create("Frame", {
-        Name = "ContentContainer",
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1
-    }, main)
-
-    local sidebar = Util.Create("Frame", {
-        Name = "TabSidebar",
-        Size = UDim2.new(0, self.SidebarWidth, 1, 0),
+    self.Window = Util.Create("Frame", {
+        Name = "Window",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = self.Size,
         BackgroundTransparency = 1,
         BorderSizePixel = 0
-    }, content)
+    }, self.Gui)
+
+    self.Main = Util.Create("Frame", {
+        Name = "Main",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Theme.Background,
+        BorderSizePixel = 0,
+        ClipsDescendants = true
+    }, self.Window)
+    Util.Corner(self.Main, 10)
+
+    local Border = Util.Create("Frame", {
+        Name = "Border",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 50
+    }, self.Window)
+    Util.Corner(Border, 10)
+    Util.Create("UIStroke", {
+        Color = Theme.Border,
+        Thickness = 1,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    }, Border)
+
+    self.Sidebar = Util.Create("Frame", {
+        Name = "Sidebar",
+        Size = UDim2.new(0, Config.SidebarWidth, 1, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0
+    }, self.Main)
 
     Util.Create("Frame", {
-        Name = "TabLine",
-        Size = UDim2.new(0, 1, 1, 0),
+        Name = "Line",
         Position = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.new(0, 1, 1, 0),
         BackgroundColor3 = Theme.Divider,
         BorderSizePixel = 0
-    }, sidebar)
+    }, self.Sidebar)
 
-    local dashboard = Util.Create("Frame", {
+    self.Dashboard = Util.Create("Frame", {
         Name = "Dashboard",
         Size = UDim2.new(1, 0, 0, 56),
         BackgroundTransparency = 1,
         BorderSizePixel = 0
-    }, sidebar)
+    }, self.Sidebar)
 
-    local titleText = Util.Create("TextLabel", {
-        Name = "TitleText",
+    self.TitleLabel = Util.Create("TextLabel", {
+        Name = "Title",
+        Position = UDim2.fromOffset(14, 16),
         Size = UDim2.new(1, -24, 0, 18),
-        Position = UDim2.new(0, 14, 0, 16),
         BackgroundTransparency = 1,
-        Text = "EcoHub",
+        Text = self.Title,
         TextColor3 = Theme.Active,
         TextSize = 15,
         Font = Enum.Font.SourceSansBold,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd
-    }, dashboard)
+    }, self.Dashboard)
 
-    local subTitleText = Util.Create("TextLabel", {
-        Name = "SubTitleText",
+    self.SubtitleLabel = Util.Create("TextLabel", {
+        Name = "Subtitle",
+        Position = UDim2.fromOffset(14, 34),
         Size = UDim2.new(1, -24, 0, 14),
-        Position = UDim2.new(0, 14, 0, 34),
         BackgroundTransparency = 1,
-        Text = "v1.0.0",
+        Text = self.Subtitle,
         TextColor3 = Theme.Subtitle,
         TextSize = 12,
         Font = Enum.Font.SourceSans,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd
-    }, dashboard)
+    }, self.Dashboard)
 
-    Locale.Bind(titleText, "Text")
-    Locale.Bind(subTitleText, "Text")
-
-    local tabList = Util.Create("ScrollingFrame", {
+    self.TabList = Util.Create("ScrollingFrame", {
         Name = "TabList",
+        Position = UDim2.fromOffset(0, 56),
         Size = UDim2.new(1, 0, 1, -56),
-        Position = UDim2.new(0, 0, 0, 56),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         ScrollBarThickness = 0,
         CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y
-    }, sidebar)
-    Util.Padding(tabList, 2, 8, 10, 10)
-    Util.List(tabList, 8)
-    Util.ScrollArea(tabList)
+    }, self.Sidebar)
+    Util.Padding(self.TabList, 2, 8, 10, 10)
+    Util.List(self.TabList, 8)
+    Util.ScrollArea(self.TabList)
 
-    local contentArea = Util.Create("Frame", {
+    self.ContentArea = Util.Create("Frame", {
         Name = "ContentArea",
-        Size = UDim2.new(1, -(self.SidebarWidth + 1), 1, 0),
-        Position = UDim2.new(0, self.SidebarWidth + 1, 0, 0),
+        Position = UDim2.fromOffset(Config.SidebarWidth + 1, 0),
+        Size = UDim2.new(1, -(Config.SidebarWidth + 1), 1, 0),
         BackgroundTransparency = 1
-    }, content)
+    }, self.Main)
 
-    local header = Util.Create("Frame", {
+    self.Header = Util.Create("Frame", {
         Name = "Header",
         Size = UDim2.new(1, 0, 0, 40),
         BackgroundTransparency = 1
-    }, contentArea)
+    }, self.ContentArea)
 
-    local pageHolder = Util.Create("Frame", {
+    self.PageHolder = Util.Create("Frame", {
         Name = "PageHolder",
+        Position = UDim2.fromOffset(0, 40),
         Size = UDim2.new(1, 0, 1, -40),
-        Position = UDim2.new(0, 0, 0, 40),
         BackgroundTransparency = 1
-    }, contentArea)
+    }, self.ContentArea)
 
-    local breadcrumb = Util.Create("Frame", {
+    self.Breadcrumb = Util.Create("Frame", {
         Name = "Breadcrumb",
-        Size = UDim2.new(1, -176, 1, 0),
-        Position = UDim2.new(0, 14, 0, 0),
+        Position = UDim2.fromOffset(14, 0),
+        Size = UDim2.new(1, -200, 1, 0),
         BackgroundTransparency = 1,
         ClipsDescendants = true
-    }, header)
-    Util.List(breadcrumb, 4, {
+    }, self.Header)
+    Util.List(self.Breadcrumb, 4, {
         FillDirection = Enum.FillDirection.Horizontal,
         VerticalAlignment = Enum.VerticalAlignment.Center
     })
 
-    local searchFrame = Util.Create("Frame", {
-        Name = "SearchFrame",
+    self.SettingsButton = Util.Create("ImageButton", {
+        Name = "Settings",
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -12, 0.5, 0),
-        Size = UDim2.new(0, 140, 0, isTouch and 30 or 26),
+        Position = UDim2.new(1, -14, 0.5, 0),
+        Size = UDim2.fromOffset(20, 20),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+        Image = GetIcon("settings"),
+        ImageColor3 = Theme.Inactive
+    }, self.Header)
+
+    self.SearchBar = Util.Create("Frame", {
+        Name = "SearchBar",
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -44, 0.5, 0),
+        Size = UDim2.fromOffset(140, IsTouch and 30 or 26),
         BackgroundColor3 = Theme.Field,
         BorderSizePixel = 0,
         ClipsDescendants = true
-    }, header)
-    Util.Corner(searchFrame, 6)
-    Util.Stroke(searchFrame, Theme.Border, 1)
+    }, self.Header)
+    Util.Corner(self.SearchBar, 6)
+    Util.Create("UIStroke", {
+        Color = Theme.Border,
+        Thickness = 1,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    }, self.SearchBar)
 
-    local searchIcon = Icons.Create(searchFrame, "search", 14, Theme.Dim)
-    searchIcon.AnchorPoint = Vector2.new(0, 0.5)
-    searchIcon.Position = UDim2.new(0, 8, 0.5, 0)
+    local SearchIcon = Util.Icon(self.SearchBar, "search", 14, Theme.Dim)
+    SearchIcon.AnchorPoint = Vector2.new(0, 0.5)
+    SearchIcon.Position = UDim2.new(0, 8, 0.5, 0)
 
-    local searchButton = Util.Create("TextButton", {
+    self.SearchButton = Util.Create("TextButton", {
         Name = "SearchButton",
+        Position = UDim2.fromOffset(28, 0),
         Size = UDim2.new(1, -34, 1, 0),
-        Position = UDim2.new(0, 28, 0, 0),
         BackgroundTransparency = 1,
         AutoButtonColor = false,
         Text = Locale.Translate("Search..."),
@@ -4918,744 +4569,2294 @@ function Window:_BuildMain()
         Font = Enum.Font.SourceSans,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd
-    }, searchFrame)
+    }, self.SearchBar)
+end
 
-    local corner = isTouch and 30 or 22
-    local handles = {}
+function Windows:_BuildElements()
+    local Previous = env.EcoHubElements
 
-    local gripButton = Util.Create("TextButton", {
-        Name = "ResizeButton",
-        AnchorPoint = Vector2.new(1, 1),
-        Position = UDim2.new(1, 0, 1, 0),
-        Size = UDim2.fromOffset(corner, corner),
+    if type(Previous) == "table" then
+        Previous.Destroyed = true
+    end
+
+    self.Elements = ElementRegistry.new()
+    self.Elements.Panel = self
+    self.Elements.OnChanged = function()
+        self:RefreshSearch()
+    end
+
+    env.EcoHubPanel = self
+    env.EcoHubElements = self.Elements
+    env.EcoHubSaves = self.Saves
+end
+
+function Windows:LoadElements(Force)
+    if self.Elements then
+        self.Elements.Load(nil, Force)
+    end
+end
+
+function Windows:ListElements()
+    if self.Elements then
+        return self.Elements.List()
+    end
+
+    return {}
+end
+
+function Windows:_CreatePalette(Name, IconName, Side)
+    local Palette = { Token = 0 }
+
+    Palette.Overlay = Util.Create("TextButton", {
+        Name = Name .. "Overlay",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
         BackgroundTransparency = 1,
+        BorderSizePixel = 0,
         AutoButtonColor = false,
         Text = "",
-        ZIndex = 11
-    }, main)
-    local dots = {}
-    local step = isTouch and 7 or 5
-    local dotSize = isTouch and 3 or 2
-    local margin = isTouch and 9 or 6
-    for row = 0, 2 do
-        for column = 0, 2 do
-            if row + column >= 2 then
-                local dot = Util.Create("Frame", {
-                    Name = "Dot",
-                    AnchorPoint = Vector2.new(1, 1),
-                    Position = UDim2.new(1, -(margin + (2 - column) * step), 1, -(margin + (2 - row) * step)),
-                    Size = UDim2.fromOffset(dotSize, dotSize),
-                    BackgroundColor3 = Theme.Dim,
-                    BorderSizePixel = 0
-                }, gripButton)
-                Util.Corner(dot, 1)
-                dots[#dots + 1] = dot
-            end
+        Visible = false,
+        ZIndex = 20
+    }, self.Main)
+    Util.Corner(Palette.Overlay, 10)
+
+    Palette.Frame = Util.Create("Frame", {
+        Name = Name .. "Frame",
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new(0.5, 0, 0, 46),
+        Size = UDim2.new(1, -20, 0, 93),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BorderSizePixel = 0,
+        Active = true,
+        Visible = false,
+        ClipsDescendants = true,
+        ZIndex = 21
+    }, self.Main)
+    Palette.Frame:SetAttribute("NoTheme", true)
+    Util.Corner(Palette.Frame, 12)
+    Util.Stroke(Palette.Frame, Theme.BorderHover, 1)
+    Util.Create("UIGradient", {
+        Color = ColorSequence.new(Theme.GradientTop, Theme.GradientBottom),
+        Rotation = 90
+    }, Palette.Frame)
+    Util.Create("UISizeConstraint", { MaxSize = Vector2.new(340, math.huge) }, Palette.Frame)
+    Palette.Scale = Util.Create("UIScale", { Scale = 0.96 }, Palette.Frame)
+
+    Palette.Header = Util.Create("Frame", {
+        Name = "Header",
+        Size = UDim2.new(1, 0, 0, 44),
+        BackgroundTransparency = 1,
+        ClipsDescendants = true
+    }, Palette.Frame)
+
+    local Icon = Util.Icon(Palette.Header, IconName, 16, Theme.Dim)
+    Icon.AnchorPoint = Vector2.new(0, 0.5)
+    Icon.Position = UDim2.new(0, 12, 0.5, 0)
+
+    Palette.Close = Util.Create("TextButton", {
+        Name = "Close",
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -8, 0.5, 0),
+        Size = UDim2.fromOffset(28, 28),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+        Text = ""
+    }, Palette.Header)
+
+    Palette.CloseIcon = Util.Icon(Palette.Close, "x", 14, Theme.Dim)
+    Palette.CloseIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+    Palette.CloseIcon.Position = UDim2.fromScale(0.5, 0.5)
+
+    Util.Create("Frame", {
+        Name = "Divider",
+        Size = UDim2.new(1, 0, 0, 1),
+        Position = UDim2.fromOffset(0, 44),
+        BackgroundColor3 = Theme.Divider,
+        BorderSizePixel = 0
+    }, Palette.Frame)
+
+    Palette.List = Util.Create("ScrollingFrame", {
+        Name = "List",
+        Size = UDim2.new(1, 0, 0, 48),
+        Position = UDim2.fromOffset(0, 45),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 4,
+        ScrollBarImageColor3 = Theme.Inactive,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        ClipsDescendants = true
+    }, Palette.Frame)
+    Util.Padding(Palette.List, 4, 4, Side, Side)
+    Palette.Layout = Util.List(Palette.List, 2)
+
+    table.insert(self.Connections, Palette.Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        self:_ResizePalette(Palette)
+    end))
+
+    table.insert(self.Connections, Palette.Close.MouseEnter:Connect(function()
+        Util.Tween(Palette.CloseIcon, Config.TweenInfo, { ImageColor3 = Theme.Active })
+    end))
+
+    table.insert(self.Connections, Palette.Close.MouseLeave:Connect(function()
+        Util.Tween(Palette.CloseIcon, Config.TweenInfo, { ImageColor3 = Theme.Dim })
+    end))
+
+    return Palette
+end
+
+function Windows:_ResizePalette(Palette)
+    local Limit = math.clamp(self.Main.AbsoluteSize.Y - 112, 96, 230)
+    local Height = math.clamp(Palette.Layout.AbsoluteContentSize.Y + 8, 48, Limit)
+
+    Palette.List.Size = UDim2.new(1, 0, 0, Height)
+    Palette.Frame.Size = UDim2.new(1, -20, 0, 45 + Height)
+end
+
+function Windows:_ShowPalette(Palette)
+    Palette.Token = Palette.Token + 1
+
+    Palette.Overlay.Visible = true
+    Palette.Frame.Visible = true
+    Palette.Overlay.BackgroundTransparency = 1
+    Palette.Scale.Scale = 0.96
+
+    Util.Tween(Palette.Overlay, Config.TweenInfo, { BackgroundTransparency = 0.5 })
+    Util.Tween(Palette.Scale, Config.TweenInfo, { Scale = 1 })
+end
+
+function Windows:_HidePalette(Palette)
+    Palette.Token = Palette.Token + 1
+
+    local Token = Palette.Token
+
+    Util.Tween(Palette.Scale, Config.TweenInfo, { Scale = 0.96 })
+
+    local Tween = Util.Tween(Palette.Overlay, Config.TweenInfo, { BackgroundTransparency = 1 })
+
+    Tween.Completed:Connect(function()
+        if Palette.Token == Token then
+            Palette.Overlay.Visible = false
+            Palette.Frame.Visible = false
         end
-    end
-    handles[#handles + 1] = {
-        Button = gripButton,
-        X = true,
-        Y = true,
-        Paint = function(lit)
-            for _, dot in ipairs(dots) do
-                Util.Tween(dot, Config.TweenInfo, {BackgroundColor3 = lit and Theme.Active or Theme.Dim})
-            end
-        end
-    }
-
-    self.Gui = gui
-    self.Main = main
-    self.Sidebar = sidebar
-    self.Dashboard = dashboard
-    self.TitleText = titleText
-    self.SubTitleText = subTitleText
-    self.TabList = tabList
-    self.ContentArea = contentArea
-    self.Header = header
-    self.PageHolder = pageHolder
-    self.Breadcrumb = breadcrumb
-    self.SearchButton = searchButton
-    self.ResizeHandles = handles
-
-    self:_ApplySize(Config.DefaultSize)
-
-    searchButton.Activated:Connect(function()
-        self:OpenSearch()
     end)
 end
 
-function Window:_BuildPanel()
-    local window = self
-    local Panel = {}
+function Windows:_BuildSearch()
+    self.SearchPalette = self:_CreatePalette("Search", "search", 4)
 
-    local function arg(first, second)
-        if rawequal(first, Panel) then
-            return second
-        end
-        return first
-    end
-
-    local function unwrap(owner, first, second, third)
-        if rawequal(first, owner) then
-            return second, third
-        end
-        return first, second
-    end
-
-    Panel.Header = self.Header
-    Panel.PageHolder = self.PageHolder
-    Panel.TabList = self.TabList
-    Panel.CreateIcon = Icons.Create
-    Panel.Locale = Locale
-
-    function Panel.SetVisible(a, b)
-        window:SetVisible(arg(a, b))
-    end
-    function Panel.Toggle()
-        window:Toggle()
-    end
-    function Panel.SetBreadcrumb(a, b)
-        window:_SetBreadcrumb(arg(a, b))
-    end
-    function Panel.OpenSearch()
-        window:OpenSearch()
-    end
-    function Panel.CloseSearch()
-        window:CloseSearch()
-    end
-    function Panel.Error(first, second, third)
-        local title, detail = unwrap(Panel, first, second, third)
-        Report(tostring(title or "Error"), tostring(detail or ""))
-    end
-
-    local SaveApi = {}
-    function SaveApi.Get(first, second, third)
-        local key, default = unwrap(SaveApi, first, second, third)
-        return Save.Get(key, default)
-    end
-    function SaveApi.Set(first, second, third)
-        local key, value = unwrap(SaveApi, first, second, third)
-        Save.Set(key, value)
-    end
-    function SaveApi.Delete(first, second)
-        local key = unwrap(SaveApi, first, second)
-        Save.Delete(key)
-    end
-    Panel.Save = SaveApi
-
-    local registry = ElementRegistry.new()
-    registry.Panel = Panel
-    registry.OnChanged = function()
-        window:RefreshSearch()
-    end
-    Panel.Elements = registry
-
-    self.Panel = Panel
-    self.Elements = registry
+    self.PaletteInput = Util.Create("TextBox", {
+        Name = "Input",
+        Size = UDim2.new(1, -76, 1, 0),
+        Position = UDim2.new(0, 36, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "",
+        PlaceholderText = Locale.Translate("Search tabs and elements..."),
+        PlaceholderColor3 = Theme.Placeholder,
+        TextColor3 = Theme.Text,
+        TextSize = 13,
+        Font = Windows.Font,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ClearTextOnFocus = false,
+        ClipsDescendants = true,
+        TextWrapped = false,
+        MultiLine = false
+    }, self.SearchPalette.Header)
 end
 
-function Window:_BuildToggle()
-    local toggleGui = Util.Create("ScreenGui", {
-        Name = "EcoHubToggle",
-        ResetOnSpawn = false,
-        Enabled = false,
-        DisplayOrder = 99999
-    }, PlayerGui)
+function Windows:_BindSearch()
+    local Palette = self.SearchPalette
 
-    local button = Util.Create("TextButton", {
+    table.insert(self.Connections, self.PaletteInput:GetPropertyChangedSignal("Text"):Connect(function()
+        local Text = self.PaletteInput.Text
+        local Clean = (string.gsub(Text, "%c", " "))
+        local Length = utf8.len(Clean) or #Clean
+
+        if Length > self.MaxQuery then
+            local Cut = utf8.offset(Clean, self.MaxQuery + 1)
+
+            if Cut then
+                Clean = string.sub(Clean, 1, Cut - 1)
+            else
+                Clean = string.sub(Clean, 1, self.MaxQuery)
+            end
+        end
+
+        if Clean ~= Text then
+            self.PaletteInput.Text = Clean
+            return
+        end
+
+        self.Query = Util.Fold(string.match(Clean, "^%s*(.-)%s*$") or "")
+        self.SearchChanged:Fire(self.Query)
+
+        if not self.SearchOpen then
+            return
+        end
+
+        self.SearchRenderId = self.SearchRenderId + 1
+        local Id = self.SearchRenderId
+
+        task.delay(0.06, function()
+            if self.SearchOpen and self.SearchRenderId == Id then
+                self:RenderSearch(self.Query)
+            end
+        end)
+    end))
+
+    table.insert(self.Connections, self.SearchButton.Activated:Connect(function()
+        self:OpenSearch()
+    end))
+
+    table.insert(self.Connections, Palette.Overlay.Activated:Connect(function()
+        self:CloseSearch()
+    end))
+
+    table.insert(self.Connections, Palette.Close.Activated:Connect(function()
+        self:CloseSearch()
+    end))
+
+    table.insert(self.Connections, self.PaletteInput.FocusLost:Connect(function(EnterPressed)
+        if not EnterPressed or not self.SearchOpen then
+            return
+        end
+
+        local Item = self.SearchItems[self.SearchSelected]
+
+        if Item then
+            self:_ActivateSearch(Item)
+        end
+    end))
+end
+
+function Windows:_BindSearchKeys()
+    table.insert(self.Connections, UserInputService.InputBegan:Connect(function(Input)
+        if Input.UserInputType ~= Enum.UserInputType.Keyboard then
+            return
+        end
+
+        if Input.KeyCode == Enum.KeyCode.Escape then
+            if self.SettingsOpen then
+                self:CloseSettings()
+            elseif self.SearchOpen then
+                self:CloseSearch()
+            end
+        elseif self.SearchOpen then
+            if Input.KeyCode == Enum.KeyCode.Down then
+                self:_MoveSearch(1)
+            elseif Input.KeyCode == Enum.KeyCode.Up then
+                self:_MoveSearch(-1)
+            end
+        end
+    end))
+end
+
+function Windows:_ClearSearch()
+    for _, Child in ipairs(self.SearchPalette.List:GetChildren()) do
+        if Child:IsA("GuiObject") then
+            Child:Destroy()
+        end
+    end
+
+    self.SearchItems = {}
+    self.SearchSelected = 0
+end
+
+function Windows:_SetSearchSelected(Index, Scroll)
+    local Previous = self.SearchItems[self.SearchSelected]
+
+    if Previous and Previous.Button.Parent then
+        Previous.Button.BackgroundTransparency = 1
+        Previous.Stroke.Transparency = 1
+    end
+
+    self.SearchSelected = Index
+
+    local Item = self.SearchItems[Index]
+
+    if not Item then
+        return
+    end
+
+    Item.Button.BackgroundTransparency = 0
+    Item.Stroke.Transparency = 0.55
+
+    if Scroll then
+        local List = self.SearchPalette.List
+        local Current = List.CanvasPosition.Y
+        local Top = Item.Button.AbsolutePosition.Y - List.AbsolutePosition.Y + Current
+        local Bottom = Top + Item.Button.AbsoluteSize.Y
+        local View = List.AbsoluteSize.Y
+
+        if Top < Current then
+            List.CanvasPosition = Vector2.new(0, math.max(Top - 28, 0))
+        elseif Bottom > Current + View then
+            List.CanvasPosition = Vector2.new(0, Bottom - View + 4)
+        end
+    end
+end
+
+function Windows:_MoveSearch(Step)
+    local Count = #self.SearchItems
+
+    if Count == 0 then
+        return
+    end
+
+    local Next = self.SearchSelected + Step
+
+    if Next > Count then
+        Next = 1
+    elseif Next < 1 then
+        Next = Count
+    end
+
+    self:_SetSearchSelected(Next, true)
+end
+
+function Windows:_FocusElement(Element)
+    local Container = Element.Container
+    local Scroll = Element.Tab.Scroll
+
+    if Container and Container.Parent and Scroll then
+        local Target = Container.AbsolutePosition.Y - Scroll.AbsolutePosition.Y + Scroll.CanvasPosition.Y - 34
+        local Limit = math.max(Scroll.AbsoluteCanvasSize.Y - Scroll.AbsoluteSize.Y, 0)
+
+        Util.Tween(Scroll, Config.TweenInfo, { CanvasPosition = Vector2.new(0, math.clamp(Target, 0, Limit)) })
+    end
+
+    if Element.Flash then
+        Element.Flash.Transparency = 0
+        Util.Tween(Element.Flash, Config.FlashInfo, { Transparency = 1 })
+    end
+
+    if type(Element.OnFocus) == "function" then
+        pcall(Element.OnFocus, Element)
+    end
+end
+
+function Windows:_ActivateSearch(Item)
+    self:CloseSearch()
+
+    if Item.Kind == "tab" then
+        self:SelectTab(Item.Tab)
+    else
+        self:SelectTab(Item.Element.Tab)
+
+        task.delay(0.05, function()
+            if not Item.Element.Destroyed then
+                self:_FocusElement(Item.Element)
+            end
+        end)
+    end
+end
+
+function Windows:_CreateSearchHeading(Order, Text)
+    local Label = Util.Create("TextLabel", {
+        Name = "Heading",
+        Size = UDim2.new(1, 0, 0, 24),
+        BackgroundTransparency = 1,
+        Text = Text,
+        TextColor3 = Theme.Dim,
+        TextSize = 10,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        LayoutOrder = Order
+    }, self.SearchPalette.List)
+
+    Util.Padding(Label, 0, 0, 8, 8)
+end
+
+function Windows:_CreateSearchSeparator(Order)
+    Util.Create("Frame", {
+        Name = "Separator",
+        Size = UDim2.new(1, 0, 0, 1),
+        BackgroundColor3 = Theme.Divider,
+        BorderSizePixel = 0,
+        LayoutOrder = Order
+    }, self.SearchPalette.List)
+end
+
+function Windows:_CreateSearchRow(Order, Data)
+    local Button = Util.Create("TextButton", {
+        Name = "Item",
+        Size = UDim2.new(1, 0, 0, IsTouch and 38 or 34),
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+        Text = "",
+        ClipsDescendants = true,
+        LayoutOrder = Order
+    }, self.SearchPalette.List)
+    Util.Corner(Button, 8)
+
+    Data.Stroke = Util.Create("UIStroke", {
+        Color = Theme.BorderHover,
+        Thickness = 1,
+        Transparency = 1,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    }, Button)
+
+    local Icon = Util.Icon(Button, Data.Icon, 16, Theme.Inactive)
+    Icon.AnchorPoint = Vector2.new(0, 0.5)
+    Icon.Position = UDim2.new(0, 8, 0.5, 0)
+
+    local Hint = Util.Create("Frame", {
+        Name = "Hint",
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -8, 0.5, 0),
+        Size = UDim2.new(0.4, 0, 0, 16),
+        BackgroundTransparency = 1,
+        ClipsDescendants = true
+    }, Button)
+    Util.List(Hint, 4, {
+        FillDirection = Enum.FillDirection.Horizontal,
+        HorizontalAlignment = Enum.HorizontalAlignment.Right,
+        VerticalAlignment = Enum.VerticalAlignment.Center
+    })
+
+    local Trail = Data.Trail
+
+    for Index, Part in ipairs(Trail) do
+        Util.Create("TextLabel", {
+            Name = "Part" .. Index,
+            AutomaticSize = Enum.AutomaticSize.X,
+            Size = UDim2.new(0, 0, 1, 0),
+            BackgroundTransparency = 1,
+            Text = tostring(Part),
+            TextColor3 = Theme.Dim,
+            TextSize = 11,
+            Font = Windows.Font,
+            LayoutOrder = Index * 2 - 1
+        }, Hint)
+
+        if Index < #Trail then
+            local Separator = Util.Icon(Hint, "chevron-right", 12, Theme.Dim)
+            Separator.Name = "Sep" .. Index
+            Separator.LayoutOrder = Index * 2
+        end
+    end
+
+    Util.Create("TextLabel", {
+        Name = "Text",
+        Size = UDim2.new(0.6, -44, 1, 0),
+        Position = UDim2.new(0, 32, 0, 0),
+        BackgroundTransparency = 1,
+        Text = Data.Name,
+        TextColor3 = Theme.Active,
+        TextSize = 13,
+        Font = Windows.Font,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd
+    }, Button)
+
+    Data.Button = Button
+    table.insert(self.SearchItems, Data)
+
+    local Index = #self.SearchItems
+
+    Button.MouseEnter:Connect(function()
+        self:_SetSearchSelected(Index, false)
+    end)
+
+    Button.Activated:Connect(function()
+        self:_ActivateSearch(Data)
+    end)
+end
+
+local function Haystack(Item, Parts)
+    if Item.SearchVersion ~= Locale.Version then
+        Item.SearchVersion = Locale.Version
+
+        local Text = table.concat(Parts, " ")
+
+        if Locale.IsActive() then
+            for _, Part in ipairs(Parts) do
+                Text = Text .. " " .. Locale.Translate(Part)
+            end
+        end
+
+        Item.SearchText = Util.Fold(Text)
+    end
+
+    return Item.SearchText
+end
+
+function Windows:RenderSearch(Query)
+    self:_ClearSearch()
+
+    local Order = 0
+    local Groups = 0
+
+    for _, Section in ipairs(self.SideSections) do
+        local SectionName = Locale.Translate(Section.Name)
+
+        for _, Tab in ipairs(Section.Tabs) do
+            local TabName = Locale.Translate(Tab.Name)
+            local TabMatch = Query ~= "" and Util.Contains(Haystack(Tab, { Tab.Name, Section.Name }), Query)
+            local Rows = {}
+
+            for _, Element in ipairs(Tab.Elements) do
+                if Element.Built and not Element.Destroyed then
+                    local Parts = { Element.Name, Element.Type, Element.Group, Tab.Name, Element.Description }
+
+                    if Query == "" or TabMatch or Util.Contains(Haystack(Element, Parts), Query) then
+                        table.insert(Rows, {
+                            Kind = "element",
+                            Name = Locale.Translate(Element.Name),
+                            Icon = ElementIcons[string.lower(Element.Type)] or "box",
+                            Trail = { Locale.Translate(Element.Group) },
+                            Element = Element
+                        })
+                    end
+                end
+            end
+
+            if Query == "" or TabMatch or #Rows > 0 then
+                table.insert(Rows, 1, { Kind = "tab", Name = TabName, Icon = Tab.IconName, Trail = { SectionName }, Tab = Tab })
+            end
+
+            if #Rows > 0 then
+                Groups = Groups + 1
+
+                if Groups > 1 then
+                    Order = Order + 1
+                    self:_CreateSearchSeparator(Order)
+                end
+
+                Order = Order + 1
+                self:_CreateSearchHeading(Order, TabName)
+
+                for _, Row in ipairs(Rows) do
+                    Order = Order + 1
+                    self:_CreateSearchRow(Order, Row)
+                end
+            end
+        end
+    end
+
+    if Groups == 0 then
+        Util.Create("TextLabel", {
+            Name = "Empty",
+            Size = UDim2.new(1, 0, 0, 48),
+            BackgroundTransparency = 1,
+            Text = Locale.Translate("No results found."),
+            TextColor3 = Theme.Dim,
+            TextSize = 13,
+            Font = Windows.Font
+        }, self.SearchPalette.List)
+    else
+        self:_SetSearchSelected(1, false)
+    end
+
+    self.SearchPalette.List.CanvasPosition = Vector2.new(0, 0)
+    self:_ResizePalette(self.SearchPalette)
+end
+
+function Windows:RefreshSearch()
+    if self.SearchOpen then
+        self:RenderSearch(self.Query)
+    end
+end
+
+function Windows:OpenSearch()
+    if self.SearchOpen or not self.Visible then
+        return
+    end
+
+    self:CloseSettings()
+
+    self.SearchOpen = true
+    self.PaletteInput.Text = ""
+    self:RenderSearch("")
+    self:_ShowPalette(self.SearchPalette)
+
+    task.defer(function()
+        if self.SearchOpen then
+            self.PaletteInput:CaptureFocus()
+        end
+    end)
+end
+
+function Windows:CloseSearch()
+    if not self.SearchOpen then
+        return
+    end
+
+    self.SearchOpen = false
+    self.SearchRenderId = self.SearchRenderId + 1
+
+    self.PaletteInput:ReleaseFocus()
+    self:_HidePalette(self.SearchPalette)
+end
+
+function Windows:ClearSearch()
+    self.PaletteInput.Text = ""
+end
+
+function Windows:_BuildSettings()
+    self.SettingsPalette = self:_CreatePalette("Settings", "settings", 8)
+    self.SettingsPalette.Layout.Padding = UDim.new(0, 8)
+
+    self.SettingsTab = {
+        Name = "Settings",
+        Window = self,
+        Sections = {},
+        Elements = {},
+        Scroll = self.SettingsPalette.List,
+        Page = self.SettingsPalette.Frame
+    }
+
+    Util.Create("TextLabel", {
+        Name = "Title",
+        Position = UDim2.new(0, 36, 0, 0),
+        Size = UDim2.new(1, -76, 1, 0),
+        BackgroundTransparency = 1,
+        Text = "Settings",
+        TextColor3 = Theme.Text,
+        TextSize = 13,
+        Font = Windows.Font,
+        TextXAlignment = Enum.TextXAlignment.Left
+    }, self.SettingsPalette.Header)
+
+    Locale.Bind(self.SettingsPalette.Header.Title, "Text")
+end
+
+function Windows:_BindSettings()
+    local Palette = self.SettingsPalette
+
+    table.insert(self.Connections, self.SettingsButton.Activated:Connect(function()
+        if self.SettingsOpen then
+            self:CloseSettings()
+        else
+            self:OpenSettings()
+        end
+    end))
+
+    table.insert(self.Connections, self.SettingsButton.MouseEnter:Connect(function()
+        Util.Tween(self.SettingsButton, Config.TweenInfo, { ImageColor3 = Theme.Active })
+    end))
+
+    table.insert(self.Connections, self.SettingsButton.MouseLeave:Connect(function()
+        Util.Tween(self.SettingsButton, Config.TweenInfo, { ImageColor3 = Theme.Inactive })
+    end))
+
+    table.insert(self.Connections, Palette.Overlay.Activated:Connect(function()
+        self:CloseSettings()
+    end))
+
+    table.insert(self.Connections, Palette.Close.Activated:Connect(function()
+        self:CloseSettings()
+    end))
+end
+
+function Windows:OpenSettings()
+    if self.SettingsOpen or not self.Visible then
+        return
+    end
+
+    self:CloseSearch()
+
+    self.SettingsOpen = true
+    self.SettingsPalette.List.CanvasPosition = Vector2.new(0, 0)
+    self:_ResizePalette(self.SettingsPalette)
+    self:_ShowPalette(self.SettingsPalette)
+end
+
+function Windows:CloseSettings()
+    if not self.SettingsOpen then
+        return
+    end
+
+    self.SettingsOpen = false
+    self:_HidePalette(self.SettingsPalette)
+end
+
+function Windows:_CreateRegistered(Section, Name, Options)
+    local Window = self
+    local Registry = self.Elements
+
+    Options = type(Options) == "table" and Options or {}
+    Name = tostring(Name)
+
+    local Key = Util.ResolveKey(Name)
+    local Core = nil
+    local Savable = not Section.NoSave and self.Saves ~= nil
+
+    if Savable then
+        local Original = Options.callback
+        local Copy = {}
+
+        for OptionKey, OptionValue in pairs(Options) do
+            Copy[OptionKey] = OptionValue
+        end
+
+        Copy.callback = function(...)
+            if type(Original) == "function" then
+                local Success, Failure = pcall(Original, ...)
+
+                if not Success then
+                    Report("Callback", Name .. ": " .. tostring(Failure))
+                end
+            end
+
+            if Core and Core.Flag and Window.Saves then
+                Window.Saves:Changed(Core.Flag)
+            end
+        end
+
+        Options = Copy
+    end
+
+    Section.Count = Section.Count + 1
+
+    local Container = Util.Create("Frame", {
+        Name = Name,
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BorderSizePixel = 0,
+        LayoutOrder = Section.Count,
+        Visible = false
+    }, Section.Holder or Section.Frame)
+    Container:SetAttribute("NoTheme", true)
+    Util.Corner(Container, 8)
+
+    local Constraint = Util.Create("UISizeConstraint", { MinSize = Vector2.new(0, 38) }, Container)
+    Util.Create("UIGradient", {
+        Color = ColorSequence.new(Theme.GradientTop, Theme.GradientBottom),
+        Rotation = 90
+    }, Container)
+
+    local Border = Util.Create("UIStroke", { Name = "Border", Color = Theme.Border, Thickness = 1 }, Container)
+    local Flash = Util.Create("UIStroke", { Name = "Flash", Color = Theme.Active, Thickness = 1.5, Transparency = 1 }, Container)
+    local Inset = Util.Create("UIPadding", { Name = "Inset" }, Container)
+
+    local Deco = Util.Create("Frame", {
+        Name = "Hover",
+        BackgroundColor3 = Theme.Active,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.fromScale(1, 1),
+        Visible = false
+    }, Container)
+    Util.Corner(Deco, 8)
+
+    if not IsTouch then
+        Container.MouseEnter:Connect(function()
+            Util.Tween(Deco, Config.TweenInfo, { BackgroundTransparency = 0.94 })
+            Util.Tween(Border, Config.TweenInfo, { Color = Theme.BorderHover })
+        end)
+
+        Container.MouseLeave:Connect(function()
+            Util.Tween(Deco, Config.TweenInfo, { BackgroundTransparency = 1 })
+            Util.Tween(Border, Config.TweenInfo, { Color = Theme.Border })
+        end)
+    end
+
+    Core = {
+        Type = Name,
+        Name = tostring(Options.title or Options.Title or Options.name or Options.Name or Options.Text or Options.Label or Name),
+        Group = Section.Name,
+        Description = tostring(Options.description or Options.Description or ""),
+        Tab = Section.Tab,
+        Section = Section,
+        Container = Container,
+        Constraint = Constraint,
+        Border = Border,
+        Flash = Flash,
+        Inset = Inset,
+        Deco = Deco,
+        Calls = {},
+        Built = false,
+        Building = false,
+        Destroyed = false,
+        Instance = nil,
+        Owner = Util.Owners[coroutine.running()],
+        Registry = Registry,
+        Flag = nil
+    }
+
+    local function ApplyFrame(Frameless)
+        local Pad = Frameless and 0 or 5
+        local Side = Frameless and 0 or 12
+
+        Container.BackgroundTransparency = Frameless and 1 or 0
+        Constraint.MinSize = Vector2.new(0, Frameless and 0 or 38)
+        Border.Enabled = not Frameless
+        Inset.PaddingTop = UDim.new(0, Pad)
+        Inset.PaddingBottom = UDim.new(0, Pad)
+        Inset.PaddingLeft = UDim.new(0, Side)
+        Inset.PaddingRight = UDim.new(0, Side)
+        Deco.Position = UDim2.fromOffset(-Side, -Pad)
+        Deco.Size = UDim2.new(1, Side * 2, 1, Pad * 2)
+        Deco.Visible = not Frameless
+    end
+
+    function Core:Build(Entry, BuildOptions, Attempt)
+        if self.Destroyed or self.Built or self.Building then
+            return
+        end
+
+        self.Building = true
+        Attempt = Attempt or 1
+        ApplyFrame(Entry.Frameless)
+
+        local Scope = {
+            frame = Container,
+            Panel = Registry.Panel,
+            Tab = Section.Tab,
+            Section = Section,
+            Element = self,
+            Elements = Registry,
+            CreateIcon = Util.Icon
+        }
+
+        local Existing = {}
+
+        for _, Child in ipairs(Container:GetChildren()) do
+            Existing[Child] = true
+        end
+
+        local Success, Result = pcall(Entry.Builder, Scope, BuildOptions or Options)
+        self.Building = false
+
+        if self.Destroyed then
+            return
+        end
+
+        if not Success then
+            for _, Child in ipairs(Container:GetChildren()) do
+                if not Existing[Child] then
+                    Child:Destroy()
+                end
+            end
+
+            if Attempt == 1 or Attempt == Config.BuildRetries then
+                Report("Element failed", Name .. " (try " .. Attempt .. "): " .. tostring(Result))
+            end
+
+            if Attempt < Config.BuildRetries + Config.BuildLateRetries then
+                local Delay = Attempt < Config.BuildRetries and 0.5 * Attempt or Config.BuildLateDelay
+
+                task.delay(Delay, function()
+                    if not self.Destroyed and not self.Built then
+                        self:Build(Entry, BuildOptions, Attempt + 1)
+                        Registry:_Changed()
+                    end
+                end)
+
+                return
+            end
+
+            Report("Element failed", Name .. " could not be built: " .. tostring(Result))
+            return
+        end
+
+        local Fresh = {}
+
+        for _, Child in ipairs(Container:GetChildren()) do
+            if not Existing[Child] then
+                table.insert(Fresh, Child)
+            end
+        end
+
+        Window:_ThemeObjects(Fresh)
+        Locale.Attach(Container)
+
+        Container.Visible = true
+        self.Built = true
+        self.Instance = type(Result) == "table" and Result or {}
+
+        local Calls = self.Calls
+        self.Calls = {}
+
+        for _, Call in ipairs(Calls) do
+            local Method = self.Instance[Call.Name]
+
+            if type(Method) == "function" then
+                pcall(Method, self.Instance, table.unpack(Call.Args, 1, Call.Count))
+            end
+        end
+
+        local Api = self.Instance
+        local GetName = type(Api.Get) == "function" and "Get" or (type(Api.GetValue) == "function" and "GetValue" or nil)
+        local SetName = type(Api.Set) == "function" and "Set" or (type(Api.SetValue) == "function" and "SetValue" or nil)
+
+        if Savable and Window.Saves and GetName and SetName then
+            local Used = Section.Used
+            Used[self.Name] = (Used[self.Name] or 0) + 1
+
+            local Flag = Section.Tab.Name .. "/" .. Section.Name .. "/" .. self.Name
+
+            if Used[self.Name] > 1 then
+                Flag = Flag .. " #" .. Used[self.Name]
+            end
+
+            self.Flag = Flag
+
+            Window.Saves:Register(Flag, function()
+                return Api[GetName](Api)
+            end, function(Value, Silent)
+                return Api[SetName](Api, Value, Silent)
+            end)
+        end
+
+        Registry:_Changed()
+    end
+
+    function Core:Destroy()
+        if self.Destroyed then
+            return
+        end
+
+        self.Destroyed = true
+
+        if self.Flag and Window.Saves then
+            Window.Saves:Unregister(self.Flag)
+        end
+
+        local Api = self.Instance
+
+        if type(Api) == "table" and type(Api.Destroy) == "function" then
+            pcall(Api.Destroy, Api)
+        end
+
+        local Index = table.find(Section.Tab.Elements, self)
+
+        if Index then
+            table.remove(Section.Tab.Elements, Index)
+        end
+
+        Container:Destroy()
+        Registry:_Changed()
+    end
+
+    table.insert(Section.Tab.Elements, Core)
+
+    local Handle = setmetatable({ Element = Core }, {
+        __index = function(_, Method)
+            if Method == "Destroy" then
+                return function()
+                    Core:Destroy()
+                end
+            end
+
+            if Core.Destroyed then
+                return function() end
+            end
+
+            if Core.Built then
+                local Value = Core.Instance[Method]
+
+                if type(Value) == "function" then
+                    return function(_, ...)
+                        return Value(Core.Instance, ...)
+                    end
+                end
+
+                return Value
+            end
+
+            return function(_, ...)
+                Core.Calls[#Core.Calls + 1] = { Name = Method, Args = { ... }, Count = select("#", ...) }
+            end
+        end
+    })
+
+    local Entry = Registry.Registry[Key]
+
+    if Entry then
+        Core:Build(Entry, Options)
+    else
+        ApplyFrame(Key == "button")
+        Registry:Enqueue(Key, Core, Options)
+    end
+
+    return Handle
+end
+
+function Windows:_ReplaceElement(Field, Section, Name, Options)
+    local Old = self[Field]
+    local Order = nil
+
+    if Old then
+        local Core = rawget(Old, "Element")
+
+        if Core and Core.Container then
+            Order = Core.Container.LayoutOrder
+        end
+
+        Old.Destroy()
+    end
+
+    local New = Section:CreateElement(Name, Options)
+    local Core = rawget(New, "Element")
+
+    if Order and Core and Core.Container then
+        Core.Container.LayoutOrder = Order
+    end
+
+    self[Field] = New
+    return New
+end
+
+function Windows:CreateSettingsSection(Name)
+    local Section = {
+        Name = tostring(Name or "Geral"),
+        Panel = self,
+        Tab = self.SettingsTab,
+        Elements = {},
+        Used = {},
+        Count = 0
+    }
+
+    table.insert(self.SettingsSections, Section)
+
+    Section.Frame = Util.Create("Frame", {
+        Name = "Section",
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        LayoutOrder = #self.SettingsSections
+    }, self.SettingsPalette.List)
+    Util.List(Section.Frame, 4)
+    Section.Holder = Section.Frame
+
+    local Heading = Util.Create("TextLabel", {
+        Name = "Heading",
+        Size = UDim2.new(1, 0, 0, 18),
+        BackgroundTransparency = 1,
+        Text = Section.Name,
+        TextColor3 = Theme.Dim,
+        TextSize = 10,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        LayoutOrder = 0
+    }, Section.Frame)
+    Util.Padding(Heading, 0, 0, 4, 4)
+    Locale.Bind(Heading, "Text", Locale.Upper)
+
+    Section.TitleLabel = Heading
+    Section.NoSave = true
+    self:_AttachSectionApi(Section)
+
+    return Section
+end
+
+function Windows:_ThemeObjects(Roots)
+    local Map = {}
+    local Changed = false
+
+    for _, Key in ipairs(ThemeKeys) do
+        local From = Pack(DefaultTheme[Key])
+
+        if From ~= Pack(Theme[Key]) then
+            Map[From] = Theme[Key]
+            Changed = true
+        end
+    end
+
+    if not Changed then
+        return
+    end
+
+    for _, Root in ipairs(Roots) do
+        RemapObject(Root, Map)
+
+        for _, Object in ipairs(Root:GetDescendants()) do
+            RemapObject(Object, Map)
+        end
+    end
+end
+
+function Windows:ApplyTheme(Colors)
+    if not self.Gui then
+        return
+    end
+
+    local New = BuildPalette(Colors or DefaultTheme)
+    local Map = {}
+    local Changed = false
+
+    for _, Key in ipairs(ThemeKeys) do
+        local Code = Pack(Theme[Key])
+
+        if Code ~= Pack(New[Key]) then
+            Map[Code] = New[Key]
+            Changed = true
+        end
+    end
+
+    if Changed then
+        for _, Object in ipairs(self.Gui:GetDescendants()) do
+            RemapObject(Object, Map)
+        end
+    end
+
+    for Key, Color in pairs(New) do
+        Theme[Key] = Color
+    end
+end
+
+function Windows:_SaveTheme(Name)
+    if not self.Saves then
+        return
+    end
+
+    self.Saves:SetSetting("Theme", Name or "Default")
+
+    if Name then
+        local Hex = {}
+
+        for _, Key in ipairs(ThemeKeys) do
+            Hex[Key] = Theme[Key]:ToHex()
+        end
+
+        self.Saves:SetSetting("ThemeColors", Hex)
+    else
+        self.Saves:SetSetting("ThemeColors", nil)
+    end
+end
+
+function Windows:SetTheme(Name, Quiet)
+    Name = tostring(Name or "Default")
+
+    self.ThemeToken = self.ThemeToken + 1
+
+    local Token = self.ThemeToken
+
+    if string.lower(Name) == "default" then
+        self.ThemeName = "Default"
+        self:ApplyTheme(DefaultTheme)
+        self:_SaveTheme(nil)
+        return true
+    end
+
+    local Colors, Failure = Themes.Load(Name)
+
+    if self.ThemeToken ~= Token or not self.Gui then
+        return false
+    end
+
+    if not Colors then
+        if not Quiet then
+            Report("Theme failed", Name .. ": " .. tostring(Failure))
+        end
+
+        return false
+    end
+
+    self.ThemeName = Name
+    self:ApplyTheme(Colors)
+    self:_SaveTheme(Name)
+    return true
+end
+
+function Windows:_ThemeDropdown()
+    self:_ReplaceElement("ThemeDropdown", self.ThemeSection, "Dropdown", {
+        title = "Theme",
+        description = "Panel colors",
+        values = self.ThemeValues,
+        default = self.ThemeName,
+        multi = false,
+        disabled = false,
+        callback = function(Value)
+            if type(Value) ~= "string" or Value == self.ThemeName then
+                return
+            end
+
+            task.spawn(function()
+                if not self:SetTheme(Value) and self.Gui then
+                    self:_ThemeDropdown()
+                end
+            end)
+        end
+    })
+end
+
+function Windows:_BuildThemeSettings()
+    self.ThemeSection = self:CreateSettingsSection("Themes")
+    self.ThemeValues = { "Default" }
+
+    if self.ThemeName ~= "Default" then
+        table.insert(self.ThemeValues, self.ThemeName)
+    end
+
+    self:_ThemeDropdown()
+
+    task.spawn(function()
+        local Names = Themes.Names()
+
+        if not self.Gui then
+            return
+        end
+
+        local List = { "Default" }
+
+        for _, Name in ipairs(Names) do
+            table.insert(List, Name)
+        end
+
+        if self.ThemeName ~= "Default" and not table.find(List, self.ThemeName) then
+            table.insert(List, self.ThemeName)
+        end
+
+        self.ThemeValues = List
+        self:_ThemeDropdown()
+
+        if self.ThemeName ~= "Default" then
+            self:SetTheme(self.ThemeName, true)
+        end
+
+        Themes.Prefetch(Names, function()
+            return self.Gui ~= nil
+        end)
+    end)
+end
+
+function Windows:_BuildSaveSettings()
+    self.SaveSection = self:CreateSettingsSection("Saves")
+
+    local Enabled = self.Saves ~= nil and self.Saves.AutoEnabled
+
+    self.SaveSection:CreateToggle({
+        title = "Auto Save",
+        description = "Saves every element and restores it when the panel restarts",
+        default = Enabled,
+        value = Enabled,
+        callback = function(Value)
+            if self.Saves then
+                self.Saves:SetAutoSave(Value and true or false)
+            end
+        end
+    })
+end
+
+function Windows:_BindAutoSave()
+    task.spawn(function()
+        while self.Gui and self.Saves do
+            task.wait(Config.AutoSaveInterval)
+
+            local Saves = self.Saves
+
+            if Saves and Saves.AutoEnabled then
+                Saves:Write()
+            end
+        end
+    end)
+end
+
+function Windows:_AttachSectionApi(Section)
+    local Window = self
+
+    function Section:CreateElement(ElementName, Options)
+        local Handle = Window:_CreateRegistered(Section, ElementName, Options)
+        Window:RefreshSearch()
+        return Handle
+    end
+
+    Section.AddElement = Section.CreateElement
+
+    function Section:SetTitle(Text)
+        if Section.TitleLabel then
+            Section.TitleLabel.Text = tostring(Text)
+        end
+    end
+
+    setmetatable(Section, {
+        __index = function(_, Key)
+            if type(Key) ~= "string" then
+                return nil
+            end
+
+            local ElementName = string.match(Key, "^Create(%u%w*)$") or string.match(Key, "^Add(%u%w*)$")
+
+            if not ElementName then
+                return nil
+            end
+
+            return function(First, Options)
+                if rawequal(First, Section) then
+                    return Section:CreateElement(ElementName, Options)
+                end
+
+                return Section:CreateElement(ElementName, First)
+            end
+        end
+    })
+end
+
+function Windows:_CreateTabSection(Tab, Name)
+    local Section = {
+        Name = Name,
+        Panel = self,
+        Tab = Tab,
+        Elements = {},
+        Used = {},
+        Count = 0
+    }
+
+    Section.Frame = Util.Create("Frame", {
+        Name = Name,
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        LayoutOrder = #Tab.Sections + 1
+    }, Tab.Scroll)
+    Util.List(Section.Frame, 6)
+
+    local Header = Util.Create("Frame", {
+        Name = "Header",
+        Size = UDim2.new(1, 0, 0, 16),
+        BackgroundTransparency = 1,
+        LayoutOrder = 0
+    }, Section.Frame)
+    Util.Padding(Header, 0, 0, 2, 0)
+    Util.List(Header, 6, {
+        FillDirection = Enum.FillDirection.Horizontal,
+        VerticalAlignment = Enum.VerticalAlignment.Center
+    })
+
+    Section.TitleLabel = Util.Create("TextLabel", {
+        Name = "Title",
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = Name,
+        TextColor3 = Theme.Active,
+        TextSize = 12,
+        Font = Enum.Font.SourceSansBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        LayoutOrder = 1
+    }, Header)
+    Locale.Bind(Section.TitleLabel, "Text", Locale.Upper)
+
+    Section.Holder = Util.Create("Frame", {
+        Name = "Holder",
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        LayoutOrder = 1
+    }, Section.Frame)
+    Util.List(Section.Holder, 6)
+
+    self:_AttachSectionApi(Section)
+    return Section
+end
+
+function Windows:_SetBreadcrumb(Items)
+    if type(Items) ~= "table" then
+        return
+    end
+
+    self.Crumbs = Items
+
+    for _, Child in ipairs(self.Breadcrumb:GetChildren()) do
+        if Child:IsA("GuiObject") then
+            Child:Destroy()
+        end
+    end
+
+    local Total = #Items
+
+    for Index, Text in ipairs(Items) do
+        local IsLast = Index == Total
+
+        Util.Create("TextLabel", {
+            Name = "Item" .. Index,
+            AutomaticSize = Enum.AutomaticSize.X,
+            Size = UDim2.new(0, 0, 0, 20),
+            BackgroundTransparency = 1,
+            Text = Locale.Translate(tostring(Text)),
+            TextSize = 14,
+            Font = IsLast and Enum.Font.SourceSansBold or Enum.Font.SourceSans,
+            TextColor3 = IsLast and Theme.Active or Theme.Inactive,
+            LayoutOrder = Index * 2 - 1
+        }, self.Breadcrumb)
+
+        if not IsLast then
+            local Separator = Util.Icon(self.Breadcrumb, "chevron-right", 14, Theme.Dim)
+            Separator.Name = "Sep" .. Index
+            Separator.LayoutOrder = Index * 2
+        end
+    end
+end
+
+function Windows:_CreateSideSection(Name)
+    self.SectionOrder = self.SectionOrder + 1
+
+    local Section = { Name = Name, Tabs = {}, Open = true, Token = 0, Window = self }
+
+    Section.Frame = Util.Create("Frame", {
+        Name = Name,
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        LayoutOrder = self.SectionOrder
+    }, self.TabList)
+    Util.List(Section.Frame, 2)
+
+    local LabelButton = Util.Create("TextButton", {
+        Name = "Label",
+        Size = UDim2.new(1, 0, 0, 24),
+        BackgroundTransparency = 1,
+        AutoButtonColor = false,
+        Text = Name,
+        TextColor3 = Theme.Inactive,
+        TextSize = 12,
+        Font = Enum.Font.SourceSansBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        LayoutOrder = 0
+    }, Section.Frame)
+    Util.Padding(LabelButton, 0, 0, 10, 26)
+    Locale.Bind(LabelButton, "Text", Locale.Upper)
+
+    Section.Chevron = Util.Icon(LabelButton, "chevron-down", 14, Theme.Inactive)
+    Section.Chevron.AnchorPoint = Vector2.new(1, 0.5)
+    Section.Chevron.Position = UDim2.new(1, 18, 0.5, 0)
+
+    Section.Menu = Util.Create("Frame", {
+        Name = "Menu",
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        LayoutOrder = 1,
+        ClipsDescendants = true
+    }, Section.Frame)
+    Util.List(Section.Menu, 2)
+
+    function Section:FullHeight()
+        return math.max(#self.Tabs * (Config.TabHeight + 2) - 2, 0)
+    end
+
+    function Section:Animate()
+        local Menu = self.Menu
+        local Full = math.max(Menu.AbsoluteSize.Y, self:FullHeight())
+
+        self.Token = self.Token + 1
+
+        local Token = self.Token
+
+        Menu.AutomaticSize = Enum.AutomaticSize.None
+
+        if self.Open then
+            Menu.Visible = true
+
+            local Tween = Util.Tween(Menu, Config.TweenInfo, { Size = UDim2.new(1, 0, 0, self:FullHeight()) })
+
+            Tween.Completed:Connect(function()
+                if self.Token == Token and self.Open then
+                    Menu.AutomaticSize = Enum.AutomaticSize.Y
+                    Menu.Size = UDim2.new(1, 0, 0, 0)
+                end
+            end)
+        else
+            Menu.Size = UDim2.new(1, 0, 0, Full)
+
+            local Tween = Util.Tween(Menu, Config.TweenInfo, { Size = UDim2.new(1, 0, 0, 0) })
+
+            Tween.Completed:Connect(function()
+                if self.Token == Token and not self.Open then
+                    Menu.Visible = false
+                end
+            end)
+        end
+    end
+
+    function Section:SetOpen(State)
+        self.Open = State and true or false
+        Util.Tween(self.Chevron, Config.TweenInfo, { Rotation = self.Open and 0 or -90 })
+        self:Animate()
+    end
+
+    LabelButton.Activated:Connect(function()
+        Section:SetOpen(not Section.Open)
+    end)
+
+    LabelButton.MouseEnter:Connect(function()
+        if not IsTouch then
+            Util.Tween(LabelButton, Config.TabTween, { TextColor3 = Theme.Active })
+            Util.Tween(Section.Chevron, Config.TabTween, { ImageColor3 = Theme.Active })
+        end
+    end)
+
+    LabelButton.MouseLeave:Connect(function()
+        Util.Tween(LabelButton, Config.TabTween, { TextColor3 = Theme.Inactive })
+        Util.Tween(Section.Chevron, Config.TabTween, { ImageColor3 = Theme.Inactive })
+    end)
+
+    return Section
+end
+
+function Windows:_CreateTabUI(Section, Tab)
+    local Window = self
+
+    local Button = Util.Create("TextButton", {
+        Name = Tab.Name,
+        Size = UDim2.new(1, 0, 0, Config.TabHeight),
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+        Text = "",
+        LayoutOrder = #Section.Tabs + 1
+    }, Section.Menu)
+    Util.Corner(Button, 6)
+
+    local Scale = Util.Create("UIScale", { Scale = 1 }, Button)
+
+    local Indicator = Util.Create("Frame", {
+        Name = "Indicator",
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 3, 0.5, 0),
+        Size = UDim2.fromOffset(3, 6),
+        BackgroundColor3 = Theme.TabActive,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0
+    }, Button)
+    Util.Corner(Indicator, 2)
+
+    local Icon = Util.Icon(Button, Tab.IconName, 16, Theme.TabInactive)
+    Icon.AnchorPoint = Vector2.new(0.5, 0.5)
+    Icon.Position = UDim2.new(0, 18, 0.5, 0)
+
+    local IconScale = Util.Create("UIScale", { Scale = 1 }, Icon)
+
+    local Label = Util.Create("TextLabel", {
+        Name = "Text",
+        Position = UDim2.new(0, 36, 0, 0),
+        Size = UDim2.new(1, -46, 1, 0),
+        BackgroundTransparency = 1,
+        Text = Tab.Name,
+        TextColor3 = Theme.TabInactive,
+        TextSize = 14,
+        Font = Enum.Font.SourceSans,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd
+    }, Button)
+    Locale.Bind(Label, "Text")
+
+    local Page = Util.Create("Frame", {
+        Name = Tab.Name,
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Visible = false
+    }, self.PageHolder)
+
+    local Scroll = Util.Create("ScrollingFrame", {
+        Name = "Scroll",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 0,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollingDirection = Enum.ScrollingDirection.Y
+    }, Page)
+    Util.Padding(Scroll, 4, 12, 12, 12)
+    Util.List(Scroll, 14)
+    Util.ScrollArea(Scroll)
+
+    Tab.Button = Button
+    Tab.Indicator = Indicator
+    Tab.Icon = Icon
+    Tab.Label = Label
+    Tab.Scale = Scale
+    Tab.IconScale = IconScale
+    Tab.Page = Page
+    Tab.Scroll = Scroll
+
+    function Tab:Style()
+        local Active = Window.ActiveTab == self
+        local Color = Active and Theme.TabActive or Theme.TabInactive
+
+        self.Label.Font = Active and Enum.Font.SourceSansSemibold or Enum.Font.SourceSans
+
+        Util.Tween(self.Button, Config.TabTween, { BackgroundTransparency = Active and Config.TabFillTransparency or 1 })
+        Util.Tween(self.Label, Config.TabTween, { TextColor3 = Color })
+        Util.Tween(self.Icon, Config.TabTween, { ImageColor3 = Color })
+        Util.Tween(self.Indicator, Config.TabTween, {
+            BackgroundTransparency = Active and 0 or 1,
+            Size = UDim2.fromOffset(3, Active and 16 or 6)
+        })
+    end
+
+    function Tab:SetIcon(Name)
+        self.IconName = Name or self.IconName
+
+        local Image = GetIcon(self.IconName)
+
+        if Image ~= "" then
+            self.Icon.Image = Image
+        end
+    end
+
+    function Tab:Pop()
+        self.IconScale.Scale = 0.65
+        Util.Tween(self.IconScale, Config.TabPop, { Scale = 1 })
+        self.Button.BackgroundTransparency = 0.05
+    end
+
+    function Tab:Select()
+        self:Pop()
+        Window:SelectTab(self)
+        self:Style()
+    end
+
+    function Tab:CreateSection(SectionName)
+        SectionName = tostring(SectionName or "Section")
+
+        for _, Existing in ipairs(self.Sections) do
+            if Existing.Name == SectionName then
+                return Existing
+            end
+        end
+
+        local NewSection = Window:_CreateTabSection(self, SectionName)
+        table.insert(self.Sections, NewSection)
+        return NewSection
+    end
+
+    Tab.AddSection = Tab.CreateSection
+
+    local Pressed = false
+
+    local function Release()
+        if not Pressed then
+            return
+        end
+
+        Pressed = false
+        Util.Tween(Scale, Config.TabRelease, { Scale = 1 })
+    end
+
+    Button.InputBegan:Connect(function(Input)
+        if Util.IsPress(Input) then
+            Pressed = true
+            Util.Tween(Scale, Config.TabPress, { Scale = 0.94 })
+        end
+    end)
+
+    Button.InputEnded:Connect(function(Input)
+        if Util.IsPress(Input) then
+            Release()
+        end
+    end)
+
+    table.insert(self.Connections, UserInputService.InputEnded:Connect(function(Input)
+        if Util.IsPress(Input) then
+            Release()
+        end
+    end))
+
+    Button.Activated:Connect(function()
+        Tab:Select()
+    end)
+
+    Button.MouseEnter:Connect(function()
+        if IsTouch or Window.ActiveTab == Tab then
+            return
+        end
+
+        Util.Tween(Button, Config.TabTween, { BackgroundTransparency = Config.TabHoverTransparency })
+        Util.Tween(Label, Config.TabTween, { TextColor3 = Theme.TabHover })
+        Util.Tween(Icon, Config.TabTween, { ImageColor3 = Theme.TabHover })
+    end)
+
+    Button.MouseLeave:Connect(function()
+        Release()
+        Tab:Style()
+    end)
+end
+
+function Windows:AddTab(SectionName, TabName, IconName, OnSelect)
+    local Window = self
+
+    SectionName = tostring(SectionName or "Main")
+    TabName = tostring(TabName)
+
+    local Section = self.SideSectionsByName[SectionName]
+
+    if not Section then
+        Section = self:_CreateSideSection(SectionName)
+        table.insert(self.SideSections, Section)
+        self.SideSectionsByName[SectionName] = Section
+    end
+
+    for _, Existing in ipairs(Section.Tabs) do
+        if Existing.Name == TabName then
+            return Existing
+        end
+    end
+
+    local Tab = {
+        Name = TabName,
+        IconName = IconName or "circle",
+        Section = Section,
+        Window = self,
+        Sections = {},
+        Elements = {},
+        OnSelect = OnSelect,
+        Scroll = nil
+    }
+
+    self:_CreateTabUI(Section, Tab)
+
+    function Tab:AddElement(Name, Type, ElementOptions)
+        ElementOptions = ElementOptions or {}
+
+        local Element = {
+            Name = tostring(Name),
+            Type = tostring(Type or "Element"),
+            Group = tostring(ElementOptions.Group or Section.Name),
+            Description = tostring(ElementOptions.Description or ""),
+            Container = ElementOptions.Container,
+            Flash = ElementOptions.Flash,
+            OnFocus = ElementOptions.OnFocus,
+            Tab = Tab,
+            Flag = nil,
+            Built = true,
+            Destroyed = false
+        }
+
+        if Window.Saves and type(ElementOptions.Get) == "function" and type(ElementOptions.Set) == "function" then
+            Element.Flag = tostring(ElementOptions.Flag or (Tab.Name .. "/" .. Element.Group .. "/" .. Element.Name))
+            Window.Saves:Register(Element.Flag, ElementOptions.Get, ElementOptions.Set)
+        end
+
+        function Element:Changed()
+            if Element.Flag and Window.Saves then
+                Window.Saves:Changed(Element.Flag)
+            end
+        end
+
+        function Element:Destroy()
+            Element.Destroyed = true
+
+            if Element.Flag and Window.Saves then
+                Window.Saves:Unregister(Element.Flag)
+            end
+
+            local Index = table.find(Tab.Elements, Element)
+
+            if Index then
+                table.remove(Tab.Elements, Index)
+            end
+        end
+
+        table.insert(Tab.Elements, Element)
+        return Element
+    end
+
+    table.insert(Section.Tabs, Tab)
+    table.insert(self.Tabs, Tab)
+
+    if Section.Open then
+        Section.Menu.Visible = true
+    end
+
+    if not self.ActiveTab then
+        self:SelectTab(Tab)
+    end
+
+    self:RefreshSearch()
+    return Tab
+end
+
+function Windows:CreateTab(Options)
+    Options = type(Options) == "table" and Options or { tab = Options }
+
+    local TabName = tostring(Options.tab or Options.Tab or Options.Name or Options.Title or "Tab")
+    local SectionName = tostring(Options.section or Options.Section or "Main")
+
+    return self:AddTab(SectionName, TabName, Options.icon or Options.Icon, Options.OnSelect)
+end
+
+function Windows:GetTab(Key)
+    if type(Key) == "number" then
+        return self.Tabs[Key]
+    end
+
+    for _, Tab in ipairs(self.Tabs) do
+        if Tab.Name == Key then
+            return Tab
+        end
+    end
+
+    return nil
+end
+
+function Windows:SelectTab(Tab)
+    if type(Tab) ~= "table" then
+        Tab = self:GetTab(Tab)
+    end
+
+    if type(Tab) ~= "table" or self.ActiveTab == Tab then
+        return
+    end
+
+    local Previous = self.ActiveTab
+
+    if Previous and Previous.Page then
+        Previous.Page.Visible = false
+    end
+
+    self.ActiveTab = Tab
+
+    if Tab.Page then
+        Tab.Page.Visible = true
+    end
+
+    if Previous and Previous.Style then
+        Previous:Style()
+    end
+
+    if Tab.Style then
+        Tab:Style()
+    end
+
+    self:_SetBreadcrumb({ Tab.Section.Name, Tab.Name })
+
+    if type(Tab.OnSelect) == "function" then
+        pcall(Tab.OnSelect, Tab)
+    end
+end
+
+function Windows:_BuildToggle()
+    self.ToggleButton = Util.Create("TextButton", {
         Name = "ToggleButton",
-        Size = UDim2.new(0, 48, 0, 48),
+        Size = UDim2.fromOffset(48, 48),
         Position = UDim2.new(0, 20, 0.5, -24),
-        BackgroundColor3 = Theme.Background,
+        BackgroundColor3 = DefaultTheme.Background,
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
         ClipsDescendants = true
-    }, toggleGui)
-    Util.Corner(button, 10)
-    Util.Create("UIStroke", {
-        Color = Theme.Border,
+    }, self.Gui)
+    self.ToggleButton:SetAttribute("NoTheme", true)
+    Util.Corner(self.ToggleButton, 10)
+
+    local Stroke = Util.Create("UIStroke", {
+        Color = DefaultTheme.Border,
         Thickness = 1.5,
         ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    }, button)
+    }, self.ToggleButton)
+    Stroke:SetAttribute("NoTheme", true)
 
-    local texture = Util.Create("ImageLabel", {
+    local Texture = Util.Create("ImageLabel", {
         Name = "Texture",
-        Size = UDim2.new(1, 0, 1, 0),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
+        Size = UDim2.fromScale(1, 1),
+        Position = UDim2.fromScale(0.5, 0.5),
         AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundTransparency = 1,
         Image = Config.ToggleImage,
         ImageTransparency = 0.3,
         ScaleType = Enum.ScaleType.Crop,
         ZIndex = 1
-    }, button)
-    Util.Corner(texture, 10)
-
-    self.ToggleGui = toggleGui
-    self.ToggleButton = button
+    }, self.ToggleButton)
+    Texture:SetAttribute("NoTheme", true)
+    Util.Corner(Texture, 10)
 end
 
-function Window:_BindToggleDrag()
-    local button = self.ToggleButton
-    local isDrag = false
-    local dragStart = Vector3.zero
-    local startPosition = button.Position
-    local moveConnection, endConnection
+function Windows:_BindToggleDrag()
+    local Pressed = false
+    local Moved = false
+    local DragStart = nil
+    local StartPosition = nil
 
-    local function stop()
-        if moveConnection then
-            moveConnection:Disconnect()
-            moveConnection = nil
-        end
-        if endConnection then
-            endConnection:Disconnect()
-            endConnection = nil
-        end
-    end
-    self.Maid:Add(stop)
-
-    button.InputBegan:Connect(function(input)
-        if not Util.IsPress(input) then
+    table.insert(self.Connections, self.ToggleButton.InputBegan:Connect(function(Input)
+        if not Util.IsPress(Input) then
             return
         end
-        isDrag = false
-        dragStart = input.Position
-        startPosition = button.Position
-        stop()
 
-        moveConnection = UserInputService.InputChanged:Connect(function(moveInput)
-            if not Util.IsMove(moveInput) then
-                return
-            end
-            local delta = moveInput.Position - dragStart
-            if delta.Magnitude > 6 then
-                isDrag = true
-            end
-            if isDrag then
-                button.Position = UDim2.new(
-                    startPosition.X.Scale, startPosition.X.Offset + delta.X,
-                    startPosition.Y.Scale, startPosition.Y.Offset + delta.Y
-                )
-            end
-        end)
+        Pressed = true
+        Moved = false
+        DragStart = Input.Position
+        StartPosition = self.ToggleButton.Position
+    end))
 
-        endConnection = UserInputService.InputEnded:Connect(function(endInput)
-            if not Util.IsPress(endInput) then
-                return
-            end
-            stop()
-            if not isDrag then
-                self:Toggle()
-            end
-            isDrag = false
-        end)
-    end)
-end
-
-function Window:_BindInput()
-    self.Maid:Connect(UserInputService.InputBegan, function(input, processed)
-        if input.UserInputType ~= Enum.UserInputType.Keyboard then
+    table.insert(self.Connections, UserInputService.InputChanged:Connect(function(Input)
+        if not Pressed or not Util.IsMove(Input) then
             return
         end
-        if self.Created and not processed and input.KeyCode == self.MinimizeKey then
+
+        local Delta = Input.Position - DragStart
+
+        if Delta.Magnitude > 6 then
+            Moved = true
+        end
+
+        if Moved then
+            self.ToggleButton.Position = UDim2.new(
+                StartPosition.X.Scale,
+                StartPosition.X.Offset + Delta.X,
+                StartPosition.Y.Scale,
+                StartPosition.Y.Offset + Delta.Y
+            )
+        end
+    end))
+
+    table.insert(self.Connections, UserInputService.InputEnded:Connect(function(Input)
+        if not Pressed or not Util.IsPress(Input) then
+            return
+        end
+
+        Pressed = false
+
+        if not Moved then
             self:Toggle()
-            return
+        else
+            self:_SavePosition("TogglePosition", self.ToggleButton.Position)
         end
 
-        local palette = self.Palette
-        if not palette.IsOpen then
-            return
-        end
-        if input.KeyCode == Enum.KeyCode.Escape then
-            palette:Close()
-        elseif input.KeyCode == Enum.KeyCode.Down then
-            palette:Move(1)
-        elseif input.KeyCode == Enum.KeyCode.Up then
-            palette:Move(-1)
-        end
-    end)
+        Moved = false
+    end))
 end
 
-function Window:_MakeDraggable(handle, target)
-    local dragging = false
-    local dragStart = Vector3.zero
-    local startPosition = target.Position
+function Windows:_BindDrag()
+    local Dragging = false
+    local DragStart = nil
+    local StartPosition = nil
 
-    handle.InputBegan:Connect(function(input)
-        if not Util.IsPress(input) then
+    local function Begin(Input)
+        if Util.IsPress(Input) then
+            Dragging = true
+            DragStart = Input.Position
+            StartPosition = self.Window.Position
+        end
+    end
+
+    table.insert(self.Connections, self.Dashboard.InputBegan:Connect(Begin))
+    table.insert(self.Connections, self.Header.InputBegan:Connect(Begin))
+
+    table.insert(self.Connections, UserInputService.InputChanged:Connect(function(Input)
+        if not Dragging or not Util.IsMove(Input) then
             return
         end
-        dragging = true
-        dragStart = input.Position
-        startPosition = target.Position
 
-        local changed
-        changed = input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-                changed:Disconnect()
-            end
-        end)
-    end)
+        local Delta = Input.Position - DragStart
 
-    self.Maid:Connect(UserInputService.InputChanged, function(input)
-        if not dragging or not Util.IsMove(input) then
-            return
-        end
-        local delta = input.Position - dragStart
-        target.Position = UDim2.new(
-            startPosition.X.Scale, startPosition.X.Offset + delta.X,
-            startPosition.Y.Scale, startPosition.Y.Offset + delta.Y
+        self.Window.Position = UDim2.new(
+            StartPosition.X.Scale,
+            StartPosition.X.Offset + Delta.X,
+            StartPosition.Y.Scale,
+            StartPosition.Y.Offset + Delta.Y
         )
-    end)
+    end))
+
+    table.insert(self.Connections, UserInputService.InputEnded:Connect(function(Input)
+        if Util.IsPress(Input) then
+            if Dragging and self.Window.Position ~= StartPosition then
+                self:_SavePosition("WindowPosition", self.Window.Position)
+            end
+
+            Dragging = false
+        end
+    end))
 end
 
-function Window:_BindResize()
-    local active = nil
-    local hovered = {}
-    local startSize = Vector2.zero
-    local startMouse = Vector3.zero
-
-    for _, handle in ipairs(self.ResizeHandles) do
-        handle.Button.InputBegan:Connect(function(input)
-            if active == nil and self.Gui.Enabled and Util.IsPress(input) then
-                active = handle
-                startSize = self.Main.AbsoluteSize
-                startMouse = input.Position
-                handle.Paint(true)
-            end
-        end)
-        if not isTouch then
-            handle.Button.MouseEnter:Connect(function()
-                hovered[handle] = true
-                if active == nil then
-                    handle.Paint(true)
-                end
-            end)
-            handle.Button.MouseLeave:Connect(function()
-                hovered[handle] = nil
-                if active ~= handle then
-                    handle.Paint(false)
-                end
-            end)
-        end
-    end
-
-    self.Maid:Connect(UserInputService.InputEnded, function(input)
-        if active and Util.IsPress(input) then
-            local finished = active
-            active = nil
-            finished.Paint(hovered[finished] == true)
-            local size = self.Main.AbsoluteSize
-            if size ~= startSize then
-                Save.Set("WindowSize", {Width = math.floor(size.X), Height = math.floor(size.Y)})
-            end
-        end
-    end)
-
-    self.Maid:Connect(UserInputService.InputChanged, function(input)
-        if not active or not Util.IsMove(input) then
+function Windows:_BindToggle()
+    table.insert(self.Connections, UserInputService.InputBegan:Connect(function(Input, Processed)
+        if Processed then
             return
         end
-        local delta = input.Position - startMouse
-        local viewport = Util.GetViewport()
-        local maxWidth = math.max(320, math.min(900, viewport.X - 16))
-        local maxHeight = math.max(240, math.min(700, viewport.Y - 16))
-        local minWidth = math.min(self.SidebarWidth + 300, maxWidth)
-        local minHeight = math.min(300, maxHeight)
-        local newWidth = startSize.X
-        local newHeight = startSize.Y
-        if active.X then
-            newWidth = math.clamp(startSize.X + delta.X, minWidth, maxWidth)
+
+        if Input.KeyCode == self.ToggleKey then
+            self:Toggle()
         end
-        if active.Y then
-            newHeight = math.clamp(startSize.Y + delta.Y, minHeight, maxHeight)
-        end
-        self.Main.Size = UDim2.new(0, newWidth, 0, newHeight)
-    end)
+    end))
 end
 
-function Window:_ApplySize(size)
-    local viewport = Util.GetViewport()
-    local width = math.clamp(size.X.Offset + size.X.Scale * viewport.X, 320, math.max(320, viewport.X - 16))
-    local height = math.clamp(size.Y.Offset + size.Y.Scale * viewport.Y, 240, math.max(240, viewport.Y - 16))
-    self.Main.Size = UDim2.fromOffset(width, height)
-    self.Main.Position = UDim2.new(0.5, -width / 2, 0.5, -height / 2)
+function Windows:SetVisible(State)
+    State = State and true or false
+
+    if not State then
+        self:CloseSearch()
+        self:CloseSettings()
+    end
+
+    self.Visible = State
+    self.Window.Visible = State
 end
 
-function Window:_RestoreSize()
-    local saved = Save.Get("WindowSize")
-    if type(saved) == "table" and tonumber(saved.Width) and tonumber(saved.Height) then
-        self:_ApplySize(UDim2.fromOffset(tonumber(saved.Width), tonumber(saved.Height)))
+function Windows:Toggle()
+    self:SetVisible(not self.Visible)
+end
+
+function Windows:SetMinimized(State)
+    self:SetVisible(not State)
+end
+
+function Windows:IsMinimized()
+    return not self.Visible
+end
+
+function Windows:SetToggleKey(KeyCode)
+    if typeof(KeyCode) == "EnumItem" then
+        self.ToggleKey = KeyCode
+
+        if self.Saves then
+            self.Saves:SetSetting("ToggleKey", KeyCode.Name)
+        end
     end
 end
 
-function Window:_SetBreadcrumb(items)
-    if type(items) ~= "table" then
+Windows.SetMinimizeKey = Windows.SetToggleKey
+
+function Windows:SetTitle(Text)
+    self.Title = Text
+    self.TitleLabel.Text = Text
+end
+
+function Windows:SetSubtitle(Text)
+    self.Subtitle = Text
+    self.SubtitleLabel.Text = Text
+end
+
+Windows.SetSubTitle = Windows.SetSubtitle
+
+function Windows:Notify(Options)
+    if type(Options) ~= "table" then
+        Options = { Description = tostring(Options) }
+    end
+
+    Notifications.Send(Options)
+end
+
+function Windows:_BindLocale()
+    local Window = self
+    local Link = {
+        Connect = function(_, Signal, Callback)
+            local Connection = Signal:Connect(Callback)
+            table.insert(Window.Connections, Connection)
+            return Connection
+        end
+    }
+
+    Locale.Watch(Link)
+    Roblox.Load()
+
+    local Unsubscribe = Locale.OnChange(function()
+        Window:_Relocalize()
+    end)
+
+    table.insert(self.Connections, { Disconnect = Unsubscribe })
+end
+
+function Windows:_Relocalize()
+    if self.Destroyed or not self.Gui then
         return
     end
-    self.Crumbs = items
-    for _, child in ipairs(self.Breadcrumb:GetChildren()) do
-        if child:IsA("GuiObject") then
-            child:Destroy()
-        end
+
+    self.SearchButton.Text = Locale.Translate("Search...")
+    self.PaletteInput.PlaceholderText = Locale.Translate("Search tabs and elements...")
+
+    if self.Crumbs then
+        self:_SetBreadcrumb(self.Crumbs)
     end
 
-    local total = #items
-    for i, text in ipairs(items) do
-        local isLast = i == total
-        Util.Create("TextLabel", {
-            Name = "Item" .. i,
-            AutomaticSize = Enum.AutomaticSize.X,
-            Size = UDim2.new(0, 0, 0, 20),
-            BackgroundTransparency = 1,
-            Text = Locale.Translate(tostring(text)),
-            TextSize = 14,
-            Font = isLast and Enum.Font.SourceSansBold or Enum.Font.SourceSans,
-            TextColor3 = isLast and Theme.Active or Theme.Inactive,
-            LayoutOrder = i * 2 - 1
-        }, self.Breadcrumb)
-
-        if not isLast then
-            local sep = Icons.Create(self.Breadcrumb, "chevron-right", 14, Theme.Dim)
-            sep.Name = "Sep" .. i
-            sep.LayoutOrder = i * 2
-        end
-    end
-end
-
-function Window:_RegisterTab(tab)
-    self.Tabs[#self.Tabs + 1] = tab
-    if not self.ActiveTab then
-        self:SelectTab(tab)
-    end
     self:RefreshSearch()
 end
 
-function Window:Configure(config, keepLayout)
-    config = type(config) == "table" and config or {}
-    if config.Title ~= nil then
-        self.TitleText.Text = tostring(config.Title)
-    end
-    if config.SubTitle ~= nil then
-        self.SubTitleText.Text = tostring(config.SubTitle)
-    end
-    if not keepLayout and tonumber(config.SidebarWidth) then
-        self:SetSidebarWidth(config.SidebarWidth)
-    end
-    if not keepLayout and typeof(config.Size) == "UDim2" then
-        self:_ApplySize(config.Size)
-    end
-    if typeof(config.MinimizeKey) == "EnumItem" then
-        self.MinimizeKey = config.MinimizeKey
-    end
+function Windows:SetLanguage(Lang)
+    Locale.SetLang(Lang)
 end
 
-function Window:SetSidebarWidth(width)
-    width = math.clamp(tonumber(width) or Config.SidebarWidth, 120, 320)
-    self.SidebarWidth = width
-    self.Sidebar.Size = UDim2.new(0, width, 1, 0)
-    self.ContentArea.Size = UDim2.new(1, -(width + 1), 1, 0)
-    self.ContentArea.Position = UDim2.new(0, width + 1, 0, 0)
-end
-
-function Window:CreateTab(config)
-    config = type(config) == "table" and config or {tab = config}
-    local tabName = tostring(config.tab or config.Tab or config.Name or config.Title or "Tab")
-    local sectionName = tostring(config.section or config.Section or "Main")
-    local iconName = config.icon or config.Icon
-
-    local section = self.SideSectionsByName[sectionName]
-    if not section then
-        section = SideSection.new(self, sectionName)
-        self.SideSections[#self.SideSections + 1] = section
-        self.SideSectionsByName[sectionName] = section
-    end
-
-    for _, existing in ipairs(section.Tabs) do
-        if existing.Name == tabName then
-            return existing
-        end
-    end
-
-    local _, tab = section:AddTab(tabName, iconName)
-    return tab
-end
-
-function Window:GetTab(key)
-    if type(key) == "number" then
-        return self.Tabs[key]
-    end
-    for _, tab in ipairs(self.Tabs) do
-        if tab.Name == key then
-            return tab
-        end
-    end
-    return nil
-end
-
-function Window:SelectTab(tab)
-    if type(tab) ~= "table" then
-        tab = self:GetTab(tab)
-    end
-    if not tab or not tab.Page or self.ActiveTab == tab then
-        return
-    end
-
-    local previous = self.ActiveTab
-    if previous then
-        previous.Page.Visible = false
-    end
-    self.ActiveTab = tab
-    tab.Page.Visible = true
-    if previous then
-        previous:Style()
-    end
-    tab:Style()
-    self:_SetBreadcrumb({tab.Section.Name, tab.Name})
-end
-
-function Window:SetVisible(state)
-    if not self.Created or self.Destroyed then
-        return
-    end
-    state = state and true or false
-    if not state then
-        self.Palette:Close()
-    end
-    self.Gui.Enabled = state
-end
-
-function Window:Toggle()
-    self:SetVisible(not self.Gui.Enabled)
-end
-
-function Window:SetMinimized(state)
-    self:SetVisible(not state)
-end
-
-function Window:IsMinimized()
-    return not self.Gui.Enabled
-end
-
-function Window:OpenSearch()
-    self.Palette:Open()
-end
-
-function Window:CloseSearch()
-    self.Palette:Close()
-end
-
-function Window:RefreshSearch()
-    if self.Palette then
-        self.Palette:Refresh()
-    end
-end
-
-function Window:ClearSearch()
-    self.Palette.Input.Text = ""
-end
-
-function Window:SetTitle(text)
-    self.TitleText.Text = tostring(text)
-end
-
-function Window:SetSubTitle(text)
-    self.SubTitleText.Text = tostring(text)
-end
-
-function Window:SetMinimizeKey(keyCode)
-    if typeof(keyCode) == "EnumItem" then
-        self.MinimizeKey = keyCode
-    end
-end
-
-function Window:Error(title, detail)
-    Report(tostring(title or "Error"), tostring(detail or ""))
-end
-
-function Window:SetLanguage(lang)
-    Locale.SetLang(lang)
-end
-
-function Window:GetLanguage()
+function Windows:GetLanguage()
     return Locale.GetLang()
 end
 
-function Window:AddTranslations(languages)
-    return Locale.AddMany(languages)
+function Windows:AddTranslations(Languages)
+    return Locale.AddMany(Languages)
 end
 
-function Window:Translate(text)
-    return Locale.Translate(tostring(text))
+function Windows:Translate(Text)
+    return Locale.Translate(tostring(Text))
 end
 
-function Window:TranslateGame(state)
+function Windows:TranslateGame(State)
     if self.GameConnection then
         self.GameConnection:Disconnect()
         self.GameConnection = nil
     end
-    if not state then
+
+    if not State then
         return
     end
-    local function attach(gui)
-        if gui:IsA("ScreenGui") and not string.find(gui.Name, "^EcoHub") then
-            Locale.Attach(gui)
+
+    local PlayerGui = GetPlayerGui()
+
+    if not PlayerGui then
+        return
+    end
+
+    local function Attach(Gui)
+        if Gui:IsA("ScreenGui") and not string.find(string.lower(Gui.Name), "^ecohub") then
+            Locale.Attach(Gui)
         end
     end
-    for _, gui in ipairs(PlayerGui:GetChildren()) do
-        attach(gui)
+
+    for _, Gui in ipairs(PlayerGui:GetChildren()) do
+        Attach(Gui)
     end
-    self.GameConnection = self.Maid:Connect(PlayerGui.ChildAdded, attach)
+
+    self.GameConnection = PlayerGui.ChildAdded:Connect(Attach)
+    table.insert(self.Connections, self.GameConnection)
 end
 
-function Window:LoadFeature(name, options)
-    return self.Features:Load(name, options)
+function Windows:LoadFeature(Name, Options)
+    return self.Features:Load(Name, Options)
 end
 
-function Window:LoadFeatures(list, options)
-    return self.Features:LoadMany(list, options)
+function Windows:LoadFeatures(List, Options)
+    return self.Features:LoadMany(List, Options)
 end
 
-function Window:LoadAllFeatures(options)
-    return self.Features:LoadAll(options)
+function Windows:LoadAllFeatures(Options)
+    return self.Features:LoadAll(Options)
 end
 
-function Window:PreloadFeatures(list)
-    return self.Features:Preload(list)
+function Windows:PreloadFeatures(List)
+    return self.Features:Preload(List)
 end
 
-function Window:UnloadFeature(name)
-    return self.Features:Unload(name)
+function Windows:UnloadFeature(Name)
+    return self.Features:Unload(Name)
 end
 
-function Window:UnloadAllFeatures()
+function Windows:UnloadAllFeatures()
     return self.Features:UnloadAll()
 end
 
-function Window:GetLoadedFeatures()
+function Windows:GetLoadedFeatures()
     return self.Features:GetLoaded()
 end
 
-function Window:IsFeatureLoaded(name)
-    return self.Features:IsLoaded(name)
+function Windows:IsFeatureLoaded(Name)
+    return self.Features:IsLoaded(Name)
 end
 
-function Window:ListFeatures()
+function Windows:ListFeatures()
     return self.Features:List()
 end
 
-function Window:RefreshFeatures()
+function Windows:RefreshFeatures()
     return self.Features:Refresh()
 end
 
-function Window:SetFeaturesSource(url)
-    return self.Features:SetSource(url)
+function Windows:SetFeaturesSource(Url)
+    return self.Features:SetSource(Url)
 end
 
-function Window:SetElementsSource(url)
-    local source = Source.Parse(url)
-    if not source then
-        Report("Invalid source", "elements source: " .. tostring(url))
+function Windows:SetElementsSource(Url)
+    local Parsed = Source.Parse(Url)
+
+    if not Parsed then
+        Report("Invalid source", "elements source: " .. tostring(Url))
         return false
     end
-    Config.ElementsPath = source.Path
-    Config.ElementsApi = "https://api.github.com/repos/" .. source.Repo .. "/contents/" .. source.Path .. "?ref=" .. source.Branch
-    Config.ElementsRaw = source.Raw
-    Config.ElementsCdn = source.Cdn
-    Config.ElementsList = source.List
+
+    Github.ElementsPath = Parsed.Path
+    Github.ElementsApi = "https://api.github.com/repos/" .. Parsed.Repo .. "/contents/" .. Parsed.Path .. "?ref=" .. Parsed.Branch
+    Github.ElementsRaw = Parsed.Raw
+    Github.ElementsCdn = Parsed.Cdn
+    Github.ElementsList = Parsed.List
+
     return true
 end
 
-function Window:ListElements()
-    return self.Elements:List()
-end
-
-function Window:LoadElements(force)
-    self.Elements.Load(nil, force)
-end
-
-function Window:Destroy()
+function Windows:Destroy()
     if self.Destroyed then
         return
     end
+
     self.Destroyed = true
-    self.Features:UnloadAll()
-    self.Elements.Destroyed = true
-    Save.Flush()
-    Notify.Destroy()
-    self.Maid:Destroy()
-    self.Gui:Destroy()
-    self.ToggleGui:Destroy()
 
-    env.EcoHubPanel = nil
-    env.EcoHubElements = nil
-    env.EcoHubDestroy = nil
-    if rawequal(env.Window, self) then
-        env.Window = nil
-        env.Windows = nil
-    end
-    if Library.Window == self then
-        Library.Window = nil
-        Library.Windows = nil
-        Library.Elements = nil
-        Library.FeatureConfig = nil
-    end
-end
-
--- // Library API
-function Library:CreateWindow(config)
-    if not rawequal(self, Library) and config == nil then
-        config = self
+    if self.Features then
+        self.Features:UnloadAll()
     end
 
-    local window = Library.Window
-    if window and not window.Destroyed then
-        window:Configure(config, true)
-        return window
+    for _, Connection in ipairs(self.Connections) do
+        Connection:Disconnect()
     end
 
-    window = Window.new(config)
-    Library.Window = window
-    Library.Windows = window
-    Library.Elements = window.Elements
-    Library.FeatureConfig = window.FeatureConfig
+    self.Connections = {}
 
-    env.EcoHubPanel = window.Panel
-    env.EcoHubElements = window.Elements
-    env.EcoHubDestroy = function()
-        window:Destroy()
+    if self.Saves then
+        local Saves = self.Saves
+
+        self.Saves = nil
+        Saves:Flush()
+        Saves:Destroy()
+
+        if rawequal(env.EcoHubSaves, Saves) then
+            env.EcoHubSaves = nil
+        end
     end
 
-    window.Created = true
-    window.Gui.Enabled = true
-    window.ToggleGui.Enabled = true
-    window.Elements:Load()
-    window.Features:Warm()
-    return window
+    if self.Elements then
+        self.Elements.Destroyed = true
+
+        if rawequal(env.EcoHubElements, self.Elements) then
+            env.EcoHubElements = nil
+        end
+
+        if rawequal(env.EcoHubPanel, self) then
+            env.EcoHubPanel = nil
+        end
+    end
+
+    if self.SearchChanged then
+        self.SearchChanged:Destroy()
+        self.SearchChanged = nil
+    end
+
+    if self.Gui then
+        local Gui = self.Gui
+        self.Gui = nil
+        Gui:Destroy()
+    end
+
+    if Librarys.Window == self then
+        Librarys.Window = nil
+        Librarys.Windows = nil
+        Librarys.Elements = nil
+        Librarys.FeatureConfig = nil
+    end
 end
 
-function Library.SetLanguage(first, second)
-    Locale.SetLang(rawequal(first, Library) and second or first)
+-- // Librarys
+
+function Librarys:CreateWindow(Options)
+    if Options == nil and type(self) == "table" and not rawequal(self, Librarys) then
+        Options = self
+    end
+
+    local Window = Windows.new(Options)
+
+    if Window then
+        Librarys.Window = Window
+        Librarys.Windows = Window
+        Librarys.Elements = Window.Elements
+        Librarys.FeatureConfig = Window.FeatureConfig
+
+        Window:LoadElements()
+        Window.Features:Warm()
+    end
+
+    return Window
 end
 
-function Library.GetLanguage()
-    return Locale.GetLang()
-end
-
-function Library.AddTranslations(first, second)
-    return Locale.AddMany(rawequal(first, Library) and second or first)
-end
-
-function Library.Translate(first, second)
-    local text = rawequal(first, Library) and second or first
-    return Locale.Translate(tostring(text))
-end
-
--- // Library Features
-local FEATURE_METHODS = {
+local ForwardMethods = {
     "LoadFeature",
     "LoadFeatures",
     "LoadAllFeatures",
@@ -5676,72 +6877,38 @@ local FEATURE_METHODS = {
     "TranslateGame"
 }
 
-for _, method in ipairs(FEATURE_METHODS) do
-    Library[method] = function(_, ...)
-        local window = Library.Window
-        if not window or window.Destroyed then
-            Report("Window missing", method .. " needs a window, call CreateWindow first")
+for _, Method in ipairs(ForwardMethods) do
+    Librarys[Method] = function(_, ...)
+        local Window = Librarys.Window
+
+        if not Window or Window.Destroyed then
+            Report("Window missing", Method .. " needs a window, call CreateWindow first")
             return nil
         end
-        return window[method](window, ...)
+
+        return Window[Method](Window, ...)
     end
 end
 
--- // Inicialização
-local function removePrevious()
-    local previous = env.EcoHubLibrary
-    if type(env.EcoHubDestroy) == "function" then
-        pcall(env.EcoHubDestroy)
-    end
-    if type(previous) == "table" then
-        local oldWindow = rawget(previous, "Window")
-        if type(oldWindow) == "table" and not oldWindow.Destroyed and type(oldWindow.Destroy) == "function" then
-            pcall(oldWindow.Destroy, oldWindow)
-        end
-    end
-    for _, name in ipairs({"EcoHub", "EcoHubToggle", "EcoHubNotification"}) do
-        for _, child in ipairs(PlayerGui:GetChildren()) do
-            if child.Name == name then
-                pcall(child.Destroy, child)
-            end
-        end
-    end
-    env.EcoHubDestroy = nil
-    env.EcoHubPanel = nil
-    env.EcoHubElements = nil
-    env.EcoHubLibrary = nil
+Librarys.Locale = Locale
+
+function Librarys.SetLanguage(First, Second)
+    Locale.SetLang(rawequal(First, Librarys) and Second or First)
 end
 
-local function reusePrevious()
-    local previous = env.EcoHubLibrary
-    if type(previous) ~= "table" then
-        return nil
-    end
-    local oldWindow = rawget(previous, "Window")
-    if type(oldWindow) ~= "table" or oldWindow.Destroyed then
-        return nil
-    end
-    local features = oldWindow.Features
-    if type(features) ~= "table" or type(features.Busy) ~= "function" then
-        return nil
-    end
-    local limit = type(oldWindow.FeatureConfig) == "table" and oldWindow.FeatureConfig.ReloadGuard or 60
-    local busy = features:Busy(limit)
-    if busy then
-        warn("[EcoHub] library reload ignored while feature " .. tostring(busy) .. " is loading")
-        return previous
-    end
-    return nil
+function Librarys.GetLanguage()
+    return Locale.GetLang()
 end
 
-local reused = reusePrevious()
-if reused then
-    return reused
+function Librarys.AddTranslations(First, Second)
+    return Locale.AddMany(rawequal(First, Librarys) and Second or First)
 end
 
-removePrevious()
+function Librarys.Translate(First, Second)
+    local Text = rawequal(First, Librarys) and Second or First
+    return Locale.Translate(tostring(Text))
+end
 
-env.EcoHubLibrary = Library
-Icons.Load()
+env.Librarys = Librarys
 
-return Library
+return Librarys
