@@ -16,5 +16,6 @@ return {
     TabInactive = Color3.fromRGB(120, 128, 165),
     TabHover = Color3.fromRGB(170, 178, 215),
     GradientTop = Color3.fromRGB(36, 42, 74),
-    GradientBottom = Color3.fromRGB(22, 26, 48)
+    GradientBottom = Color3.fromRGB(22, 26, 48),
+    TrackOn = Color3.fromRGB(170, 178, 215),
 }
