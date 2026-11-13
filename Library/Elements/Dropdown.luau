@@ -2,28 +2,36 @@
 Elements.Register("Dropdown", function(section, options)
     options = type(options) == "table" and options or {}
 
-    local COLORS = {
-        TextActive = Color3.fromRGB(240, 240, 240),
-        TextInactive = Color3.fromRGB(165, 165, 165),
-        TextDisabled = Color3.fromRGB(85, 85, 85),
-        FieldBg = Color3.fromRGB(28, 28, 28),
-        FieldBorder = Color3.fromRGB(55, 55, 55),
-        FieldBorderHover = Color3.fromRGB(85, 85, 85),
-        RowBg = Color3.fromRGB(28, 28, 28),
-        RowHover = Color3.fromRGB(42, 42, 42),
-        RowSelected = Color3.fromRGB(52, 52, 52),
-        OverlayBg = Color3.fromRGB(28, 28, 28),
-        OverlayBorder = Color3.fromRGB(55, 55, 55),
-        SearchBg = Color3.fromRGB(34, 34, 34),
-        SearchBorder = Color3.fromRGB(55, 55, 55),
-        SearchPlaceholder = Color3.fromRGB(110, 110, 110),
-        DescText = Color3.fromRGB(125, 125, 125),
-        TitleText = Color3.fromRGB(240, 240, 240),
-        Icon = Color3.fromRGB(125, 125, 125),
-        IconActive = Color3.fromRGB(240, 240, 240),
-        ScrollBar = Color3.fromRGB(85, 85, 85),
-        Line = Color3.fromRGB(50, 50, 50),
+    local Default = {
+        Active = Color3.fromRGB(240, 240, 240),
+        Inactive = Color3.fromRGB(165, 165, 165),
+        Dim = Color3.fromRGB(115, 115, 115),
+        Accent = Color3.fromRGB(42, 42, 42),
+        Field = Color3.fromRGB(34, 34, 34),
+        Border = Color3.fromRGB(55, 55, 55),
+        BorderHover = Color3.fromRGB(88, 88, 88),
+        Palette = Color3.fromRGB(28, 28, 28),
+        Divider = Color3.fromRGB(50, 50, 50),
+        Placeholder = Color3.fromRGB(110, 110, 110),
     }
+
+    local host = section.Panel or Panel
+    local constructing = true
+
+    local Colors = setmetatable({}, {
+        __index = function(_, key)
+            if not constructing then
+                local theme = host and host.Theme
+                local live = theme and theme[key]
+
+                if typeof(live) == "Color3" then
+                    return live
+                end
+            end
+
+            return Default[key]
+        end
+    })
 
     local tweenService = TweenService or game:GetService("TweenService")
     local userInputService = UserInputService or game:GetService("UserInputService")
@@ -247,7 +255,7 @@ Elements.Register("Dropdown", function(section, options)
     titleLabel.Name = "Title"
     titleLabel.BackgroundTransparency = 1
     titleLabel.Text = title
-    titleLabel.TextColor3 = disabled and COLORS.TextDisabled or COLORS.TitleText
+    titleLabel.TextColor3 = disabled and Colors.BorderHover or Colors.Active
     titleLabel.TextSize = TITLE_SIZE
     titleLabel.Font = fontTitle
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -275,7 +283,7 @@ Elements.Register("Dropdown", function(section, options)
         descLabel.AutomaticSize = Enum.AutomaticSize.Y
         descLabel.BackgroundTransparency = 1
         descLabel.Text = breakWords(text, WORD_BREAK)
-        descLabel.TextColor3 = COLORS.DescText
+        descLabel.TextColor3 = Default.Dim
         descLabel.TextSize = DESC_SIZE
         descLabel.Font = fontRegular
         descLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -301,7 +309,7 @@ Elements.Register("Dropdown", function(section, options)
     field.Size = UDim2.new(0, FIELD_W, 0, FIELD_H)
     field.Position = UDim2.new(1, -1, 0.5, 0)
     field.AnchorPoint = Vector2.new(1, 0.5)
-    field.BackgroundColor3 = COLORS.FieldBg
+    field.BackgroundColor3 = Colors.Palette
     field.BorderSizePixel = 0
     field.Text = ""
     field.AutoButtonColor = false
@@ -314,7 +322,7 @@ Elements.Register("Dropdown", function(section, options)
     fieldCorner.Parent = field
 
     local fStroke = Instance.new("UIStroke")
-    fStroke.Color = COLORS.FieldBorder
+    fStroke.Color = Colors.Border
     fStroke.Thickness = 1
     fStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     fStroke.Parent = field
@@ -325,7 +333,7 @@ Elements.Register("Dropdown", function(section, options)
     fieldText.Position = UDim2.new(0, 9, 0, 0)
     fieldText.BackgroundTransparency = 1
     fieldText.Text = placeholder
-    fieldText.TextColor3 = COLORS.TextInactive
+    fieldText.TextColor3 = Colors.Inactive
     fieldText.TextSize = LABEL_SIZE
     fieldText.Font = fontRegular
     fieldText.TextXAlignment = Enum.TextXAlignment.Left
@@ -339,7 +347,7 @@ Elements.Register("Dropdown", function(section, options)
     fieldIcon.AnchorPoint = Vector2.new(1, 0.5)
     fieldIcon.BackgroundTransparency = 1
     fieldIcon.Image = chevronImage
-    fieldIcon.ImageColor3 = COLORS.Icon
+    fieldIcon.ImageColor3 = Colors.Dim
     fieldIcon.Parent = field
 
     local function applyWidth()
@@ -358,7 +366,7 @@ Elements.Register("Dropdown", function(section, options)
 
     local panel = Instance.new("Frame")
     panel.Name = title .. "_Panel"
-    panel.BackgroundColor3 = COLORS.OverlayBg
+    panel.BackgroundColor3 = Colors.Palette
     panel.BorderSizePixel = 0
     panel.Position = UDim2.new(0, 1, 0, rowH + GAP)
     panel.Size = UDim2.new(1, -2, 0, 0)
@@ -373,7 +381,7 @@ Elements.Register("Dropdown", function(section, options)
     panelCorner.Parent = panel
 
     local pStroke = Instance.new("UIStroke")
-    pStroke.Color = COLORS.OverlayBorder
+    pStroke.Color = Colors.Border
     pStroke.Thickness = 1
     pStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     pStroke.Parent = panel
@@ -382,7 +390,7 @@ Elements.Register("Dropdown", function(section, options)
     searchFrame.Name = "Search"
     searchFrame.Size = UDim2.new(1, -10, 0, SEARCH_H)
     searchFrame.Position = UDim2.new(0, 5, 0, 5)
-    searchFrame.BackgroundColor3 = COLORS.SearchBg
+    searchFrame.BackgroundColor3 = Colors.Field
     searchFrame.BorderSizePixel = 0
     searchFrame.ClipsDescendants = true
     searchFrame.ZIndex = Z + 1
@@ -393,7 +401,7 @@ Elements.Register("Dropdown", function(section, options)
     searchCorner.Parent = searchFrame
 
     local sStroke = Instance.new("UIStroke")
-    sStroke.Color = COLORS.SearchBorder
+    sStroke.Color = Colors.Border
     sStroke.Thickness = 1
     sStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     sStroke.Parent = searchFrame
@@ -405,7 +413,7 @@ Elements.Register("Dropdown", function(section, options)
     searchIcon.AnchorPoint = Vector2.new(0, 0.5)
     searchIcon.BackgroundTransparency = 1
     searchIcon.Image = searchImage
-    searchIcon.ImageColor3 = COLORS.Icon
+    searchIcon.ImageColor3 = Colors.Dim
     searchIcon.ZIndex = Z + 2
     searchIcon.Parent = searchFrame
 
@@ -416,8 +424,8 @@ Elements.Register("Dropdown", function(section, options)
     searchBox.BackgroundTransparency = 1
     searchBox.Text = ""
     searchBox.PlaceholderText = "Search..."
-    searchBox.PlaceholderColor3 = COLORS.SearchPlaceholder
-    searchBox.TextColor3 = COLORS.TextActive
+    searchBox.PlaceholderColor3 = Colors.Placeholder
+    searchBox.TextColor3 = Colors.Active
     searchBox.TextSize = LABEL_SIZE
     searchBox.Font = fontRegular
     searchBox.TextXAlignment = Enum.TextXAlignment.Left
@@ -436,7 +444,7 @@ Elements.Register("Dropdown", function(section, options)
     clearBtn.AnchorPoint = Vector2.new(1, 0.5)
     clearBtn.BackgroundTransparency = 1
     clearBtn.Image = clearImage
-    clearBtn.ImageColor3 = COLORS.Icon
+    clearBtn.ImageColor3 = Colors.Dim
     clearBtn.AutoButtonColor = false
     clearBtn.Selectable = false
     clearBtn.Visible = false
@@ -447,7 +455,7 @@ Elements.Register("Dropdown", function(section, options)
     separator.Name = "Separator"
     separator.Size = UDim2.new(1, 0, 0, 1)
     separator.Position = UDim2.new(0, 0, 0, SEARCH_AREA - 3)
-    separator.BackgroundColor3 = COLORS.Line
+    separator.BackgroundColor3 = Colors.Divider
     separator.BorderSizePixel = 0
     separator.ZIndex = Z + 1
     separator.Parent = panel
@@ -459,7 +467,7 @@ Elements.Register("Dropdown", function(section, options)
     scroll.BackgroundTransparency = 1
     scroll.BorderSizePixel = 0
     scroll.ScrollBarThickness = MOBILE and 3 or 2
-    scroll.ScrollBarImageColor3 = COLORS.ScrollBar
+    scroll.ScrollBarImageColor3 = Colors.BorderHover
     scroll.ScrollBarImageTransparency = 0
     scroll.ScrollingDirection = Enum.ScrollingDirection.Y
     scroll.ElasticBehavior = Enum.ElasticBehavior.Never
@@ -486,7 +494,7 @@ Elements.Register("Dropdown", function(section, options)
     emptyLabel.Position = UDim2.new(0, 0, 0, SEARCH_AREA)
     emptyLabel.BackgroundTransparency = 1
     emptyLabel.Text = "No results found"
-    emptyLabel.TextColor3 = COLORS.TextInactive
+    emptyLabel.TextColor3 = Colors.Inactive
     emptyLabel.TextSize = LABEL_SIZE
     emptyLabel.Font = fontRegular
     emptyLabel.Visible = false
@@ -545,17 +553,17 @@ Elements.Register("Dropdown", function(section, options)
     local function updateField(animate)
         local col
         if data.disabled then
-            col = COLORS.TextDisabled
+            col = Colors.BorderHover
         elseif hasSelection() then
-            col = COLORS.TextActive
+            col = Colors.Active
         else
-            col = COLORS.TextInactive
+            col = Colors.Inactive
         end
         local text = getDisplayText()
         if fieldText.Text ~= text then
             fieldText.Text = text
         end
-        titleLabel.TextColor3 = data.disabled and COLORS.TextDisabled or COLORS.TitleText
+        titleLabel.TextColor3 = data.disabled and Colors.BorderHover or Colors.Active
         if animate then
             tw(fieldText, TI_FAST, { TextColor3 = col })
         else
@@ -566,13 +574,13 @@ Elements.Register("Dropdown", function(section, options)
     local function updateFieldBorder()
         if destroyed then return end
         local hot = (fieldHover or data.expanded) and not data.disabled
-        tw(fStroke, TI_HOVER, { Color = hot and COLORS.FieldBorderHover or COLORS.FieldBorder })
+        tw(fStroke, TI_HOVER, { Color = hot and Colors.BorderHover or Colors.Border })
     end
 
     local function updateRow(row, animate)
         local sel = isSelected(row.value)
-        local bg = sel and COLORS.RowSelected or COLORS.RowBg
-        local tc = sel and COLORS.TextActive or (data.disabled and COLORS.TextDisabled or COLORS.TextInactive)
+        local bg = sel and Colors.Border or Colors.Palette
+        local tc = sel and Colors.Active or (data.disabled and Colors.BorderHover or Colors.Inactive)
         local checkT = sel and 0 or 1
         if animate then
             tw(row.frame, TI_ROW, { BackgroundColor3 = bg })
@@ -688,7 +696,7 @@ Elements.Register("Dropdown", function(section, options)
         data.expanded = false
         outsideStart = nil
         searchBox:ReleaseFocus()
-        tw(fieldIcon, TI_ICON, { Rotation = 0, ImageColor3 = COLORS.Icon })
+        tw(fieldIcon, TI_ICON, { Rotation = 0, ImageColor3 = Colors.Dim })
         updateFieldBorder()
 
         if instant then
@@ -744,7 +752,7 @@ Elements.Register("Dropdown", function(section, options)
         local optFrame = Instance.new("Frame")
         optFrame.Name = "Opt_" .. index
         optFrame.Size = UDim2.new(1, 0, 0, OPT_H)
-        optFrame.BackgroundColor3 = COLORS.RowBg
+        optFrame.BackgroundColor3 = Default.Palette
         optFrame.BorderSizePixel = 0
         optFrame.LayoutOrder = index
         optFrame.ZIndex = Z
@@ -759,7 +767,7 @@ Elements.Register("Dropdown", function(section, options)
         optLabel.Position = UDim2.new(0, 9, 0, 0)
         optLabel.BackgroundTransparency = 1
         optLabel.Text = tostring(value)
-        optLabel.TextColor3 = COLORS.TextInactive
+        optLabel.TextColor3 = Default.Inactive
         optLabel.TextSize = LABEL_SIZE
         optLabel.Font = fontRegular
         optLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -775,7 +783,7 @@ Elements.Register("Dropdown", function(section, options)
         optCheck.AnchorPoint = Vector2.new(1, 0.5)
         optCheck.BackgroundTransparency = 1
         optCheck.Image = checkImage
-        optCheck.ImageColor3 = COLORS.IconActive
+        optCheck.ImageColor3 = Default.Active
         optCheck.ImageTransparency = 1
         optCheck.ZIndex = Z + 1
         optCheck.Parent = optFrame
@@ -793,8 +801,6 @@ Elements.Register("Dropdown", function(section, options)
         local row = { frame = optFrame, label = optLabel, check = optCheck, value = value, key = valueKeys[index] or tostring(value):lower() }
         optRows[#optRows + 1] = row
 
-        updateRow(row, false)
-
         local query = searchBox.Text:lower()
         if query ~= "" and string.find(row.key, query, 1, true) == nil then
             optFrame.Visible = false
@@ -802,32 +808,34 @@ Elements.Register("Dropdown", function(section, options)
 
         optFrame.Parent = scroll
 
+        updateRow(row, false)
+
         local pressPos = nil
 
         rowConnections[#rowConnections + 1] = btn.MouseEnter:Connect(function()
             if usingTouch() then return end
             if not isSelected(value) and not data.disabled then
-                tw(optFrame, TI_HOVER, { BackgroundColor3 = COLORS.RowHover })
-                tw(optLabel, TI_HOVER, { TextColor3 = COLORS.TextActive })
+                tw(optFrame, TI_HOVER, { BackgroundColor3 = Colors.Accent })
+                tw(optLabel, TI_HOVER, { TextColor3 = Colors.Active })
             end
         end)
         rowConnections[#rowConnections + 1] = btn.MouseLeave:Connect(function()
             if not isSelected(value) then
-                tw(optFrame, TI_HOVER, { BackgroundColor3 = COLORS.RowBg })
-                tw(optLabel, TI_HOVER, { TextColor3 = COLORS.TextInactive })
+                tw(optFrame, TI_HOVER, { BackgroundColor3 = Colors.Palette })
+                tw(optLabel, TI_HOVER, { TextColor3 = Colors.Inactive })
             end
         end)
         rowConnections[#rowConnections + 1] = btn.InputBegan:Connect(function(input)
             if not isPointerInput(input) then return end
             pressPos = Vector2.new(input.Position.X, input.Position.Y)
             if not isSelected(value) and not data.disabled then
-                tw(optFrame, TI_HOVER, { BackgroundColor3 = COLORS.RowHover })
+                tw(optFrame, TI_HOVER, { BackgroundColor3 = Colors.Accent })
             end
         end)
         rowConnections[#rowConnections + 1] = btn.InputEnded:Connect(function(input)
             if not isPointerInput(input) then return end
             if input.UserInputType == Enum.UserInputType.Touch and not isSelected(value) then
-                tw(optFrame, TI_HOVER, { BackgroundColor3 = COLORS.RowBg })
+                tw(optFrame, TI_HOVER, { BackgroundColor3 = Colors.Palette })
             end
         end)
         rowConnections[#rowConnections + 1] = btn.Activated:Connect(function(input)
@@ -891,7 +899,7 @@ Elements.Register("Dropdown", function(section, options)
         scroll.CanvasPosition = Vector2.new(0, 0)
 
         tweenContainer(rowH + GAP + h + 2, TI_OPEN, revealPanel)
-        tw(fieldIcon, TI_ICON, { Rotation = 180, ImageColor3 = COLORS.IconActive })
+        tw(fieldIcon, TI_ICON, { Rotation = 180, ImageColor3 = Colors.Active })
         updateFieldBorder()
 
         if not MOBILE then
@@ -960,13 +968,13 @@ Elements.Register("Dropdown", function(section, options)
     end)
 
     connect(searchBox.Focused, function()
-        tw(sStroke, TI_HOVER, { Color = COLORS.FieldBorderHover })
-        tw(searchIcon, TI_HOVER, { ImageColor3 = COLORS.IconActive })
+        tw(sStroke, TI_HOVER, { Color = Colors.BorderHover })
+        tw(searchIcon, TI_HOVER, { ImageColor3 = Colors.Active })
     end)
 
     connect(searchBox.FocusLost, function(enterPressed)
-        tw(sStroke, TI_HOVER, { Color = COLORS.SearchBorder })
-        tw(searchIcon, TI_HOVER, { ImageColor3 = COLORS.Icon })
+        tw(sStroke, TI_HOVER, { Color = Colors.Border })
+        tw(searchIcon, TI_HOVER, { ImageColor3 = Colors.Dim })
         if enterPressed and data.expanded and searchBox.Text ~= "" then
             searchToken = searchToken + 1
             applyFilter()
@@ -987,11 +995,11 @@ Elements.Register("Dropdown", function(section, options)
     end)
 
     connect(clearBtn.MouseEnter, function()
-        tw(clearBtn, TI_HOVER, { ImageColor3 = COLORS.IconActive })
+        tw(clearBtn, TI_HOVER, { ImageColor3 = Colors.Active })
     end)
 
     connect(clearBtn.MouseLeave, function()
-        tw(clearBtn, TI_HOVER, { ImageColor3 = COLORS.Icon })
+        tw(clearBtn, TI_HOVER, { ImageColor3 = Colors.Dim })
     end)
 
     connect(userInputService.InputBegan, function(input)
@@ -1167,6 +1175,8 @@ Elements.Register("Dropdown", function(section, options)
         table.clear(connections)
         container:Destroy()
     end
+
+    constructing = false
 
     return data
 end)

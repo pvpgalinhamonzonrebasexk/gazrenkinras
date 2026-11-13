@@ -2,19 +2,32 @@
 Elements.Register("Slider", function(section, options)
     options = type(options) == "table" and options or {}
 
-    local COLORS = {
-        TextActive = Color3.fromRGB(250, 250, 250),
-        TextDisabled = Color3.fromRGB(82, 82, 91),
-        Track = Color3.fromRGB(39, 39, 42),
-        Fill = Color3.fromRGB(250, 250, 250),
-        FillDisabled = Color3.fromRGB(82, 82, 91),
-        BadgeBg = Color3.fromRGB(39, 39, 42),
-        BadgeText = Color3.fromRGB(228, 228, 231),
-        BadgeTextDisabled = Color3.fromRGB(82, 82, 91),
-        DescriptionText = Color3.fromRGB(113, 113, 122),
-        ThumbBg = Color3.fromRGB(250, 250, 250),
-        ThumbRing = Color3.fromRGB(24, 24, 27),
+    local Default = {
+        Active = Color3.fromRGB(240, 240, 240),
+        Text = Color3.fromRGB(230, 230, 230),
+        Dim = Color3.fromRGB(115, 115, 115),
+        BorderHover = Color3.fromRGB(88, 88, 88),
+        Accent = Color3.fromRGB(42, 42, 42),
+        Background = Color3.fromRGB(24, 24, 24),
     }
+
+    local panel = section.Panel or Panel
+    local building = true
+
+    local Colors = setmetatable({}, {
+        __index = function(_, key)
+            if not building then
+                local theme = panel and panel.Theme
+                local live = theme and theme[key]
+
+                if typeof(live) == "Color3" then
+                    return live
+                end
+            end
+
+            return Default[key]
+        end
+    })
 
     local tweenService = TweenService or game:GetService("TweenService")
     local userInputService = UserInputService or game:GetService("UserInputService")
@@ -164,10 +177,10 @@ Elements.Register("Slider", function(section, options)
     valueBadge.Name = "ValueBadge"
     valueBadge.Size = UDim2.new(0, BADGE_MIN_W, 1, 0)
     valueBadge.AutomaticSize = Enum.AutomaticSize.X
-    valueBadge.BackgroundColor3 = COLORS.BadgeBg
+    valueBadge.BackgroundColor3 = Colors.Accent
     valueBadge.BorderSizePixel = 0
     valueBadge.Text = formatValue(default)
-    valueBadge.TextColor3 = COLORS.BadgeText
+    valueBadge.TextColor3 = Colors.Text
     valueBadge.TextSize = BADGE_SIZE
     valueBadge.Font = fontBold
     valueBadge.TextXAlignment = Enum.TextXAlignment.Center
@@ -189,7 +202,7 @@ Elements.Register("Slider", function(section, options)
     label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
     label.Text = title
-    label.TextColor3 = COLORS.TextActive
+    label.TextColor3 = Colors.Active
     label.TextSize = TITLE_SIZE
     label.Font = fontBold
     label.TextXAlignment = Enum.TextXAlignment.Left
@@ -211,7 +224,7 @@ Elements.Register("Slider", function(section, options)
         descLabel.AutomaticSize = Enum.AutomaticSize.Y
         descLabel.BackgroundTransparency = 1
         descLabel.Text = breakLongWords(text, WORD_MAX)
-        descLabel.TextColor3 = COLORS.DescriptionText
+        descLabel.TextColor3 = Default.Dim
         descLabel.TextSize = DESC_SIZE
         descLabel.Font = fontRegular
         descLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -242,7 +255,7 @@ Elements.Register("Slider", function(section, options)
     track.Name = "Track"
     track.Size = UDim2.new(1, 0, 0, TRACK_H)
     track.Position = UDim2.new(0, 0, 0.5, -TRACK_H / 2)
-    track.BackgroundColor3 = COLORS.Track
+    track.BackgroundColor3 = Colors.Accent
     track.BorderSizePixel = 0
     track.Parent = trackWrapper
 
@@ -253,7 +266,7 @@ Elements.Register("Slider", function(section, options)
     local fill = Instance.new("Frame")
     fill.Name = "Fill"
     fill.Size = UDim2.new(0, 0, 1, 0)
-    fill.BackgroundColor3 = COLORS.Fill
+    fill.BackgroundColor3 = Colors.Active
     fill.BorderSizePixel = 0
     fill.ZIndex = 1
     fill.Parent = track
@@ -267,7 +280,7 @@ Elements.Register("Slider", function(section, options)
     thumb.Size = UDim2.new(0, THUMB_SIZE, 0, THUMB_SIZE)
     thumb.AnchorPoint = Vector2.new(0.5, 0.5)
     thumb.Position = UDim2.new(0, 0, 0.5, 0)
-    thumb.BackgroundColor3 = COLORS.ThumbBg
+    thumb.BackgroundColor3 = Colors.Active
     thumb.BorderSizePixel = 0
     thumb.ZIndex = 4
     thumb.Parent = track
@@ -277,7 +290,7 @@ Elements.Register("Slider", function(section, options)
     thumbCorner.Parent = thumb
 
     local thumbStroke = Instance.new("UIStroke")
-    thumbStroke.Color = COLORS.ThumbRing
+    thumbStroke.Color = Colors.Background
     thumbStroke.Thickness = 3
     thumbStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     thumbStroke.Parent = thumb
@@ -331,10 +344,10 @@ Elements.Register("Slider", function(section, options)
         if destroyed then return end
 
         local alpha = getAlpha(data.value)
-        local fillColor = data.disabled and COLORS.FillDisabled or COLORS.Fill
-        local thumbColor = data.disabled and COLORS.FillDisabled or COLORS.ThumbBg
-        local textColor = data.disabled and COLORS.TextDisabled or COLORS.TextActive
-        local badgeColor = data.disabled and COLORS.BadgeTextDisabled or COLORS.BadgeText
+        local fillColor = data.disabled and Colors.BorderHover or Colors.Active
+        local thumbColor = data.disabled and Colors.BorderHover or Colors.Active
+        local textColor = data.disabled and Colors.BorderHover or Colors.Active
+        local badgeColor = data.disabled and Colors.BorderHover or Colors.Text
 
         valueBadge.Text = formatValue(data.value)
         valueBadge.TextColor3 = badgeColor
@@ -527,6 +540,8 @@ Elements.Register("Slider", function(section, options)
         table.clear(connections)
         container:Destroy()
     end
+
+    building = false
 
     return data
 end)

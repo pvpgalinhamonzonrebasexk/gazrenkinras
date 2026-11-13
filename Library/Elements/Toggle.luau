@@ -2,23 +2,35 @@
 Elements.Register("Checkbox", function(section, options)
     options = type(options) == "table" and options or {}
 
-    local COLORS = {
-        TrackOn = Color3.fromRGB(240, 240, 240),
-        TrackOff = Color3.fromRGB(55, 55, 55),
-        TrackDisabled = Color3.fromRGB(38, 38, 38),
-        KnobOn = Color3.fromRGB(24, 24, 24),
-        KnobOff = Color3.fromRGB(240, 240, 240),
-        KnobDisabled = Color3.fromRGB(85, 85, 85),
-        TextOn = Color3.fromRGB(240, 240, 240),
-        TextOff = Color3.fromRGB(165, 165, 165),
-        TextDisabled = Color3.fromRGB(85, 85, 85),
-        Description = Color3.fromRGB(125, 125, 125),
-        KeyBg = Color3.fromRGB(28, 28, 28),
-        KeyBorder = Color3.fromRGB(55, 55, 55),
-        KeyText = Color3.fromRGB(165, 165, 165),
-        KeyListening = Color3.fromRGB(42, 42, 42),
-        KeyListenText = Color3.fromRGB(240, 240, 240),
+    local Default = {
+        Active = Color3.fromRGB(240, 240, 240),
+        Inactive = Color3.fromRGB(165, 165, 165),
+        Dim = Color3.fromRGB(115, 115, 115),
+        Accent = Color3.fromRGB(42, 42, 42),
+        Border = Color3.fromRGB(55, 55, 55),
+        BorderHover = Color3.fromRGB(88, 88, 88),
+        Palette = Color3.fromRGB(28, 28, 28),
+        Background = Color3.fromRGB(24, 24, 24),
+        GradientTop = Color3.fromRGB(38, 38, 38),
     }
+
+    local panel = section.Panel or Panel
+    local building = true
+
+    local Colors = setmetatable({}, {
+        __index = function(_, key)
+            if not building then
+                local theme = panel and panel.Theme
+                local live = theme and theme[key]
+
+                if typeof(live) == "Color3" then
+                    return live
+                end
+            end
+
+            return Default[key]
+        end
+    })
 
     local TITLE_SIZE = 13
     local DESC_SIZE = 11
@@ -210,7 +222,7 @@ Elements.Register("Checkbox", function(section, options)
     label.Size = UDim2.new(1, 0, 0, TITLE_SIZE + 3)
     label.BackgroundTransparency = 1
     label.Text = title
-    label.TextColor3 = default and COLORS.TextOn or COLORS.TextOff
+    label.TextColor3 = default and Colors.Active or Colors.Inactive
     label.TextSize = TITLE_SIZE
     label.Font = fontBold
     label.TextXAlignment = Enum.TextXAlignment.Left
@@ -229,7 +241,7 @@ Elements.Register("Checkbox", function(section, options)
         descLabel.AutomaticSize = Enum.AutomaticSize.Y
         descLabel.BackgroundTransparency = 1
         descLabel.Text = breakLongWords(text, WORD_MAX)
-        descLabel.TextColor3 = COLORS.Description
+        descLabel.TextColor3 = Default.Dim
         descLabel.TextSize = DESC_SIZE
         descLabel.Font = fontRegular
         descLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -253,7 +265,7 @@ Elements.Register("Checkbox", function(section, options)
     track.Size = UDim2.new(0, SWITCH_W, 0, SWITCH_H)
     track.Position = UDim2.new(1, -SIDE_PAD, 0.5, 0)
     track.AnchorPoint = Vector2.new(1, 0.5)
-    track.BackgroundColor3 = default and COLORS.TrackOn or COLORS.TrackOff
+    track.BackgroundColor3 = default and Colors.Active or Colors.Border
     track.BorderSizePixel = 0
     track.ZIndex = 3
     track.Parent = container
@@ -267,7 +279,7 @@ Elements.Register("Checkbox", function(section, options)
     knob.Size = UDim2.new(0, KNOB, 0, KNOB)
     knob.AnchorPoint = Vector2.new(0, 0.5)
     knob.Position = knobPosition(default)
-    knob.BackgroundColor3 = default and COLORS.KnobOn or COLORS.KnobOff
+    knob.BackgroundColor3 = default and Colors.Background or Colors.Active
     knob.BorderSizePixel = 0
     knob.ZIndex = 4
     knob.Parent = track
@@ -283,7 +295,7 @@ Elements.Register("Checkbox", function(section, options)
         keyBtn.Size = UDim2.new(0, PILL_W, 0, PILL_H)
         keyBtn.AnchorPoint = Vector2.new(1, 0.5)
         keyBtn.Position = UDim2.new(1, -(SWITCH_W + SIDE_PAD + 8), 0.5, 0)
-        keyBtn.BackgroundColor3 = COLORS.KeyBg
+        keyBtn.BackgroundColor3 = Colors.Palette
         keyBtn.BorderSizePixel = 0
         keyBtn.Text = ""
         keyBtn.AutoButtonColor = false
@@ -297,7 +309,7 @@ Elements.Register("Checkbox", function(section, options)
         keyCorner.Parent = keyBtn
 
         keyStroke = Instance.new("UIStroke")
-        keyStroke.Color = COLORS.KeyBorder
+        keyStroke.Color = Colors.Border
         keyStroke.Thickness = 1
         keyStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         keyStroke.Parent = keyBtn
@@ -307,7 +319,7 @@ Elements.Register("Checkbox", function(section, options)
         keyLabel.Size = UDim2.new(1, 0, 1, 0)
         keyLabel.BackgroundTransparency = 1
         keyLabel.Text = getKeyName(data.keybind)
-        keyLabel.TextColor3 = COLORS.KeyText
+        keyLabel.TextColor3 = Colors.Inactive
         keyLabel.TextSize = KEY_SIZE
         keyLabel.Font = fontBold
         keyLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -340,14 +352,14 @@ Elements.Register("Checkbox", function(section, options)
     local function updateVisuals(animate)
         if destroyed then return end
 
-        local trackColor = data.state and COLORS.TrackOn or COLORS.TrackOff
-        local knobColor = data.state and COLORS.KnobOn or COLORS.KnobOff
-        local textColor = data.state and COLORS.TextOn or COLORS.TextOff
+        local trackColor = data.state and Colors.Active or Colors.Border
+        local knobColor = data.state and Colors.Background or Colors.Active
+        local textColor = data.state and Colors.Active or Colors.Inactive
 
         if data.disabled then
-            trackColor = COLORS.TrackDisabled
-            knobColor = COLORS.KnobDisabled
-            textColor = COLORS.TextDisabled
+            trackColor = Colors.GradientTop
+            knobColor = Colors.BorderHover
+            textColor = Colors.BorderHover
         end
 
         play(track, { BackgroundColor3 = trackColor }, animate)
@@ -381,10 +393,10 @@ Elements.Register("Checkbox", function(section, options)
 
     local function resetKeyVisual()
         if not keyBtn then return end
-        keyBtn.BackgroundColor3 = COLORS.KeyBg
-        keyStroke.Color = COLORS.KeyBorder
+        keyBtn.BackgroundColor3 = Colors.Palette
+        keyStroke.Color = Colors.Border
         keyLabel.Text = getKeyName(data.keybind)
-        keyLabel.TextColor3 = COLORS.KeyText
+        keyLabel.TextColor3 = Colors.Inactive
     end
 
     local function stopListening()
@@ -406,10 +418,10 @@ Elements.Register("Checkbox", function(section, options)
         env.EcoHubBinding = true
         listenStartedAt = os.clock()
 
-        keyBtn.BackgroundColor3 = COLORS.KeyListening
-        keyStroke.Color = COLORS.KeyListenText
+        keyBtn.BackgroundColor3 = Colors.Accent
+        keyStroke.Color = Colors.Active
         keyLabel.Text = "..."
-        keyLabel.TextColor3 = COLORS.KeyListenText
+        keyLabel.TextColor3 = Colors.Active
 
         listeningConnection = userInputService.InputBegan:Connect(function(input)
             if destroyed or not data.listening then return end
@@ -559,6 +571,8 @@ Elements.Register("Checkbox", function(section, options)
         table.clear(connections)
         container:Destroy()
     end
+
+    building = false
 
     return data
 end)

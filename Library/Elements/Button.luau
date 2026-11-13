@@ -2,50 +2,31 @@
 Elements.Register("Button", function(section, options)
     options = type(options) == "table" and options or {}
 
-    local VARIANTS = {
-        default = {
-            bg = Color3.fromRGB(240, 240, 240), bgT = 0,
-            hover = Color3.fromRGB(218, 218, 218), hoverT = 0,
-            pressed = Color3.fromRGB(200, 200, 200),
-            text = Color3.fromRGB(24, 24, 24), textHover = Color3.fromRGB(24, 24, 24),
-            stroke = Color3.fromRGB(240, 240, 240), strokeT = 1,
-        },
-        secondary = {
-            bg = Color3.fromRGB(42, 42, 42), bgT = 0,
-            hover = Color3.fromRGB(52, 52, 52), hoverT = 0,
-            pressed = Color3.fromRGB(62, 62, 62),
-            text = Color3.fromRGB(240, 240, 240), textHover = Color3.fromRGB(240, 240, 240),
-            stroke = Color3.fromRGB(42, 42, 42), strokeT = 1,
-        },
-        outline = {
-            bg = Color3.fromRGB(34, 34, 34), bgT = 0,
-            hover = Color3.fromRGB(42, 42, 42), hoverT = 0,
-            pressed = Color3.fromRGB(52, 52, 52),
-            text = Color3.fromRGB(240, 240, 240), textHover = Color3.fromRGB(240, 240, 240),
-            stroke = Color3.fromRGB(55, 55, 55), strokeT = 0,
-        },
-        ghost = {
-            bg = Color3.fromRGB(42, 42, 42), bgT = 1,
-            hover = Color3.fromRGB(42, 42, 42), hoverT = 0,
-            pressed = Color3.fromRGB(52, 52, 52),
-            text = Color3.fromRGB(200, 200, 200), textHover = Color3.fromRGB(240, 240, 240),
-            stroke = Color3.fromRGB(42, 42, 42), strokeT = 1,
-        },
-        destructive = {
-            bg = Color3.fromRGB(58, 24, 27), bgT = 0,
-            hover = Color3.fromRGB(78, 30, 34), hoverT = 0,
-            pressed = Color3.fromRGB(98, 36, 40),
-            text = Color3.fromRGB(248, 113, 113), textHover = Color3.fromRGB(252, 165, 165),
-            stroke = Color3.fromRGB(58, 24, 27), strokeT = 1,
-        },
-        link = {
-            bg = Color3.fromRGB(24, 24, 24), bgT = 1,
-            hover = Color3.fromRGB(24, 24, 24), hoverT = 1,
-            pressed = Color3.fromRGB(24, 24, 24),
-            text = Color3.fromRGB(240, 240, 240), textHover = Color3.fromRGB(165, 165, 165),
-            stroke = Color3.fromRGB(24, 24, 24), strokeT = 1,
-        },
+    local Default = {
+        Active = Color3.fromRGB(240, 240, 240),
+        Text = Color3.fromRGB(230, 230, 230),
+        TabHover = Color3.fromRGB(200, 200, 200),
+        Dim = Color3.fromRGB(115, 115, 115),
+        Background = Color3.fromRGB(24, 24, 24),
     }
+
+    local panel = section.Panel or Panel
+    local building = true
+
+    local Colors = setmetatable({}, {
+        __index = function(_, key)
+            if not building then
+                local theme = panel and panel.Theme
+                local live = theme and theme[key]
+
+                if typeof(live) == "Color3" then
+                    return live
+                end
+            end
+
+            return Default[key]
+        end
+    })
 
     local SIZES = {
         xs = { height = 22, text = 11, pad = 8 },
@@ -54,7 +35,6 @@ Elements.Register("Button", function(section, options)
         lg = { height = 36, text = 14, pad = 16 },
     }
 
-    local COLOR_DESC = Color3.fromRGB(125, 125, 125)
     local DISABLED_FADE = 0.5
     local WORD_MAX = 20
     local SPINNER = 12
@@ -118,11 +98,6 @@ Elements.Register("Button", function(section, options)
         return fallback
     end
 
-    local function fade(t)
-        if t >= 1 then return 1 end
-        return t + (1 - t) * DISABLED_FADE
-    end
-
     local title = tostring(options.title or options.Name or "Button")
     local description = tostring(options.description or "")
     local callback = options.callback or options.Callback
@@ -134,7 +109,6 @@ Elements.Register("Button", function(section, options)
     local data = {
         disabled = options.disabled == true,
         loading = options.loading == true,
-        variant = pickKey(VARIANTS, options.variant or options.Variant, "default"),
         size = pickKey(SIZES, options.size or options.Size, "default"),
     }
 
@@ -152,11 +126,6 @@ Elements.Register("Button", function(section, options)
     local containerCorner = Instance.new("UICorner")
     containerCorner.CornerRadius = UDim.new(0, 6)
     containerCorner.Parent = container
-
-    local containerStroke = Instance.new("UIStroke")
-    containerStroke.Thickness = 1
-    containerStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    containerStroke.Parent = container
 
     local textFrame = Instance.new("Frame")
     textFrame.Name = "TextFrame"
@@ -178,7 +147,6 @@ Elements.Register("Button", function(section, options)
     local label = Instance.new("TextLabel")
     label.Name = "Title"
     label.BackgroundTransparency = 1
-    label.RichText = true
     label.Font = fontBold
     label.TextXAlignment = Enum.TextXAlignment.Center
     label.TextYAlignment = Enum.TextYAlignment.Center
@@ -188,14 +156,6 @@ Elements.Register("Button", function(section, options)
     label.Parent = textFrame
 
     local descLabel
-
-    local function displayTitle()
-        local safe = title:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
-        if data.variant == "link" then
-            return "<u>" .. safe .. "</u>"
-        end
-        return safe
-    end
 
     local function descSize()
         return math.max(SIZES[data.size].text - 2, 10)
@@ -208,7 +168,7 @@ Elements.Register("Button", function(section, options)
         descLabel.AutomaticSize = Enum.AutomaticSize.Y
         descLabel.BackgroundTransparency = 1
         descLabel.Text = breakLongWords(text, WORD_MAX)
-        descLabel.TextColor3 = COLOR_DESC
+        descLabel.TextColor3 = Default.Dim
         descLabel.TextSize = descSize()
         descLabel.Font = fontRegular
         descLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -240,6 +200,7 @@ Elements.Register("Button", function(section, options)
     spinnerStroke.Parent = spinner
 
     local spinnerGradient = Instance.new("UIGradient")
+    spinnerGradient.Color = ColorSequence.new(Color3.fromRGB(255, 255, 254))
     spinnerGradient.Transparency = NumberSequence.new({
         NumberSequenceKeypoint.new(0, 0),
         NumberSequenceKeypoint.new(0.5, 0),
@@ -286,38 +247,33 @@ Elements.Register("Button", function(section, options)
     local function render(animate)
         if destroyed then return end
 
-        local v = VARIANTS[data.variant]
         local live = not data.disabled and not data.loading
 
-        local bg, bgT, textColor = v.bg, v.bgT, v.text
+        local bg = Colors.Active
         if live and pressed then
-            bg, bgT, textColor = v.pressed, data.variant == "link" and 1 or 0, v.textHover
+            bg = Colors.TabHover
         elseif live and hovering then
-            bg, bgT, textColor = v.hover, v.hoverT, v.textHover
+            bg = Colors.Text
         end
 
-        local strokeT = v.strokeT
+        local bgT = 0
         local textT = 0
 
         if data.disabled then
-            bgT = fade(bgT)
-            strokeT = fade(strokeT)
+            bgT = DISABLED_FADE
             textT = DISABLED_FADE
         end
 
-        spinnerStroke.Color = v.text
+        spinnerStroke.Color = Colors.Background
 
         local containerProps = { BackgroundColor3 = bg, BackgroundTransparency = bgT }
-        local strokeProps = { Color = v.stroke, Transparency = strokeT }
-        local labelProps = { TextColor3 = textColor, TextTransparency = textT }
+        local labelProps = { TextColor3 = Colors.Background, TextTransparency = textT }
 
         if animate then
             tweenService:Create(container, tweenInfo, containerProps):Play()
-            tweenService:Create(containerStroke, tweenInfo, strokeProps):Play()
             tweenService:Create(label, tweenInfo, labelProps):Play()
         else
             for k, val in pairs(containerProps) do container[k] = val end
-            for k, val in pairs(strokeProps) do containerStroke[k] = val end
             for k, val in pairs(labelProps) do label[k] = val end
         end
     end
@@ -335,7 +291,7 @@ Elements.Register("Button", function(section, options)
     end
 
     local function applyAll(animate)
-        label.Text = displayTitle()
+        label.Text = title
         applySize()
         clickArea.Active = not data.disabled and not data.loading
         if data.loading then
@@ -414,12 +370,6 @@ Elements.Register("Button", function(section, options)
         return data.loading
     end
 
-    function data:SetVariant(value)
-        if destroyed then return end
-        data.variant = pickKey(VARIANTS, value, data.variant)
-        applyAll(true)
-    end
-
     function data:SetSize(value)
         if destroyed then return end
         data.size = pickKey(SIZES, value, data.size)
@@ -429,7 +379,7 @@ Elements.Register("Button", function(section, options)
     function data:SetTitle(newTitle)
         if destroyed then return end
         title = tostring(newTitle or "")
-        label.Text = displayTitle()
+        label.Text = title
     end
 
     function data:SetDescription(newDesc)
@@ -465,6 +415,8 @@ Elements.Register("Button", function(section, options)
         table.clear(connections)
         container:Destroy()
     end
+
+    building = false
 
     return data
 end)
