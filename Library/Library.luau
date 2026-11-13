@@ -406,8 +406,8 @@ end
 local Protection = {}
 
 local _ProtRunService = game:GetService("RunService")
-
 local _ProtLocalPlayer = Players.LocalPlayer
+local _IsMobile = game:GetService("UserInputService").TouchEnabled
 
 local function _isExecFunc(fn)
     if type(fn) ~= "function" then return false end
@@ -450,14 +450,14 @@ function Protection.ApplyHiddenGui(gui)
             return
         end
     end
-    local cg = game:GetService("CoreGui")
-    if cg then
+    local ok2, cg = pcall(game.GetService, game, "CoreGui")
+    if ok2 and cg then
         pcall(function() gui.Parent = cg end)
     end
 end
 
 function Protection.HideFromStack(fn)
-    if type(fn) ~= "function" then return end
+    if type(fn) ~= "function" then return fn end
     if type(setstackhidden) == "function" then
         pcall(setstackhidden, fn, true)
     end
@@ -469,12 +469,11 @@ function Protection.DisableSignalConnections(signal)
     local ok, conns = pcall(getconnections, signal)
     if not ok or type(conns) ~= "table" then return end
     for _, conn in ipairs(conns) do
-        local isExec = pcall(function()
-            return conn.LuaConnection and not _isExecFunc(conn.Function)
+        pcall(function()
+            if conn.LuaConnection and not _isExecFunc(conn.Function) then
+                conn:Disable()
+            end
         end)
-        if isExec then
-            pcall(function() conn:Disable() end)
-        end
     end
 end
 
@@ -540,6 +539,7 @@ end
 local _MetaHooks = {}
 
 function Protection.HookGameMeta()
+    if _IsMobile then return end
     if type(hookmetamethod) ~= "function" or type(getrawmetatable) ~= "function" then return end
     local ok, mt = pcall(getrawmetatable, game)
     if not ok or not mt then return end
@@ -563,13 +563,20 @@ function Protection.HookGameMeta()
 end
 
 function Protection.UnhookGameMeta()
-    if _MetaHooks.index    then Protection.SafeUnhook(_MetaHooks.index)    _MetaHooks.index    = nil end
-    if _MetaHooks.namecall then Protection.SafeUnhook(_MetaHooks.namecall) _MetaHooks.namecall = nil end
+    if _MetaHooks.index then
+        Protection.SafeUnhook(_MetaHooks.index)
+        _MetaHooks.index = nil
+    end
+    if _MetaHooks.namecall then
+        Protection.SafeUnhook(_MetaHooks.namecall)
+        _MetaHooks.namecall = nil
+    end
 end
 
 local _GuiConns = {}
 
 function Protection.HidePlayerGui()
+    if _IsMobile then return end
     if type(getconnections) ~= "function" then return end
     local gui = _ProtLocalPlayer:FindFirstChildOfClass("PlayerGui")
     if not gui then return end
@@ -599,9 +606,31 @@ function Protection.HideThread()
 end
 
 local _MonitorConn = nil
+local _AntiAfkConn = nil
 local _SeenScripts = {}
 local _SeenCleanTimer = 0
+local _AfkTimer = 0
 local _SEEN_CLEAN_INTERVAL = 30
+local _ANTI_AFK_INTERVAL = 60
+
+function Protection.StartAntiAfk()
+    if _AntiAfkConn then return end
+    _AntiAfkConn = _ProtRunService.Heartbeat:Connect(function(dt)
+        _AfkTimer = _AfkTimer + dt
+        if _AfkTimer >= _ANTI_AFK_INTERVAL then
+            _AfkTimer = 0
+            Protection.DisableSignalConnections(_ProtLocalPlayer.Idled)
+        end
+    end)
+end
+
+function Protection.StopAntiAfk()
+    if _AntiAfkConn then
+        _AntiAfkConn:Disconnect()
+        _AntiAfkConn = nil
+    end
+    _AfkTimer = 0
+end
 
 function Protection.StartMonitor(onDetected)
     if _MonitorConn then return end
@@ -640,30 +669,37 @@ end
 
 function Protection.Apply(window, options)
     options = type(options) == "table" and options or {}
+
     Protection.HideThread()
+
     if window then
-        if window.Gui       then Protection.ApplyHiddenGui(window.Gui)       end
+        if window.Gui then Protection.ApplyHiddenGui(window.Gui) end
         if window.ToggleGui then Protection.ApplyHiddenGui(window.ToggleGui) end
     end
-    if options.HideStack ~= false then
+
+    if options.HideStack ~= false and not _IsMobile then
         local function noop() end
         Protection.HideFromStack(noop)
     end
-    if options.DisableIdleCheck ~= false then
-        Protection.DisableSignalConnections(_ProtLocalPlayer.Idled)
-    end
+
+    Protection.DisableSignalConnections(_ProtLocalPlayer.Idled)
+    Protection.StartAntiAfk()
+
     if options.HookMeta ~= false then
         Protection.HookGameMeta()
     end
+
     if options.HideGui ~= false then
         Protection.HidePlayerGui()
     end
+
     local detected = Protection.ScanRunningScripts()
     if #detected > 0 and type(options.OnMalicious) == "function" then
         for _, info in ipairs(detected) do
             task.spawn(options.OnMalicious, info.Script, info.Keyword)
         end
     end
+
     if options.Monitor ~= false then
         Protection.StartMonitor(options.OnMalicious)
     end
@@ -671,6 +707,7 @@ end
 
 function Protection.Destroy()
     Protection.StopMonitor()
+    Protection.StopAntiAfk()
     Protection.UnhookGameMeta()
     Protection.RestorePlayerGui()
 end
