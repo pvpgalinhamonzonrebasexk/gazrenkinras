@@ -13,7 +13,7 @@ return {
     Border = Color3.fromRGB(36, 58, 88),
     BorderHover = Color3.fromRGB(64, 100, 150),
     Active = Color3.fromRGB(59, 130, 246),
-    Text = Color3.fromRGB(96, 165, 250),
+    Text = Color3.fromRGB(255, 255, 255),
     Inactive = Color3.fromRGB(140, 165, 195),
     Dim = Color3.fromRGB(90, 115, 145),
     Placeholder = Color3.fromRGB(80, 104, 134),
