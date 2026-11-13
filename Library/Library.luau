@@ -6077,10 +6077,17 @@ function Windows:_CreateSideSection(Name)
         LayoutOrder = 1,
         ClipsDescendants = true
     }, Section.Frame)
+    Util.Padding(Section.Menu, 2, 2, 2, 2)
     Util.List(Section.Menu, 2)
 
     function Section:FullHeight()
-        return math.max(#self.Tabs * (Config.TabHeight + 2) - 2, 0)
+        local Count = #self.Tabs
+
+        if Count == 0 then
+            return 0
+        end
+
+        return Count * (Config.TabHeight + 2) - 2 + 4
     end
 
     function Section:Animate()
