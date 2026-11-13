@@ -1829,6 +1829,10 @@ function ElementRegistry:_Watch()
 end
 
 function ElementRegistry:_Load(Names, Force, Quiet)
+    if self.Active > 0 and not Force then
+        return
+    end
+
     Names = Names or env.EcoHubElementList
 
     if Force then
@@ -3347,6 +3351,20 @@ function Features:_Lookup(index, lowered, folderOnly)
     return nil
 end
 
+function Features:_UrlKey(clean)
+    local source = self.Source
+    local parsed = Source.Parse(clean)
+
+    if parsed and source.Prefix ~= "" and Features._IsScript(parsed.Path)
+        and string.lower(parsed.Repo) == string.lower(source.Repo)
+        and string.lower(parsed.Branch) == string.lower(source.Branch)
+        and string.lower(string.sub(parsed.Path, 1, #source.Prefix)) == string.lower(source.Prefix) then
+        return string.lower(Features._Strip(string.sub(parsed.Path, #source.Prefix + 1)))
+    end
+
+    return string.lower(clean)
+end
+
 function Features:_Resolve(name, final)
     local original = string.gsub(tostring(name), "^%s+", "")
     original = string.gsub(original, "%s+$", "")
@@ -3363,7 +3381,7 @@ function Features:_Resolve(name, final)
                 urls[#urls + 1] = mirrors[i]
             end
         end
-        return { { Key = string.lower(clean), Path = clean, Name = display, Urls = urls } }
+        return { { Key = self:_UrlKey(clean), Path = clean, Name = display, Urls = urls } }
     end
 
     local clean = self:_Normalize(original)
@@ -3605,6 +3623,9 @@ function Features:_Run(job, chunk)
     local late = false
     local ok = false
     local result = nil
+
+    self:_Purge(job.Key)
+
     local before = self:_Count()
 
     self.Active[job.Key] = os.clock()
@@ -3660,7 +3681,7 @@ function Features:_FindLoaded(name)
     local key
     if string.match(text, "^https?://") then
         local raw = Features._ToRaw(text)
-        key = string.lower(string.match(raw, "^[^%?#]+") or raw)
+        key = self:_UrlKey(string.match(raw, "^[^%?#]+") or raw)
     else
         key = string.lower(self:_Normalize(text))
     end
@@ -5312,6 +5333,21 @@ function Windows:_CreateRegistered(Section, Name, Options)
         Options = Copy
     end
 
+    local Owner = Util.Owners[coroutine.running()]
+    local ElementName = tostring(Options.title or Options.Title or Options.name or Options.Name or Options.Text or Options.Label or Name)
+    local DedupeKey = string.gsub(ElementName, "%d+%s*[dhms]%f[%A]", "#")
+    local Order = nil
+
+    for Index = #Section.Tab.Elements, 1, -1 do
+        local Existing = Section.Tab.Elements[Index]
+
+        if Existing and not Existing.Destroyed and Existing.Section == Section and Existing.Type == Name and Existing.Key == DedupeKey then
+            Order = Existing.Container.LayoutOrder
+            Section.Used[Existing.Name] = math.max((Section.Used[Existing.Name] or 1) - 1, 0)
+            Existing:Destroy()
+        end
+    end
+
     Section.Count = Section.Count + 1
 
     local Container = Util.Create("Frame", {
@@ -5325,6 +5361,10 @@ function Windows:_CreateRegistered(Section, Name, Options)
     }, Section.Holder or Section.Frame)
     Container:SetAttribute("NoTheme", true)
     Util.Corner(Container, 8)
+
+    if Order then
+        Container.LayoutOrder = Order
+    end
 
     local Constraint = Util.Create("UISizeConstraint", { MinSize = Vector2.new(0, 38) }, Container)
     Util.Create("UIGradient", {
@@ -5361,6 +5401,7 @@ function Windows:_CreateRegistered(Section, Name, Options)
     Core = {
         Type = Name,
         Name = tostring(Options.title or Options.Title or Options.name or Options.Name or Options.Text or Options.Label or Name),
+        Key = DedupeKey,
         Group = Section.Name,
         Description = tostring(Options.description or Options.Description or ""),
         Tab = Section.Tab,
@@ -5376,7 +5417,7 @@ function Windows:_CreateRegistered(Section, Name, Options)
         Building = false,
         Destroyed = false,
         Instance = nil,
-        Owner = Util.Owners[coroutine.running()],
+        Owner = Owner,
         Registry = Registry,
         Flag = nil
     }
@@ -5467,6 +5508,10 @@ function Windows:_CreateRegistered(Section, Name, Options)
 
         Window:_ThemeObjects(Fresh)
         Locale.Attach(Container)
+
+        Container.DescendantAdded:Connect(function(Object)
+            Window:_ThemeObjects({ Object })
+        end)
 
         Container.Visible = true
         self.Built = true
@@ -6114,16 +6159,12 @@ function Windows:_CreateTabUI(Section, Tab)
 
     local Scale = Util.Create("UIScale", { Scale = 1 }, Button)
 
-    local Indicator = Util.Create("Frame", {
-        Name = "Indicator",
-        AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 3, 0.5, 0),
-        Size = UDim2.fromOffset(3, 6),
-        BackgroundColor3 = Theme.TabActive,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0
+    local Stroke = Util.Create("UIStroke", {
+        Color = Theme.BorderHover,
+        Thickness = 1,
+        Transparency = 1,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     }, Button)
-    Util.Corner(Indicator, 2)
 
     local Icon = Util.Icon(Button, Tab.IconName, 16, Theme.TabInactive)
     Icon.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -6167,7 +6208,7 @@ function Windows:_CreateTabUI(Section, Tab)
     Util.ScrollArea(Scroll)
 
     Tab.Button = Button
-    Tab.Indicator = Indicator
+    Tab.Stroke = Stroke
     Tab.Icon = Icon
     Tab.Label = Label
     Tab.Scale = Scale
@@ -6184,10 +6225,7 @@ function Windows:_CreateTabUI(Section, Tab)
         Util.Tween(self.Button, Config.TabTween, { BackgroundTransparency = Active and Config.TabFillTransparency or 1 })
         Util.Tween(self.Label, Config.TabTween, { TextColor3 = Color })
         Util.Tween(self.Icon, Config.TabTween, { ImageColor3 = Color })
-        Util.Tween(self.Indicator, Config.TabTween, {
-            BackgroundTransparency = Active and 0 or 1,
-            Size = UDim2.fromOffset(3, Active and 16 or 6)
-        })
+        Util.Tween(self.Stroke, Config.TabTween, { Transparency = Active and 0.55 or 1 })
     end
 
     function Tab:SetIcon(Name)
@@ -6432,6 +6470,14 @@ function Windows:SelectTab(Tab)
 end
 
 function Windows:_BuildToggle()
+    self.ToggleGui = Util.Create("ScreenGui", {
+        Name = "EcohubToggle",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        DisplayOrder = 99,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    }, self.Gui.Parent)
+
     self.ToggleButton = Util.Create("TextButton", {
         Name = "ToggleButton",
         Size = UDim2.fromOffset(48, 48),
@@ -6441,7 +6487,7 @@ function Windows:_BuildToggle()
         Text = "",
         AutoButtonColor = false,
         ClipsDescendants = true
-    }, self.Gui)
+    }, self.ToggleGui)
     self.ToggleButton:SetAttribute("NoTheme", true)
     Util.Corner(self.ToggleButton, 10)
 
@@ -6611,6 +6657,33 @@ function Windows:SetToggleKey(KeyCode)
 end
 
 Windows.SetMinimizeKey = Windows.SetToggleKey
+
+function Windows:Configure(Options, KeepLayout)
+    Options = type(Options) == "table" and Options or {}
+
+    if Options.Title ~= nil then
+        self:SetTitle(tostring(Options.Title))
+    end
+
+    local SubTitle = Options.SubTitle
+
+    if SubTitle == nil then
+        SubTitle = Options.Subtitle
+    end
+
+    if SubTitle ~= nil then
+        self:SetSubtitle(tostring(SubTitle))
+    end
+
+    if not KeepLayout and typeof(Options.Size) == "UDim2" then
+        self.Window.Size = ResolveSize(Options.Size)
+    end
+
+    if typeof(Options.MinimizeKey) == "EnumItem" then
+        self.ToggleKey = Options.MinimizeKey
+        self.KeyLocked = true
+    end
+end
 
 function Windows:SetTitle(Text)
     self.Title = Text
@@ -6826,6 +6899,14 @@ function Windows:Destroy()
         Gui:Destroy()
     end
 
+    if self.ToggleGui then
+        local ToggleGui = self.ToggleGui
+        self.ToggleGui = nil
+        ToggleGui:Destroy()
+    end
+
+    env.EcoHubDestroy = nil
+
     if Librarys.Window == self then
         Librarys.Window = nil
         Librarys.Windows = nil
@@ -6841,10 +6922,22 @@ function Librarys:CreateWindow(Options)
         Options = self
     end
 
+    local Existing = Librarys.Window
+
+    if Existing and not Existing.Destroyed then
+        Existing:Configure(Options, true)
+        return Existing
+    end
+
     local Window = Windows.new(Options)
 
     if Window then
         Librarys.Window = Window
+
+        env.EcoHubDestroy = function()
+            Window:Destroy()
+        end
+
         Librarys.Windows = Window
         Librarys.Elements = Window.Elements
         Librarys.FeatureConfig = Window.FeatureConfig
@@ -6909,6 +7002,85 @@ function Librarys.Translate(First, Second)
     return Locale.Translate(tostring(Text))
 end
 
+-- // Init
+local function ReusePrevious()
+    local Previous = env.EcoHubLibrary
+
+    if type(Previous) ~= "table" then
+        return nil
+    end
+
+    local Old = rawget(Previous, "Window")
+
+    if type(Old) ~= "table" or Old.Destroyed then
+        return nil
+    end
+
+    local Loader = Old.Features
+
+    if type(Loader) ~= "table" or type(Loader.Busy) ~= "function" then
+        return nil
+    end
+
+    local Limit = type(Old.FeatureConfig) == "table" and Old.FeatureConfig.ReloadGuard or 60
+    local Busy = Loader:Busy(Limit)
+
+    if Busy then
+        warn("[Ecohub] library reload ignored while feature " .. tostring(Busy) .. " is loading")
+        return Previous
+    end
+
+    return nil
+end
+
+local function RemovePrevious()
+    local Previous = env.EcoHubLibrary
+
+    if type(env.EcoHubDestroy) == "function" then
+        pcall(env.EcoHubDestroy)
+    end
+
+    local Panel = env.EcoHubPanel
+
+    if type(Panel) == "table" and not Panel.Destroyed and type(Panel.Destroy) == "function" then
+        pcall(Panel.Destroy, Panel)
+    end
+
+    if type(Previous) == "table" then
+        local Old = rawget(Previous, "Window")
+
+        if type(Old) == "table" and not Old.Destroyed and type(Old.Destroy) == "function" then
+            pcall(Old.Destroy, Old)
+        end
+    end
+
+    local PlayerGui = GetPlayerGui()
+
+    if PlayerGui then
+        for _, Name in ipairs({ "Ecohub", "EcohubToggle" }) do
+            for _, Child in ipairs(PlayerGui:GetChildren()) do
+                if Child.Name == Name then
+                    pcall(Child.Destroy, Child)
+                end
+            end
+        end
+    end
+
+    env.EcoHubDestroy = nil
+    env.EcoHubPanel = nil
+    env.EcoHubElements = nil
+    env.EcoHubLibrary = nil
+end
+
+local Reused = ReusePrevious()
+
+if Reused then
+    return Reused
+end
+
+RemovePrevious()
+
+env.EcoHubLibrary = Librarys
 env.Librarys = Librarys
 
 return Librarys

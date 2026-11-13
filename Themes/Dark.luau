@@ -1,20 +1,25 @@
+-- [[
+    by rip_sheldoohz
+    Dark
+]]
+
 return {
-    Active = Color3.fromRGB(235, 238, 255),
-    Inactive = Color3.fromRGB(150, 158, 190),
-    Dim = Color3.fromRGB(105, 112, 145),
-    Accent = Color3.fromRGB(40, 46, 78),
-    Field = Color3.fromRGB(30, 35, 62),
-    Border = Color3.fromRGB(52, 60, 100),
-    BorderHover = Color3.fromRGB(85, 96, 150),
-    Palette = Color3.fromRGB(24, 28, 52),
-    Background = Color3.fromRGB(18, 21, 40),
-    Divider = Color3.fromRGB(46, 53, 90),
-    Subtitle = Color3.fromRGB(140, 148, 185),
-    Placeholder = Color3.fromRGB(100, 108, 142),
-    Text = Color3.fromRGB(225, 229, 250),
+    Background = Color3.fromRGB(10, 18, 28),
+    GradientTop = Color3.fromRGB(20, 34, 52),
+    GradientBottom = Color3.fromRGB(12, 22, 34),
+    Palette = Color3.fromRGB(14, 24, 38),
+    Field = Color3.fromRGB(18, 30, 46),
+    Accent = Color3.fromRGB(28, 48, 74),
+    Border = Color3.fromRGB(36, 58, 88),
+    BorderHover = Color3.fromRGB(64, 100, 150),
+    Divider = Color3.fromRGB(30, 50, 76),
+    Active = Color3.fromRGB(225, 240, 255),
+    Text = Color3.fromRGB(210, 228, 245),
+    Inactive = Color3.fromRGB(140, 165, 195),
+    Subtitle = Color3.fromRGB(120, 148, 180),
+    Dim = Color3.fromRGB(90, 115, 145),
+    Placeholder = Color3.fromRGB(80, 104, 134),
     TabActive = Color3.fromRGB(255, 255, 255),
-    TabInactive = Color3.fromRGB(120, 128, 165),
-    TabHover = Color3.fromRGB(170, 178, 215),
-    GradientTop = Color3.fromRGB(36, 42, 74),
-    GradientBottom = Color3.fromRGB(22, 26, 48)
+    TabInactive = Color3.fromRGB(120, 150, 185),
+    TabHover = Color3.fromRGB(180, 205, 235)
 }
