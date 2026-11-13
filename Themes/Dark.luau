@@ -1,6 +1,3 @@
--- by rip_sheldoohz
--- Dark
-
 return {
     Background = Color3.fromRGB(10, 18, 28),
     GradientTop = Color3.fromRGB(20, 34, 52),
