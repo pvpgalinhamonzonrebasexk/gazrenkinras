@@ -8,13 +8,13 @@ return {
     Border = Color3.fromRGB(36, 58, 88),
     BorderHover = Color3.fromRGB(64, 100, 150),
     Divider = Color3.fromRGB(30, 50, 76),
-    Active = Color3.fromRGB(225, 240, 255),
-    Text = Color3.fromRGB(210, 228, 245),
+    Active = Color3.fromRGB(59, 130, 246),
+    Text = Color3.fromRGB(96, 165, 250),
     Inactive = Color3.fromRGB(140, 165, 195),
     Subtitle = Color3.fromRGB(120, 148, 180),
     Dim = Color3.fromRGB(90, 115, 145),
     Placeholder = Color3.fromRGB(80, 104, 134),
     TabActive = Color3.fromRGB(255, 255, 255),
     TabInactive = Color3.fromRGB(120, 150, 185),
-    TabHover = Color3.fromRGB(180, 205, 235)
+    TabHover = Color3.fromRGB(147, 197, 253)
 }
