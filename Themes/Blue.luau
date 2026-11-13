@@ -2,7 +2,7 @@ return {
     -- // Window
     Background = Color3.fromRGB(10, 18, 28),
     Divider = Color3.fromRGB(30, 50, 76),
-    Subtitle = Color3.fromRGB(120, 148, 180),
+    Subtitle = Color3.fromRGB(150, 150, 150),
 
     -- // Elements
     GradientTop = Color3.fromRGB(20, 34, 52),
@@ -20,6 +20,6 @@ return {
 
     -- // Tab
     TabActive = Color3.fromRGB(255, 255, 255),
-    TabInactive = Color3.fromRGB(120, 150, 185),
-    TabHover = Color3.fromRGB(147, 197, 253)
+    TabInactive = Color3.fromRGB(145, 145, 145),
+    TabHover = Color3.fromRGB(200, 200, 200)
 }

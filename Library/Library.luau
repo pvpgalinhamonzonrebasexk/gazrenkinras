@@ -4480,7 +4480,7 @@ function Windows:_Build()
         Size = UDim2.new(1, -24, 0, 18),
         BackgroundTransparency = 1,
         Text = self.Title,
-        TextColor3 = Theme.Active,
+        TextColor3 = Theme.Text,
         TextSize = 15,
         Font = Enum.Font.SourceSansBold,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -6055,7 +6055,7 @@ function Windows:_CreateSideSection(Name)
         BackgroundTransparency = 1,
         AutoButtonColor = false,
         Text = Name,
-        TextColor3 = Theme.Inactive,
+        TextColor3 = Theme.TabInactive,
         TextSize = 12,
         Font = Enum.Font.SourceSansBold,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -6065,7 +6065,7 @@ function Windows:_CreateSideSection(Name)
     Util.Padding(LabelButton, 0, 0, 10, 26)
     Locale.Bind(LabelButton, "Text", Locale.Upper)
 
-    Section.Chevron = Util.Icon(LabelButton, "chevron-down", 14, Theme.Inactive)
+    Section.Chevron = Util.Icon(LabelButton, "chevron-down", 14, Theme.TabInactive)
     Section.Chevron.AnchorPoint = Vector2.new(1, 0.5)
     Section.Chevron.Position = UDim2.new(1, 18, 0.5, 0)
 
@@ -6129,14 +6129,14 @@ function Windows:_CreateSideSection(Name)
 
     LabelButton.MouseEnter:Connect(function()
         if not IsTouch then
-            Util.Tween(LabelButton, Config.TabTween, { TextColor3 = Theme.Active })
-            Util.Tween(Section.Chevron, Config.TabTween, { ImageColor3 = Theme.Active })
+            Util.Tween(LabelButton, Config.TabTween, { TextColor3 = Theme.TabHover })
+            Util.Tween(Section.Chevron, Config.TabTween, { ImageColor3 = Theme.TabHover })
         end
     end)
 
     LabelButton.MouseLeave:Connect(function()
-        Util.Tween(LabelButton, Config.TabTween, { TextColor3 = Theme.Inactive })
-        Util.Tween(Section.Chevron, Config.TabTween, { ImageColor3 = Theme.Inactive })
+        Util.Tween(LabelButton, Config.TabTween, { TextColor3 = Theme.TabInactive })
+        Util.Tween(Section.Chevron, Config.TabTween, { ImageColor3 = Theme.TabInactive })
     end)
 
     return Section
