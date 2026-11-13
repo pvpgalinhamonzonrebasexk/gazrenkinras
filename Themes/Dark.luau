@@ -1,7 +1,5 @@
--- [[
-    by rip_sheldoohz
-    Dark
-]]
+-- by rip_sheldoohz
+-- Dark
 
 return {
     Background = Color3.fromRGB(10, 18, 28),
