@@ -28,6 +28,18 @@ local THEME_KEYS = {
     "GradientTop",
 }
 
+local DERIVED = {
+    Hover = function(colors)
+        return colors.Palette:Lerp(colors.Accent, 0.6)
+    end,
+    Pressed = function(colors)
+        return colors.Accent:Lerp(colors.BorderHover, 0.35)
+    end,
+    TextHover = function(colors)
+        return colors.Inactive:Lerp(colors.Active, 0.25)
+    end,
+}
+
 -- // ThemeWatcher
 local themeWatchers = {}
 local themeConnection
@@ -62,7 +74,9 @@ local function stopThemeWatcher()
 end
 
 local function createColors(panel)
-    local colors = setmetatable({}, {
+    local colors
+
+    colors = setmetatable({}, {
         __index = function(_, key)
             local theme = panel and panel.Theme
             local live = type(theme) == "table" and theme[key] or nil
@@ -71,32 +85,44 @@ local function createColors(panel)
                 return live
             end
 
-            return Default[key]
+            local base = Default[key]
+
+            if base then
+                return base
+            end
+
+            local derive = DERIVED[key]
+
+            if derive then
+                return derive(colors)
+            end
+
+            return nil
         end
     })
 
-    local function signature()
-        local parts = {}
+    local function watch(apply)
+        local last = {}
 
-        for index, key in ipairs(THEME_KEYS) do
-            parts[index] = tostring(colors[key])
+        for _, key in ipairs(THEME_KEYS) do
+            last[key] = colors[key]
         end
 
-        return table.concat(parts, "|")
-    end
-
-    local lastSignature = signature()
-
-    local function watch(apply)
         local function check()
-            local current = signature()
+            local changed = false
 
-            if current == lastSignature then
-                return
+            for _, key in ipairs(THEME_KEYS) do
+                local current = colors[key]
+
+                if last[key] ~= current then
+                    last[key] = current
+                    changed = true
+                end
             end
 
-            lastSignature = current
-            pcall(apply)
+            if changed then
+                pcall(apply)
+            end
         end
 
         themeWatchers[check] = true
@@ -158,7 +184,7 @@ Elements.Register("Dropdown", function(section, options)
     local OPT_H = MOBILE and 34 or 28
     local OPT_GAP = 2
     local SEARCH_H = MOBILE and 32 or 26
-    local SEARCH_AREA = SEARCH_H + 14
+    local SEARCH_AREA = SEARCH_H + 10
     local MAX_H = MOBILE and 250 or 210
     local MAX_SCREEN = MOBILE and 0.42 or 0.5
     local CHECK_SIZE = 12
@@ -192,6 +218,7 @@ Elements.Register("Dropdown", function(section, options)
     local sizeTween
     local unwatchTheme
     local fieldHover = false
+    local fieldPressed = false
     local searchFocused = false
     local openedAt = 0
     local visibleCount = 0
@@ -307,21 +334,25 @@ Elements.Register("Dropdown", function(section, options)
     end
 
     local function fieldStrokeColor()
-        local hot = (fieldHover or data.expanded) and not data.disabled
+        local hot = (fieldHover or fieldPressed or data.expanded) and not data.disabled
         return hot and Colors.BorderHover or Colors.Border
     end
 
     local function fieldBgColor()
-        local hot = (fieldHover or data.expanded) and not data.disabled
-        return hot and Colors.GradientTop or Colors.Palette
-    end
-
-    local function searchStrokeColor()
-        return searchFocused and Colors.Inactive or Colors.Border
+        if data.disabled then
+            return Colors.Palette
+        end
+        if fieldPressed then
+            return Colors.Pressed
+        end
+        if fieldHover or data.expanded then
+            return Colors.Hover
+        end
+        return Colors.Palette
     end
 
     local function searchIconColor()
-        return searchFocused and Colors.Active or Colors.Dim
+        return searchFocused and Colors.Inactive or Colors.Dim
     end
 
     local container = Instance.new("Frame")
@@ -487,85 +518,10 @@ Elements.Register("Dropdown", function(section, options)
     pStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     pStroke.Parent = panel
 
-    local searchFrame = Instance.new("Frame")
-    searchFrame.Name = "Search"
-    searchFrame.Size = UDim2.new(1, -12, 0, SEARCH_H)
-    searchFrame.Position = UDim2.new(0, 6, 0, 6)
-    searchFrame.BackgroundColor3 = Colors.Palette
-    searchFrame.BorderSizePixel = 0
-    searchFrame.ClipsDescendants = true
-    searchFrame.ZIndex = Z + 1
-    searchFrame.Parent = panel
-
-    local searchCorner = Instance.new("UICorner")
-    searchCorner.CornerRadius = UDim.new(0, 6)
-    searchCorner.Parent = searchFrame
-
-    local sStroke = Instance.new("UIStroke")
-    sStroke.Color = Colors.Border
-    sStroke.Thickness = 1
-    sStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    sStroke.Parent = searchFrame
-
-    local searchIcon = Instance.new("ImageLabel")
-    searchIcon.Name = "Icon"
-    searchIcon.Size = UDim2.new(0, 12, 0, 12)
-    searchIcon.Position = UDim2.new(0, 9, 0.5, 0)
-    searchIcon.AnchorPoint = Vector2.new(0, 0.5)
-    searchIcon.BackgroundTransparency = 1
-    searchIcon.Image = searchImage
-    searchIcon.ImageColor3 = Colors.Dim
-    searchIcon.ZIndex = Z + 2
-    searchIcon.Parent = searchFrame
-
-    local searchBox = Instance.new("TextBox")
-    searchBox.Name = "Input"
-    searchBox.Size = UDim2.new(1, -54, 1, 0)
-    searchBox.Position = UDim2.new(0, 28, 0, 0)
-    searchBox.BackgroundTransparency = 1
-    searchBox.Text = ""
-    searchBox.PlaceholderText = "Search..."
-    searchBox.PlaceholderColor3 = Colors.Dim
-    searchBox.TextColor3 = Colors.Active
-    searchBox.TextSize = LABEL_SIZE
-    searchBox.Font = fontRegular
-    searchBox.TextXAlignment = Enum.TextXAlignment.Left
-    searchBox.TextTruncate = Enum.TextTruncate.AtEnd
-    searchBox.ClearTextOnFocus = false
-    searchBox.ClipsDescendants = true
-    searchBox.TextWrapped = false
-    searchBox.MultiLine = false
-    searchBox.ZIndex = Z + 2
-    searchBox.Parent = searchFrame
-
-    local clearBtn = Instance.new("ImageButton")
-    clearBtn.Name = "Clear"
-    clearBtn.Size = UDim2.new(0, 16, 0, 16)
-    clearBtn.Position = UDim2.new(1, -6, 0.5, 0)
-    clearBtn.AnchorPoint = Vector2.new(1, 0.5)
-    clearBtn.BackgroundTransparency = 1
-    clearBtn.Image = clearImage
-    clearBtn.ImageColor3 = Colors.Dim
-    clearBtn.AutoButtonColor = false
-    clearBtn.Selectable = false
-    clearBtn.Visible = false
-    clearBtn.ZIndex = Z + 3
-    clearBtn.Parent = searchFrame
-
-    local separator = Instance.new("Frame")
-    separator.Name = "Separator"
-    separator.Size = UDim2.new(1, -12, 0, 1)
-    separator.Position = UDim2.new(0, 6, 0, SEARCH_AREA - 3)
-    separator.BackgroundColor3 = Colors.Border
-    separator.BackgroundTransparency = 0.45
-    separator.BorderSizePixel = 0
-    separator.ZIndex = Z + 1
-    separator.Parent = panel
-
     local scroll = Instance.new("ScrollingFrame")
     scroll.Name = "Scroll"
-    scroll.Size = UDim2.new(1, -4, 1, -(SEARCH_AREA + 2))
-    scroll.Position = UDim2.new(0, 2, 0, SEARCH_AREA)
+    scroll.Size = UDim2.new(1, -4, 1, -(SEARCH_AREA + 4))
+    scroll.Position = UDim2.new(0, 2, 0, 2)
     scroll.BackgroundTransparency = 1
     scroll.BorderSizePixel = 0
     scroll.ScrollBarThickness = MOBILE and 3 or 2
@@ -593,7 +549,7 @@ Elements.Register("Dropdown", function(section, options)
     local emptyLabel = Instance.new("TextLabel")
     emptyLabel.Name = "Empty"
     emptyLabel.Size = UDim2.new(1, 0, 0, OPT_H)
-    emptyLabel.Position = UDim2.new(0, 0, 0, SEARCH_AREA)
+    emptyLabel.Position = UDim2.new(0, 0, 0, 2)
     emptyLabel.BackgroundTransparency = 1
     emptyLabel.Text = "No results found"
     emptyLabel.TextColor3 = Colors.Inactive
@@ -602,6 +558,61 @@ Elements.Register("Dropdown", function(section, options)
     emptyLabel.Visible = false
     emptyLabel.ZIndex = Z + 1
     emptyLabel.Parent = panel
+
+    local searchFrame = Instance.new("Frame")
+    searchFrame.Name = "Search"
+    searchFrame.Size = UDim2.new(1, -16, 0, SEARCH_H)
+    searchFrame.Position = UDim2.new(0, 8, 1, -(SEARCH_H + 5))
+    searchFrame.BackgroundTransparency = 1
+    searchFrame.BorderSizePixel = 0
+    searchFrame.ClipsDescendants = true
+    searchFrame.ZIndex = Z + 1
+    searchFrame.Parent = panel
+
+    local searchIcon = Instance.new("ImageLabel")
+    searchIcon.Name = "Icon"
+    searchIcon.Size = UDim2.new(0, 12, 0, 12)
+    searchIcon.Position = UDim2.new(0, 6, 0.5, 0)
+    searchIcon.AnchorPoint = Vector2.new(0, 0.5)
+    searchIcon.BackgroundTransparency = 1
+    searchIcon.Image = searchImage
+    searchIcon.ImageColor3 = Colors.Dim
+    searchIcon.ZIndex = Z + 2
+    searchIcon.Parent = searchFrame
+
+    local searchBox = Instance.new("TextBox")
+    searchBox.Name = "Input"
+    searchBox.Size = UDim2.new(1, -52, 1, 0)
+    searchBox.Position = UDim2.new(0, 26, 0, 0)
+    searchBox.BackgroundTransparency = 1
+    searchBox.Text = ""
+    searchBox.PlaceholderText = "Search..."
+    searchBox.PlaceholderColor3 = Colors.Dim
+    searchBox.TextColor3 = Colors.Active
+    searchBox.TextSize = LABEL_SIZE
+    searchBox.Font = fontRegular
+    searchBox.TextXAlignment = Enum.TextXAlignment.Left
+    searchBox.TextTruncate = Enum.TextTruncate.AtEnd
+    searchBox.ClearTextOnFocus = false
+    searchBox.ClipsDescendants = true
+    searchBox.TextWrapped = false
+    searchBox.MultiLine = false
+    searchBox.ZIndex = Z + 2
+    searchBox.Parent = searchFrame
+
+    local clearBtn = Instance.new("ImageButton")
+    clearBtn.Name = "Clear"
+    clearBtn.Size = UDim2.new(0, 16, 0, 16)
+    clearBtn.Position = UDim2.new(1, -4, 0.5, 0)
+    clearBtn.AnchorPoint = Vector2.new(1, 0.5)
+    clearBtn.BackgroundTransparency = 1
+    clearBtn.Image = clearImage
+    clearBtn.ImageColor3 = Colors.Dim
+    clearBtn.AutoButtonColor = false
+    clearBtn.Selectable = false
+    clearBtn.Visible = false
+    clearBtn.ZIndex = Z + 3
+    clearBtn.Parent = searchFrame
 
     local optRows = {}
     local optionsBuilt = false
@@ -681,8 +692,28 @@ Elements.Register("Dropdown", function(section, options)
 
     local function updateRow(row, animate)
         local sel = isSelected(row.value)
-        local bg = sel and Colors.Accent or Colors.Background
-        local tc = sel and Colors.Active or (data.disabled and Colors.BorderHover or Colors.Inactive)
+        local pressed = row.pressed and not data.disabled
+        local hover = row.hover and not data.disabled
+        local bg
+        local tc
+        if pressed then
+            bg = Colors.Pressed
+        elseif sel then
+            bg = Colors.Accent
+        elseif hover then
+            bg = Colors.Hover
+        else
+            bg = Colors.Background
+        end
+        if data.disabled then
+            tc = sel and Colors.Inactive or Colors.BorderHover
+        elseif sel then
+            tc = Colors.Active
+        elseif hover or pressed then
+            tc = Colors.TextHover
+        else
+            tc = Colors.Inactive
+        end
         local checkT = sel and 0 or 1
         if animate then
             tw(row.frame, TI_ROW, { BackgroundColor3 = bg })
@@ -706,26 +737,32 @@ Elements.Register("Dropdown", function(section, options)
 
         field.BackgroundColor3 = fieldBgColor()
         fStroke.Color = fieldStrokeColor()
-        fieldIcon.ImageColor3 = data.expanded and Colors.Active or Colors.Dim
+        fieldIcon.ImageColor3 = data.expanded and Colors.Inactive or Colors.Dim
 
         panel.BackgroundColor3 = Colors.Background
         pStroke.Color = Colors.Border
-        searchFrame.BackgroundColor3 = Colors.Palette
-        sStroke.Color = searchStrokeColor()
         searchIcon.ImageColor3 = searchIconColor()
         searchBox.TextColor3 = Colors.Active
         searchBox.PlaceholderColor3 = Colors.Dim
         clearBtn.ImageColor3 = Colors.Dim
-        separator.BackgroundColor3 = Colors.Border
         scroll.ScrollBarImageColor3 = Colors.BorderHover
         emptyLabel.TextColor3 = Colors.Inactive
 
         for _, row in ipairs(optRows) do
-            row.check.ImageColor3 = Colors.Active
+            row.check.ImageColor3 = Colors.Inactive
             updateRow(row, false)
         end
 
         updateField(false)
+    end
+
+    local function setFieldPressed(value)
+        if data.disabled then
+            value = false
+        end
+        if fieldPressed == value then return end
+        fieldPressed = value
+        updateFieldBorder()
     end
 
     local function fireCallback()
@@ -917,7 +954,7 @@ Elements.Register("Dropdown", function(section, options)
         optCheck.AnchorPoint = Vector2.new(1, 0.5)
         optCheck.BackgroundTransparency = 1
         optCheck.Image = checkImage
-        optCheck.ImageColor3 = Colors.Active
+        optCheck.ImageColor3 = Colors.Inactive
         optCheck.ImageTransparency = 1
         optCheck.ZIndex = Z + 1
         optCheck.Parent = optFrame
@@ -932,7 +969,15 @@ Elements.Register("Dropdown", function(section, options)
         btn.ZIndex = Z + 2
         btn.Parent = optFrame
 
-        local row = { frame = optFrame, label = optLabel, check = optCheck, value = value, key = valueKeys[index] or tostring(value):lower() }
+        local row = {
+            frame = optFrame,
+            label = optLabel,
+            check = optCheck,
+            value = value,
+            key = valueKeys[index] or tostring(value):lower(),
+            hover = false,
+            pressed = false,
+        }
         optRows[#optRows + 1] = row
 
         local query = searchBox.Text:lower()
@@ -948,35 +993,34 @@ Elements.Register("Dropdown", function(section, options)
 
         rowConnections[#rowConnections + 1] = btn.MouseEnter:Connect(function()
             if usingTouch() then return end
-            if not isSelected(value) and not data.disabled then
-                tw(optFrame, TI_HOVER, { BackgroundColor3 = Colors.GradientTop })
-                tw(optLabel, TI_HOVER, { TextColor3 = Colors.Active })
-            end
+            row.hover = true
+            updateRow(row, true)
         end)
         rowConnections[#rowConnections + 1] = btn.MouseLeave:Connect(function()
-            if not isSelected(value) then
-                tw(optFrame, TI_HOVER, { BackgroundColor3 = Colors.Background })
-                tw(optLabel, TI_HOVER, { TextColor3 = Colors.Inactive })
-            end
+            row.hover = false
+            row.pressed = false
+            updateRow(row, true)
         end)
         rowConnections[#rowConnections + 1] = btn.InputBegan:Connect(function(input)
             if not isPointerInput(input) then return end
             pressPos = Vector2.new(input.Position.X, input.Position.Y)
-            if not isSelected(value) and not data.disabled then
-                tw(optFrame, TI_HOVER, { BackgroundColor3 = Colors.Accent })
-            end
+            row.pressed = true
+            updateRow(row, true)
         end)
         rowConnections[#rowConnections + 1] = btn.InputEnded:Connect(function(input)
             if not isPointerInput(input) then return end
-            if input.UserInputType == Enum.UserInputType.Touch and not isSelected(value) then
-                tw(optFrame, TI_HOVER, { BackgroundColor3 = Colors.Background })
+            row.pressed = false
+            if input.UserInputType == Enum.UserInputType.Touch then
+                row.hover = false
             end
+            updateRow(row, true)
         end)
         rowConnections[#rowConnections + 1] = btn.Activated:Connect(function(input)
             if pressPos and input then
                 local endPos = Vector2.new(input.Position.X, input.Position.Y)
                 if (endPos - pressPos).Magnitude > TAP_SLOP then
                     pressPos = nil
+                    row.pressed = false
                     updateRow(row, false)
                     return
                 end
@@ -1033,7 +1077,7 @@ Elements.Register("Dropdown", function(section, options)
         scroll.CanvasPosition = Vector2.new(0, 0)
 
         tweenContainer(rowH + GAP + h + 2, TI_OPEN, revealPanel)
-        tw(fieldIcon, TI_ICON, { Rotation = 180, ImageColor3 = Colors.Active })
+        tw(fieldIcon, TI_ICON, { Rotation = 180, ImageColor3 = Colors.Inactive })
         updateFieldBorder()
 
         if not MOBILE then
@@ -1068,6 +1112,7 @@ Elements.Register("Dropdown", function(section, options)
 
     connect(field.MouseLeave, function()
         setHover(false)
+        setFieldPressed(false)
     end)
 
     connect(headerButton.MouseEnter, function()
@@ -1077,7 +1122,24 @@ Elements.Register("Dropdown", function(section, options)
 
     connect(headerButton.MouseLeave, function()
         setHover(false)
+        setFieldPressed(false)
     end)
+
+    for _, target in ipairs({ field, headerButton }) do
+        connect(target.InputBegan, function(input)
+            if isPointerInput(input) then
+                setFieldPressed(true)
+            end
+        end)
+        connect(target.InputEnded, function(input)
+            if isPointerInput(input) then
+                setFieldPressed(false)
+                if input.UserInputType == Enum.UserInputType.Touch then
+                    setHover(false)
+                end
+            end
+        end)
+    end
 
     connect(searchBox:GetPropertyChangedSignal("Text"), function()
         local raw = searchBox.Text
@@ -1103,13 +1165,11 @@ Elements.Register("Dropdown", function(section, options)
 
     connect(searchBox.Focused, function()
         searchFocused = true
-        tw(sStroke, TI_HOVER, { Color = searchStrokeColor() })
         tw(searchIcon, TI_HOVER, { ImageColor3 = searchIconColor() })
     end)
 
     connect(searchBox.FocusLost, function(enterPressed)
         searchFocused = false
-        tw(sStroke, TI_HOVER, { Color = searchStrokeColor() })
         tw(searchIcon, TI_HOVER, { ImageColor3 = searchIconColor() })
         if enterPressed and data.expanded and searchBox.Text ~= "" then
             searchToken = searchToken + 1
@@ -1131,7 +1191,8 @@ Elements.Register("Dropdown", function(section, options)
     end)
 
     connect(clearBtn.MouseEnter, function()
-        tw(clearBtn, TI_HOVER, { ImageColor3 = Colors.Active })
+        if usingTouch() then return end
+        tw(clearBtn, TI_HOVER, { ImageColor3 = Colors.Inactive })
     end)
 
     connect(clearBtn.MouseLeave, function()
@@ -1252,7 +1313,10 @@ Elements.Register("Dropdown", function(section, options)
         data.disabled = value == true
         field.Active = not data.disabled
         headerButton.Active = not data.disabled
-        if data.disabled then closeOverlay(true) end
+        if data.disabled then
+            fieldPressed = false
+            closeOverlay(true)
+        end
         for _, row in ipairs(optRows) do updateRow(row, false) end
         updateField(true)
         updateFieldBorder()
@@ -1315,6 +1379,10 @@ Elements.Register("Dropdown", function(section, options)
         table.clear(connections)
         container:Destroy()
     end
+
+    connect(container.Destroying, function()
+        data:Destroy()
+    end)
 
     unwatchTheme = watchTheme(applyTheme)
 
