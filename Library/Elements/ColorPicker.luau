@@ -1,37 +1,212 @@
+-- // Services
+local tweenService = game:GetService("TweenService")
+local userInputService = game:GetService("UserInputService")
+local runService = game:GetService("RunService")
+local guiService = game:GetService("GuiService")
+
+-- // Themes
+local Default = {
+    Active = Color3.fromRGB(240, 240, 240),
+    Inactive = Color3.fromRGB(165, 165, 165),
+    Dim = Color3.fromRGB(115, 115, 115),
+    Accent = Color3.fromRGB(42, 42, 42),
+    Border = Color3.fromRGB(55, 55, 55),
+    BorderHover = Color3.fromRGB(88, 88, 88),
+    Palette = Color3.fromRGB(28, 28, 28),
+    Background = Color3.fromRGB(24, 24, 24),
+    GradientTop = Color3.fromRGB(38, 38, 38),
+}
+
+local THEME_KEYS = {
+    "Active",
+    "Inactive",
+    "Dim",
+    "Accent",
+    "Border",
+    "BorderHover",
+    "Palette",
+    "Background",
+    "GradientTop",
+}
+
+local DERIVED = {
+    Hover = function(colors)
+        return colors.Palette:Lerp(colors.Accent, 0.6)
+    end,
+    Pressed = function(colors)
+        return colors.Accent:Lerp(colors.BorderHover, 0.35)
+    end,
+    TextHover = function(colors)
+        return colors.Inactive:Lerp(colors.Active, 0.25)
+    end,
+}
+
+-- // ThemeWatcher
+local themeGroups = {}
+local themeConnection
+local NO_PANEL = {}
+
+local function resolveColor(panel, key)
+    local theme = type(panel) == "table" and panel.Theme or nil
+    local live = type(theme) == "table" and theme[key] or nil
+
+    if typeof(live) == "Color3" then
+        return live
+    end
+
+    return Default[key]
+end
+
+local function checkGroup(group)
+    local changed = false
+
+    for _, key in ipairs(THEME_KEYS) do
+        local current = resolveColor(group.panel, key)
+
+        if group.last[key] ~= current then
+            group.last[key] = current
+            changed = true
+        end
+    end
+
+    if not changed then
+        return
+    end
+
+    for apply in pairs(group.callbacks) do
+        pcall(apply)
+    end
+end
+
+local function startThemeWatcher()
+    if themeConnection then
+        return
+    end
+
+    themeConnection = runService.Heartbeat:Connect(function()
+        for _, group in pairs(themeGroups) do
+            checkGroup(group)
+        end
+    end)
+end
+
+local function stopThemeWatcher()
+    if themeConnection and next(themeGroups) == nil then
+        themeConnection:Disconnect()
+        themeConnection = nil
+    end
+end
+
+local function watchGroup(panel, apply)
+    local id = panel or NO_PANEL
+    local group = themeGroups[id]
+
+    if not group then
+        group = { panel = panel, last = {}, callbacks = {} }
+
+        for _, key in ipairs(THEME_KEYS) do
+            group.last[key] = resolveColor(panel, key)
+        end
+
+        if type(panel) == "table" then
+            pcall(function()
+                local signal = panel.ThemeChanged
+
+                if typeof(signal) == "RBXScriptSignal" then
+                    group.signal = signal:Connect(function()
+                        checkGroup(group)
+                    end)
+                end
+            end)
+        end
+
+        themeGroups[id] = group
+    end
+
+    group.callbacks[apply] = true
+    startThemeWatcher()
+
+    return function()
+        group.callbacks[apply] = nil
+
+        if next(group.callbacks) == nil then
+            if group.signal then
+                group.signal:Disconnect()
+                group.signal = nil
+            end
+
+            themeGroups[id] = nil
+            stopThemeWatcher()
+        end
+    end
+end
+
+local function createColors(panel)
+    local colors
+
+    colors = setmetatable({}, {
+        __index = function(_, key)
+            if Default[key] then
+                return resolveColor(panel, key)
+            end
+
+            local theme = type(panel) == "table" and panel.Theme or nil
+            local live = type(theme) == "table" and theme[key] or nil
+
+            if typeof(live) == "Color3" then
+                return live
+            end
+
+            local derive = DERIVED[key]
+
+            if derive then
+                return derive(colors)
+            end
+
+            return nil
+        end
+    })
+
+    local function watch(apply)
+        return watchGroup(panel, apply)
+    end
+
+    return colors, watch
+end
+
 -- // Colorpick
 Elements.Register("ColorPicker", function(section, options)
     options = type(options) == "table" and options or {}
 
-    local COLORS = {
-        TextActive = Color3.fromRGB(240, 240, 240),
-        TextInactive = Color3.fromRGB(165, 165, 165),
-        TextDisabled = Color3.fromRGB(85, 85, 85),
-        Line = Color3.fromRGB(55, 55, 55),
-        Field = Color3.fromRGB(34, 34, 34),
-        FieldAlt = Color3.fromRGB(42, 42, 42),
-        MenuBackground = Color3.fromRGB(28, 28, 28),
-        SectionBackground = Color3.fromRGB(34, 34, 34),
-        DescriptionText = Color3.fromRGB(125, 125, 125),
-        Accent = Color3.fromRGB(240, 240, 240),
-    }
+    local Colors, watchTheme = createColors(section.Panel or Panel)
 
-    local TITLE_TEXT_SIZE = 13
+    local fontBold = FONT_BOLD or Enum.Font.SourceSansSemibold
+    local fontRegular = FONT or Enum.Font.SourceSans
+
+    local MOBILE = userInputService.TouchEnabled and not userInputService.KeyboardEnabled
+
+    local TITLE_TEXT_SIZE = MOBILE and 14 or 13
     local DESCRIPTION_TEXT_SIZE = 11
-    local LABEL_TEXT_SIZE = 11
-    local BASE_ROW_H = 34
-    local FIELD_WIDTH = 96
-    local FIELD_HEIGHT = 22
+    local LABEL_TEXT_SIZE = MOBILE and 12 or 11
+    local BASE_ROW_H = MOBILE and 40 or 34
+    local FIELD_WIDTH = MOBILE and 104 or 96
+    local FIELD_HEIGHT = MOBILE and 28 or 22
     local OVERLAY_ZINDEX = 1000
     local WORD_MAX = 30
-    local MAP_HEIGHT = 100
-    local HUE_HEIGHT = 14
-    local ALPHA_HEIGHT = 14
+    local MAP_HEIGHT = MOBILE and 110 or 100
+    local HUE_HEIGHT = MOBILE and 18 or 14
+    local ALPHA_HEIGHT = HUE_HEIGHT
+    local HEX_HEIGHT = MOBILE and 30 or 24
     local OVERLAY_PADDING = 10
     local OVERLAY_GAP = 10
-    local OVERLAY_HEIGHT = (OVERLAY_PADDING * 2) + MAP_HEIGHT + HUE_HEIGHT + ALPHA_HEIGHT + (OVERLAY_GAP * 2)
+    local OVERLAY_HEIGHT = (OVERLAY_PADDING * 2) + MAP_HEIGHT + HUE_HEIGHT + ALPHA_HEIGHT + HEX_HEIGHT + (OVERLAY_GAP * 3)
     local TITLE_Y = 3
     local TITLE_H = 15
     local DESC_Y = TITLE_Y + TITLE_H + 1
+    local TAP_SLOP = 14
+    local CALLBACK_INTERVAL = 0.05
+    local ERROR_COLOR = Color3.fromRGB(200, 80, 80)
+    local NOTIFY_TITLE = "Sistema"
     local rowH = BASE_ROW_H
     local applyHeader
 
@@ -42,16 +217,10 @@ Elements.Register("ColorPicker", function(section, options)
     local function totalOpen()
         return overlayOffset() + OVERLAY_HEIGHT + 4
     end
-    local NOTIFY_TITLE = "Sistema"
-
-    local tweenService = TweenService or game:GetService("TweenService")
-    local userInputService = UserInputService or game:GetService("UserInputService")
-    local guiService = game:GetService("GuiService")
-    local fontBold = FONT_BOLD or Enum.Font.SourceSansSemibold
-    local fontRegular = FONT or Enum.Font.SourceSans
 
     local TI_OPEN = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     local TI_CLOSE = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+    local TI_REVEAL = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
     local connections = {}
     local destroyed = false
@@ -60,6 +229,17 @@ Elements.Register("ColorPicker", function(section, options)
     local lockedScroll
     local lockedScrollWas = true
     local pointerOffsets = {}
+    local unwatchTheme
+    local fieldHover = false
+    local fieldPressed = false
+    local hexInvalid = false
+    local outsideStart
+    local lastFire = 0
+    local pendingFire = false
+    local dragging = nil
+    local dragInput = nil
+    local openedAt = 0
+    local dragEndedAt = 0
 
     local function connect(signal, fn)
         local conn = signal:Connect(fn)
@@ -97,6 +277,23 @@ Elements.Register("ColorPicker", function(section, options)
         return string.format("%02X%02X%02X", r, g, b)
     end
 
+    local function parseHex(text)
+        local clean = string.upper((string.gsub(tostring(text or ""), "[%s#]", "")))
+        if #clean == 3 then
+            clean = string.gsub(clean, ".", "%0%0")
+        end
+        if #clean ~= 6 or string.find(clean, "%X") then
+            return nil
+        end
+        local r = tonumber(string.sub(clean, 1, 2), 16)
+        local g = tonumber(string.sub(clean, 3, 4), 16)
+        local b = tonumber(string.sub(clean, 5, 6), 16)
+        if not r or not g or not b then
+            return nil
+        end
+        return Color3.fromRGB(r, g, b)
+    end
+
     local function getContrastColor(color, transparency)
         transparency = transparency or 0
         local bg = 0.12
@@ -119,6 +316,10 @@ Elements.Register("ColorPicker", function(section, options)
     local function isPointerInput(input)
         return input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch
+    end
+
+    local function usingTouch()
+        return userInputService:GetLastInputType() == Enum.UserInputType.Touch
     end
 
     local function pointerKey(input)
@@ -163,18 +364,34 @@ Elements.Register("ColorPicker", function(section, options)
     container.ClipsDescendants = false
     container.Parent = section.frame
 
+    local headerRow = Instance.new("Frame")
+    headerRow.Name = "Header"
+    headerRow.Size = UDim2.new(1, 0, 0, rowH)
+    headerRow.BackgroundTransparency = 1
+    headerRow.Parent = container
+
+    local headerButton = Instance.new("TextButton")
+    headerButton.Name = "HeaderButton"
+    headerButton.Size = UDim2.new(1, 0, 1, 0)
+    headerButton.BackgroundTransparency = 1
+    headerButton.Text = ""
+    headerButton.AutoButtonColor = false
+    headerButton.Selectable = false
+    headerButton.Active = not disabled
+    headerButton.Parent = headerRow
+
     local textContainer = Instance.new("Frame")
     textContainer.Name = "TextContainer"
-    textContainer.Size = UDim2.new(1, -(FIELD_WIDTH + 16), 0, rowH)
+    textContainer.Size = UDim2.new(1, -(FIELD_WIDTH + 16), 1, 0)
     textContainer.BackgroundTransparency = 1
-    textContainer.Parent = container
+    textContainer.Parent = headerRow
 
     local label = Instance.new("TextLabel")
     label.Name = "Title"
     label.Size = UDim2.new(1, 0, 0, TITLE_H)
     label.BackgroundTransparency = 1
     label.Text = title
-    label.TextColor3 = disabled and COLORS.TextDisabled or COLORS.TextActive
+    label.TextColor3 = disabled and Colors.BorderHover or Colors.Active
     label.TextSize = TITLE_TEXT_SIZE
     label.Font = fontBold
     label.TextXAlignment = Enum.TextXAlignment.Left
@@ -202,7 +419,7 @@ Elements.Register("ColorPicker", function(section, options)
         descLabel.AutomaticSize = Enum.AutomaticSize.Y
         descLabel.BackgroundTransparency = 1
         descLabel.Text = breakLongWords(text, WORD_MAX)
-        descLabel.TextColor3 = COLORS.DescriptionText
+        descLabel.TextColor3 = Colors.Dim
         descLabel.TextSize = DESCRIPTION_TEXT_SIZE
         descLabel.Font = fontRegular
         descLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -226,23 +443,23 @@ Elements.Register("ColorPicker", function(section, options)
     local field = Instance.new("TextButton")
     field.Name = "Field"
     field.Size = UDim2.new(0, FIELD_WIDTH, 0, FIELD_HEIGHT)
-    field.Position = UDim2.new(1, 0, 0, rowH / 2)
+    field.Position = UDim2.new(1, 0, 0.5, 0)
     field.AnchorPoint = Vector2.new(1, 0.5)
-    field.BackgroundColor3 = COLORS.Field
+    field.BackgroundColor3 = Colors.Palette
     field.BorderSizePixel = 0
     field.Text = ""
     field.AutoButtonColor = false
     field.Selectable = false
     field.Active = not disabled
     field.ZIndex = 10
-    field.Parent = container
+    field.Parent = headerRow
 
     local fieldCorner = Instance.new("UICorner")
     fieldCorner.CornerRadius = UDim.new(0, 6)
     fieldCorner.Parent = field
 
     local fieldStroke = Instance.new("UIStroke")
-    fieldStroke.Color = COLORS.Line
+    fieldStroke.Color = Colors.Border
     fieldStroke.Thickness = 1
     fieldStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     fieldStroke.Parent = field
@@ -291,10 +508,11 @@ Elements.Register("ColorPicker", function(section, options)
     overlayCanvas.Size = UDim2.new(1, 0, 0, 0)
     overlayCanvas.Position = UDim2.new(0, 0, 0, overlayOffset())
     overlayCanvas.AnchorPoint = Vector2.new(0, 0)
-    overlayCanvas.BackgroundColor3 = COLORS.MenuBackground
+    overlayCanvas.BackgroundColor3 = Colors.Background
     overlayCanvas.BorderSizePixel = 0
     overlayCanvas.ClipsDescendants = true
     overlayCanvas.Visible = false
+    overlayCanvas.Active = true
     overlayCanvas.ZIndex = OVERLAY_ZINDEX
     overlayCanvas.Parent = container
 
@@ -303,7 +521,7 @@ Elements.Register("ColorPicker", function(section, options)
     overlayCorner.Parent = overlayCanvas
 
     local overlayStroke = Instance.new("UIStroke")
-    overlayStroke.Color = COLORS.Line
+    overlayStroke.Color = Colors.Border
     overlayStroke.Thickness = 1
     overlayStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     overlayStroke.Parent = overlayCanvas
@@ -334,7 +552,7 @@ Elements.Register("ColorPicker", function(section, options)
     satVibCorner.Parent = satVibMap
 
     local satVibStroke = Instance.new("UIStroke")
-    satVibStroke.Color = COLORS.Line
+    satVibStroke.Color = Colors.Border
     satVibStroke.Thickness = 1
     satVibStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     satVibStroke.Parent = satVibMap
@@ -426,7 +644,7 @@ Elements.Register("ColorPicker", function(section, options)
     hueCorner.Parent = hueSlider
 
     local hueStroke = Instance.new("UIStroke")
-    hueStroke.Color = COLORS.Line
+    hueStroke.Color = Colors.Border
     hueStroke.Thickness = 1
     hueStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     hueStroke.Parent = hueSlider
@@ -465,7 +683,7 @@ Elements.Register("ColorPicker", function(section, options)
     local alphaSlider = Instance.new("Frame")
     alphaSlider.Name = "AlphaSlider"
     alphaSlider.Size = UDim2.new(1, 0, 0, ALPHA_HEIGHT)
-    alphaSlider.BackgroundColor3 = COLORS.Field
+    alphaSlider.BackgroundColor3 = Colors.Palette
     alphaSlider.LayoutOrder = 3
     alphaSlider.BorderSizePixel = 0
     alphaSlider.ZIndex = OVERLAY_ZINDEX + 1
@@ -476,7 +694,7 @@ Elements.Register("ColorPicker", function(section, options)
     alphaCorner.Parent = alphaSlider
 
     local alphaStroke = Instance.new("UIStroke")
-    alphaStroke.Color = COLORS.Line
+    alphaStroke.Color = Colors.Border
     alphaStroke.Thickness = 1
     alphaStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     alphaStroke.Parent = alphaSlider
@@ -537,20 +755,148 @@ Elements.Register("ColorPicker", function(section, options)
     alphaCursorStroke.Transparency = 0.3
     alphaCursorStroke.Parent = alphaCursor
 
+    local hexRow = Instance.new("Frame")
+    hexRow.Name = "HexRow"
+    hexRow.Size = UDim2.new(1, 0, 0, HEX_HEIGHT)
+    hexRow.BackgroundColor3 = Colors.Palette
+    hexRow.BorderSizePixel = 0
+    hexRow.LayoutOrder = 4
+    hexRow.ZIndex = OVERLAY_ZINDEX + 1
+    hexRow.Parent = overlayCanvas
+
+    local hexCorner = Instance.new("UICorner")
+    hexCorner.CornerRadius = UDim.new(0, 6)
+    hexCorner.Parent = hexRow
+
+    local hexStroke = Instance.new("UIStroke")
+    hexStroke.Color = Colors.Border
+    hexStroke.Thickness = 1
+    hexStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    hexStroke.Parent = hexRow
+
+    local hexPrefix = Instance.new("TextLabel")
+    hexPrefix.Name = "Prefix"
+    hexPrefix.Size = UDim2.new(0, 14, 1, 0)
+    hexPrefix.Position = UDim2.new(0, 8, 0, 0)
+    hexPrefix.BackgroundTransparency = 1
+    hexPrefix.Text = "#"
+    hexPrefix.TextColor3 = Colors.Dim
+    hexPrefix.TextSize = LABEL_TEXT_SIZE + 1
+    hexPrefix.Font = fontBold
+    hexPrefix.TextXAlignment = Enum.TextXAlignment.Left
+    hexPrefix.ZIndex = OVERLAY_ZINDEX + 2
+    hexPrefix.Parent = hexRow
+
+    local hexBox = Instance.new("TextBox")
+    hexBox.Name = "HexInput"
+    hexBox.Size = UDim2.new(1, -76, 1, 0)
+    hexBox.Position = UDim2.new(0, 24, 0, 0)
+    hexBox.BackgroundTransparency = 1
+    hexBox.Text = rgbToHex(data.value)
+    hexBox.PlaceholderText = "RRGGBB"
+    hexBox.PlaceholderColor3 = Colors.Dim
+    hexBox.TextColor3 = Colors.Active
+    hexBox.TextSize = LABEL_TEXT_SIZE + 1
+    hexBox.Font = fontRegular
+    hexBox.TextXAlignment = Enum.TextXAlignment.Left
+    hexBox.ClearTextOnFocus = false
+    hexBox.TextEditable = not disabled
+    hexBox.TextWrapped = false
+    hexBox.MultiLine = false
+    hexBox.ZIndex = OVERLAY_ZINDEX + 2
+    hexBox.Parent = hexRow
+
+    local alphaText = Instance.new("TextLabel")
+    alphaText.Name = "AlphaText"
+    alphaText.Size = UDim2.new(0, 44, 1, 0)
+    alphaText.Position = UDim2.new(1, -8, 0, 0)
+    alphaText.AnchorPoint = Vector2.new(1, 0)
+    alphaText.BackgroundTransparency = 1
+    alphaText.Text = math.round((1 - data.transparency) * 100) .. "%"
+    alphaText.TextColor3 = Colors.Inactive
+    alphaText.TextSize = LABEL_TEXT_SIZE
+    alphaText.Font = fontRegular
+    alphaText.TextXAlignment = Enum.TextXAlignment.Right
+    alphaText.ZIndex = OVERLAY_ZINDEX + 2
+    alphaText.Parent = hexRow
+
     local function fireCallback()
+        pendingFire = false
+        lastFire = os.clock()
         local ok, err = pcall(callback, data.value, data.transparency)
         if not ok then
             warnf("callback error: " .. tostring(err))
         end
     end
 
+    local function queueCallback()
+        local elapsed = os.clock() - lastFire
+        if elapsed >= CALLBACK_INTERVAL then
+            fireCallback()
+            return
+        end
+        if pendingFire then return end
+        pendingFire = true
+        task.delay(CALLBACK_INTERVAL - elapsed, function()
+            if pendingFire and not destroyed then
+                fireCallback()
+            end
+        end)
+    end
+
+    local function hexStrokeColor()
+        if hexInvalid then
+            return ERROR_COLOR
+        end
+        if hexBox:IsFocused() then
+            return Colors.Inactive
+        end
+        return Colors.Border
+    end
+
+    local function fieldStrokeColor()
+        if data.disabled then
+            return Colors.Border
+        end
+        if fieldPressed or data.opened then
+            return Colors.Inactive
+        end
+        if fieldHover then
+            return Colors.BorderHover
+        end
+        return Colors.Border
+    end
+
+    local function fieldBgColor()
+        if data.disabled then
+            return Colors.Palette
+        end
+        if fieldPressed then
+            return Colors.Pressed
+        end
+        if fieldHover or data.opened then
+            return Colors.Hover
+        end
+        return Colors.Palette
+    end
+
+    local function updateFieldState()
+        if destroyed then return end
+        fieldStroke.Color = fieldStrokeColor()
+        field.BackgroundColor3 = fieldBgColor()
+    end
+
     local function updateFieldVisuals()
         fieldColor.BackgroundColor3 = data.value
-        fieldColor.BackgroundTransparency = data.transparency
+        fieldColor.BackgroundTransparency = data.disabled and math.clamp(data.transparency + 0.4, 0, 1) or data.transparency
         fieldLabel.Text = rgbToHex(data.value)
         fieldLabel.TextColor3 = getContrastColor(data.value, data.transparency)
+        fieldLabel.TextTransparency = data.disabled and 0.4 or 0
         alphaGradient.Color = ColorSequence.new(data.value)
-        field.BackgroundTransparency = data.disabled and 0.5 or 0
+        alphaText.Text = math.round((1 - data.transparency) * 100) .. "%"
+        if not hexBox:IsFocused() then
+            hexBox.Text = rgbToHex(data.value)
+        end
     end
 
     local function display()
@@ -564,12 +910,57 @@ Elements.Register("ColorPicker", function(section, options)
         updateFieldVisuals()
     end
 
-    display()
+    local function applyColor(color, transparency)
+        local newHue, newSat, newVib = Color3.toHSV(color)
+        if newSat > 0 and newVib > 0 then
+            hue = newHue
+        end
+        sat, vib = newSat, newVib
+        if transparency ~= nil then
+            data.transparency = transparency
+        end
+        display()
+        data.value = color
+        updateFieldVisuals()
+    end
 
-    local dragging = nil
-    local dragInput = nil
-    local openedAt = 0
-    local dragEndedAt = 0
+    local function applyDisabledVisual()
+        field.Active = not data.disabled
+        headerButton.Active = not data.disabled
+        hexBox.TextEditable = not data.disabled
+        label.TextColor3 = data.disabled and Colors.BorderHover or Colors.Active
+        field.BackgroundTransparency = data.disabled and 0.5 or 0
+        updateFieldVisuals()
+        updateFieldState()
+    end
+
+    local function applyTheme()
+        if destroyed then return end
+
+        label.TextColor3 = data.disabled and Colors.BorderHover or Colors.Active
+
+        if descLabel then
+            descLabel.TextColor3 = Colors.Dim
+        end
+
+        updateFieldState()
+
+        overlayCanvas.BackgroundColor3 = Colors.Background
+        overlayStroke.Color = Colors.Border
+        satVibStroke.Color = Colors.Border
+        hueStroke.Color = Colors.Border
+        alphaStroke.Color = Colors.Border
+        alphaSlider.BackgroundColor3 = Colors.Palette
+        hexRow.BackgroundColor3 = Colors.Palette
+        hexStroke.Color = hexStrokeColor()
+        hexPrefix.TextColor3 = Colors.Dim
+        hexBox.TextColor3 = Colors.Active
+        hexBox.PlaceholderColor3 = Colors.Dim
+        alphaText.TextColor3 = Colors.Inactive
+    end
+
+    applyColor(data.value)
+    applyDisabledVisual()
 
     local function lockScroll(lock)
         if lock then
@@ -643,7 +1034,7 @@ Elements.Register("ColorPicker", function(section, options)
             if maxX > minX then data.transparency = (mouseX - minX) / (maxX - minX) end
         end
         display()
-        fireCallback()
+        queueCallback()
     end
 
     local function stopDrag()
@@ -652,12 +1043,16 @@ Elements.Register("ColorPicker", function(section, options)
         dragInput = nil
         dragEndedAt = os.clock()
         lockScroll(false)
+        if pendingFire then
+            fireCallback()
+        end
     end
 
     local function bindDrag(gui, kind)
         connect(gui.InputBegan, function(input)
             if destroyed or data.disabled then return end
             if isPointerInput(input) then
+                hexBox:ReleaseFocus()
                 calibrate(gui, input)
                 dragging = kind
                 dragInput = input
@@ -701,6 +1096,22 @@ Elements.Register("ColorPicker", function(section, options)
         table.clear(activeTweens)
     end
 
+    local function revealOverlay()
+        if destroyed or not data.opened then return end
+        local scrollFrame = container:FindFirstAncestorWhichIsA("ScrollingFrame")
+        if not scrollFrame then return end
+        local bottom = container.AbsolutePosition.Y + container.AbsoluteSize.Y - scrollFrame.AbsolutePosition.Y
+        local overflow = bottom - scrollFrame.AbsoluteSize.Y + 8
+        if overflow > 0 then
+            local current = scrollFrame.CanvasPosition
+            pcall(function()
+                tweenService:Create(scrollFrame, TI_REVEAL, {
+                    CanvasPosition = Vector2.new(current.X, current.Y + overflow),
+                }):Play()
+            end)
+        end
+    end
+
     local function animateMenu(open)
         disconnectTweens()
 
@@ -717,7 +1128,17 @@ Elements.Register("ColorPicker", function(section, options)
 
         activeTweens = { overlayTween, containerTween }
 
-        if not open then
+        if open then
+            tweenDoneConn = containerTween.Completed:Connect(function(state)
+                if tweenDoneConn then
+                    tweenDoneConn:Disconnect()
+                    tweenDoneConn = nil
+                end
+                if state == Enum.PlaybackState.Completed then
+                    revealOverlay()
+                end
+            end)
+        else
             tweenDoneConn = overlayTween.Completed:Connect(function()
                 if not data.opened and not destroyed then
                     overlayCanvas.Visible = false
@@ -739,6 +1160,7 @@ Elements.Register("ColorPicker", function(section, options)
         if destroyed or data.disabled or data.opened then return end
         data.opened = true
         openedAt = os.clock()
+        updateFieldState()
 
         overlayCanvas.Visible = true
         animateMenu(true)
@@ -747,8 +1169,19 @@ Elements.Register("ColorPicker", function(section, options)
     closeMenu = function()
         if not data.opened then return end
         data.opened = false
+        outsideStart = nil
         stopDrag()
+        hexBox:ReleaseFocus()
+        updateFieldState()
         animateMenu(false)
+    end
+
+    local function toggleMenu()
+        if data.opened then
+            closeMenu()
+        else
+            openMenu()
+        end
     end
 
     applyHeader = function()
@@ -759,8 +1192,7 @@ Elements.Register("ColorPicker", function(section, options)
         end
         if h == rowH then return end
         rowH = h
-        textContainer.Size = UDim2.new(1, -(FIELD_WIDTH + 16), 0, rowH)
-        field.Position = UDim2.new(1, 0, 0, rowH / 2)
+        headerRow.Size = UDim2.new(1, 0, 0, rowH)
         overlayCanvas.Position = UDim2.new(0, 0, 0, overlayOffset())
         disconnectTweens()
         if data.opened then
@@ -773,34 +1205,114 @@ Elements.Register("ColorPicker", function(section, options)
         end
     end
 
-    connect(field.MouseButton1Click, function()
-        if data.opened then
-            closeMenu()
-        else
-            openMenu()
+    connect(field.Activated, toggleMenu)
+    connect(headerButton.Activated, toggleMenu)
+
+    local function setHover(value)
+        fieldHover = value
+        updateFieldState()
+    end
+
+    local function setPressed(value)
+        if data.disabled then
+            value = false
         end
+        if fieldPressed == value then return end
+        fieldPressed = value
+        updateFieldState()
+    end
+
+    for _, target in ipairs({ field, headerButton }) do
+        connect(target.MouseEnter, function()
+            if usingTouch() then return end
+            setHover(true)
+        end)
+        connect(target.MouseLeave, function()
+            setHover(false)
+            setPressed(false)
+        end)
+        connect(target.InputBegan, function(input)
+            if isPointerInput(input) then
+                setPressed(true)
+            end
+        end)
+        connect(target.InputEnded, function(input)
+            if isPointerInput(input) then
+                setPressed(false)
+                if input.UserInputType == Enum.UserInputType.Touch then
+                    setHover(false)
+                end
+            end
+        end)
+    end
+
+    local function flashInvalid()
+        hexInvalid = true
+        hexStroke.Color = hexStrokeColor()
+        task.delay(0.5, function()
+            hexInvalid = false
+            if not destroyed then
+                hexStroke.Color = hexStrokeColor()
+            end
+        end)
+    end
+
+    connect(hexBox:GetPropertyChangedSignal("Text"), function()
+        local raw = hexBox.Text
+        local clean = string.upper((string.gsub(raw, "[^%x]", "")))
+        if #clean > 6 then
+            clean = string.sub(clean, 1, 6)
+        end
+        if clean ~= raw then
+            hexBox.Text = clean
+        end
+    end)
+
+    connect(hexBox.Focused, function()
+        hexStroke.Color = hexStrokeColor()
+    end)
+
+    connect(hexBox.FocusLost, function()
+        if destroyed then return end
+        local color = parseHex(hexBox.Text)
+        if color then
+            if rgbToHex(color) ~= rgbToHex(data.value) then
+                applyColor(color)
+                fireCallback()
+            end
+        elseif hexBox.Text ~= "" then
+            flashInvalid()
+        end
+        hexBox.Text = rgbToHex(data.value)
+        hexStroke.Color = hexStrokeColor()
     end)
 
     connect(userInputService.InputBegan, function(input)
         if destroyed or not data.opened or dragging then return end
+        if not isPointerInput(input) then return end
         if os.clock() - openedAt < 0.1 then return end
         if os.clock() - dragEndedAt < 0.1 then return end
-        if not isPointerInput(input) then return end
 
         local pos = toGuiPosition(input)
-        if not isInside(overlayCanvas, pos) and not isInside(field, pos) then
-            closeMenu()
+        if isInside(overlayCanvas, pos) or isInside(headerRow, pos) then
+            outsideStart = nil
+        else
+            outsideStart = Vector2.new(input.Position.X, input.Position.Y)
         end
     end)
 
-    local function applyDisabledVisual()
-        field.Active = not data.disabled
-        label.TextColor3 = data.disabled and COLORS.TextDisabled or COLORS.TextActive
-        field.BackgroundTransparency = data.disabled and 0.5 or 0
-        fieldColor.BackgroundTransparency = data.disabled and math.clamp(data.transparency + 0.4, 0, 1) or data.transparency
-    end
-
-    applyDisabledVisual()
+    connect(userInputService.InputEnded, function(input)
+        if not outsideStart then return end
+        if not isPointerInput(input) then return end
+        local startPos = outsideStart
+        outsideStart = nil
+        if destroyed or not data.opened or dragging then return end
+        local moved = (Vector2.new(input.Position.X, input.Position.Y) - startPos).Magnitude
+        if moved >= TAP_SLOP then return end
+        local pos = toGuiPosition(input)
+        if isInside(overlayCanvas, pos) or isInside(headerRow, pos) then return end
+        closeMenu()
+    end)
 
     function data:Set(color, transparency)
         if destroyed then return end
@@ -810,15 +1322,7 @@ Elements.Register("ColorPicker", function(section, options)
         end
         transparency = math.clamp(tonumber(transparency) or 0, 0, 1)
         if data.value == color and data.transparency == transparency then return end
-        data.transparency = transparency
-        local newHue, newSat, newVib = Color3.toHSV(color)
-        if newSat > 0 and newVib > 0 then
-            hue = newHue
-        end
-        sat, vib = newSat, newVib
-        display()
-        data.value = color
-        updateFieldVisuals()
+        applyColor(color, transparency)
         fireCallback()
     end
 
@@ -845,6 +1349,10 @@ Elements.Register("ColorPicker", function(section, options)
     function data:SetDisabled(value)
         if destroyed then return end
         data.disabled = value == true
+        if data.disabled then
+            fieldPressed = false
+            fieldHover = false
+        end
         applyDisabledVisual()
         if data.disabled and data.opened then
             closeMenu()
@@ -853,7 +1361,10 @@ Elements.Register("ColorPicker", function(section, options)
 
     function data:SetTitle(newTitle)
         if destroyed then return end
-        label.Text = tostring(newTitle or "")
+        title = tostring(newTitle or "")
+        label.Text = title
+        container.Name = title .. "_ColorPicker"
+        overlayCanvas.Name = title .. "_PickerOverlay"
     end
 
     function data:SetDescription(newDesc)
@@ -877,6 +1388,10 @@ Elements.Register("ColorPicker", function(section, options)
         applyHeader()
     end
 
+    function data:RefreshTheme()
+        applyTheme()
+    end
+
     function data:Open()
         openMenu()
     end
@@ -888,9 +1403,14 @@ Elements.Register("ColorPicker", function(section, options)
     function data:Destroy()
         if destroyed then return end
         destroyed = true
+        pendingFire = false
         stopDrag()
         lockScroll(false)
         disconnectTweens()
+        if unwatchTheme then
+            unwatchTheme()
+            unwatchTheme = nil
+        end
         for _, conn in ipairs(connections) do
             conn:Disconnect()
         end
@@ -898,6 +1418,14 @@ Elements.Register("ColorPicker", function(section, options)
         overlayCanvas:Destroy()
         container:Destroy()
     end
+
+    connect(container.Destroying, function()
+        data:Destroy()
+    end)
+
+    unwatchTheme = watchTheme(applyTheme)
+
+    applyTheme()
 
     return data
 end)
