@@ -1,84 +1,177 @@
--- // Paragraph
+-- // Services
+local runService = game:GetService("RunService")
 
-local THEMES = {
-    dark = {
-        Title = Color3.fromRGB(248, 248, 252),
-        Text = Color3.fromRGB(236, 236, 243),
-        Desc = Color3.fromRGB(168, 168, 184),
-        Muted = Color3.fromRGB(124, 124, 140),
-        Line = Color3.fromRGB(54, 54, 66),
-        Track = Color3.fromRGB(44, 44, 56),
-        Accent = Color3.fromRGB(120, 160, 255),
-        Light = false,
-    },
-    light = {
-        Title = Color3.fromRGB(18, 18, 24),
-        Text = Color3.fromRGB(36, 36, 48),
-        Desc = Color3.fromRGB(88, 88, 104),
-        Muted = Color3.fromRGB(120, 120, 136),
-        Line = Color3.fromRGB(206, 206, 216),
-        Track = Color3.fromRGB(224, 224, 232),
-        Accent = Color3.fromRGB(50, 96, 230),
-        Light = true,
-    },
-    midnight = {
-        Title = Color3.fromRGB(235, 240, 255),
-        Text = Color3.fromRGB(214, 224, 250),
-        Desc = Color3.fromRGB(150, 166, 205),
-        Muted = Color3.fromRGB(104, 120, 160),
-        Line = Color3.fromRGB(40, 52, 92),
-        Track = Color3.fromRGB(30, 40, 74),
-        Accent = Color3.fromRGB(110, 140, 255),
-        Light = false,
-    },
-    ocean = {
-        Title = Color3.fromRGB(232, 250, 255),
-        Text = Color3.fromRGB(210, 240, 248),
-        Desc = Color3.fromRGB(140, 184, 198),
-        Muted = Color3.fromRGB(98, 140, 156),
-        Line = Color3.fromRGB(30, 70, 86),
-        Track = Color3.fromRGB(24, 56, 70),
-        Accent = Color3.fromRGB(56, 200, 230),
-        Light = false,
-    },
-    rose = {
-        Title = Color3.fromRGB(255, 240, 245),
-        Text = Color3.fromRGB(250, 222, 232),
-        Desc = Color3.fromRGB(200, 150, 168),
-        Muted = Color3.fromRGB(158, 108, 126),
-        Line = Color3.fromRGB(86, 40, 58),
-        Track = Color3.fromRGB(64, 30, 44),
-        Accent = Color3.fromRGB(255, 110, 160),
-        Light = false,
-    },
-    forest = {
-        Title = Color3.fromRGB(238, 252, 242),
-        Text = Color3.fromRGB(218, 242, 226),
-        Desc = Color3.fromRGB(150, 190, 162),
-        Muted = Color3.fromRGB(108, 150, 120),
-        Line = Color3.fromRGB(36, 74, 48),
-        Track = Color3.fromRGB(28, 56, 38),
-        Accent = Color3.fromRGB(80, 210, 120),
-        Light = false,
-    },
-    amber = {
-        Title = Color3.fromRGB(255, 248, 232),
-        Text = Color3.fromRGB(250, 236, 208),
-        Desc = Color3.fromRGB(204, 176, 132),
-        Muted = Color3.fromRGB(160, 134, 96),
-        Line = Color3.fromRGB(84, 64, 30),
-        Track = Color3.fromRGB(64, 48, 24),
-        Accent = Color3.fromRGB(255, 180, 50),
-        Light = false,
-    },
+-- // Themes
+local Default = {
+    Active = Color3.fromRGB(240, 240, 240),
+    Inactive = Color3.fromRGB(165, 165, 165),
+    Dim = Color3.fromRGB(115, 115, 115),
+    Accent = Color3.fromRGB(42, 42, 42),
+    Border = Color3.fromRGB(55, 55, 55),
+    BorderHover = Color3.fromRGB(88, 88, 88),
+    Palette = Color3.fromRGB(28, 28, 28),
+    Background = Color3.fromRGB(24, 24, 24),
+    GradientTop = Color3.fromRGB(38, 38, 38),
 }
 
-local THEME_ALIAS = {
-    default = "dark", escuro = "dark", claro = "light", noite = "midnight",
-    oceano = "ocean", rosa = "rose", floresta = "forest", ambar = "amber",
+local THEME_KEYS = {
+    "Active",
+    "Inactive",
+    "Dim",
+    "Accent",
+    "Border",
+    "BorderHover",
+    "Palette",
+    "Background",
+    "GradientTop",
 }
 
-local THEME_KEYS = { "Title", "Text", "Desc", "Muted", "Line", "Track", "Accent" }
+local DERIVED = {
+    Hover = function(colors)
+        return colors.Palette:Lerp(colors.Accent, 0.6)
+    end,
+    Pressed = function(colors)
+        return colors.Accent:Lerp(colors.BorderHover, 0.35)
+    end,
+    TextHover = function(colors)
+        return colors.Inactive:Lerp(colors.Active, 0.25)
+    end,
+}
+
+-- // ThemeWatcher
+local themeGroups = {}
+local themeConnection
+local NO_PANEL = {}
+
+local function resolveColor(panel, key)
+    local theme = type(panel) == "table" and panel.Theme or nil
+    local live = type(theme) == "table" and theme[key] or nil
+
+    if typeof(live) == "Color3" then
+        return live
+    end
+
+    return Default[key]
+end
+
+local function checkGroup(group)
+    local changed = false
+
+    for _, key in ipairs(THEME_KEYS) do
+        local current = resolveColor(group.panel, key)
+
+        if group.last[key] ~= current then
+            group.last[key] = current
+            changed = true
+        end
+    end
+
+    if not changed then
+        return
+    end
+
+    for apply in pairs(group.callbacks) do
+        pcall(apply)
+    end
+end
+
+local function startThemeWatcher()
+    if themeConnection then
+        return
+    end
+
+    themeConnection = runService.Heartbeat:Connect(function()
+        for _, group in pairs(themeGroups) do
+            checkGroup(group)
+        end
+    end)
+end
+
+local function stopThemeWatcher()
+    if themeConnection and next(themeGroups) == nil then
+        themeConnection:Disconnect()
+        themeConnection = nil
+    end
+end
+
+local function watchGroup(panel, apply)
+    local id = panel or NO_PANEL
+    local group = themeGroups[id]
+
+    if not group then
+        group = { panel = panel, last = {}, callbacks = {} }
+
+        for _, key in ipairs(THEME_KEYS) do
+            group.last[key] = resolveColor(panel, key)
+        end
+
+        if type(panel) == "table" then
+            pcall(function()
+                local signal = panel.ThemeChanged
+
+                if typeof(signal) == "RBXScriptSignal" then
+                    group.signal = signal:Connect(function()
+                        checkGroup(group)
+                    end)
+                end
+            end)
+        end
+
+        themeGroups[id] = group
+    end
+
+    group.callbacks[apply] = true
+    startThemeWatcher()
+
+    return function()
+        group.callbacks[apply] = nil
+
+        if next(group.callbacks) == nil then
+            if group.signal then
+                group.signal:Disconnect()
+                group.signal = nil
+            end
+
+            themeGroups[id] = nil
+            stopThemeWatcher()
+        end
+    end
+end
+
+local function createColors(panel)
+    local colors
+
+    colors = setmetatable({}, {
+        __index = function(_, key)
+            if Default[key] then
+                return resolveColor(panel, key)
+            end
+
+            local theme = type(panel) == "table" and panel.Theme or nil
+            local live = type(theme) == "table" and theme[key] or nil
+
+            if typeof(live) == "Color3" then
+                return live
+            end
+
+            local derive = DERIVED[key]
+
+            if derive then
+                return derive(colors)
+            end
+
+            return nil
+        end
+    })
+
+    local function watch(apply)
+        return watchGroup(panel, apply)
+    end
+
+    return colors, watch
+end
+
+-- // Palette
 
 local PALETTE_DARK = {
     red = Color3.fromRGB(255, 82, 82),
@@ -145,6 +238,9 @@ Elements.Register("Paragraph", function(section, options)
         return pick(options, ...)
     end
 
+    local Colors, watchTheme = createColors(section.Panel or Panel)
+    local unwatchTheme
+
     local Svc = {
         input = UserInputService or game:GetService("UserInputService"),
         tween = TweenService or game:GetService("TweenService"),
@@ -169,8 +265,8 @@ Elements.Register("Paragraph", function(section, options)
         PREVIEW_H = MOBILE and 150 or 140,
         BAR_H = 5,
         DIVIDER_H = 11,
-        GAP = 8,
-        ROW_GAP = MOBILE and 10 or 9,
+        GAP = 6,
+        ROW_GAP = MOBILE and 6 or 5,
         PAD = 2,
         MIN_H = 4,
         LOAD_WAIT = 4,
@@ -186,8 +282,6 @@ Elements.Register("Paragraph", function(section, options)
         tweens = setmetatable({}, { __mode = "k" }),
         destroyed = false,
         theme = nil,
-        themeName = "dark",
-        themeSource = opt("theme", "Theme"),
         accent = opt("accent", "Accent"),
         titleColor = opt("titleColor", "TitleColor"),
         descColor = opt("descriptionColor", "DescriptionColor", "descColor"),
@@ -197,8 +291,8 @@ Elements.Register("Paragraph", function(section, options)
         rows = {},
         textures = {},
         rich = options.richText ~= false,
-        marker = "bar",
-        rule = options.rule ~= false,
+        marker = "none",
+        rule = options.rule == true,
     }
 
     local markerOption = opt("marker", "Marker")
@@ -307,6 +401,10 @@ Elements.Register("Paragraph", function(section, options)
                 return theme[THEME_ROLE[key]]
             end
             local hex = key:match("^#?(%x%x%x%x%x%x)$")
+            local short = key:match("^#(%x%x%x)$")
+            if short then
+                hex = short:gsub("%x", "%0%0")
+            end
             if hex then
                 return Color3.fromRGB(
                     tonumber(hex:sub(1, 2), 16),
@@ -330,59 +428,36 @@ Elements.Register("Paragraph", function(section, options)
 
     -- // Temas
 
-    function H.resolveTheme(value)
-        local name = "dark"
-        local base = THEMES.dark
-        local overrides = nil
-
-        if type(value) == "string" then
-            local key = (value:lower():gsub("%s", ""))
-            key = THEME_ALIAS[key] or key
-            if THEMES[key] then
-                name = key
-                base = THEMES[key]
-            end
-        elseif type(value) == "table" then
-            local baseName = pick(value, "base", "Base")
-            if type(baseName) == "string" then
-                local key = (baseName:lower():gsub("%s", ""))
-                key = THEME_ALIAS[key] or key
-                if THEMES[key] then
-                    base = THEMES[key]
-                end
-            end
-            name = "custom"
-            overrides = value
-        end
-
-        local merged = copyTable(base)
-        if overrides then
-            for _, key in ipairs(THEME_KEYS) do
-                local color = H.color(pick(overrides, key, key:lower()))
-                if color then
-                    merged[key] = color
-                end
-            end
-            local light = pick(overrides, "light", "Light")
-            if type(light) == "boolean" then
-                merged.Light = light
-            end
-        end
+    function H.buildTheme()
+        local background = Colors.Background
+        local luminance = (0.299 * background.R) + (0.587 * background.G) + (0.114 * background.B)
+        local theme = {
+            Title = Colors.Active,
+            Text = Colors.Active,
+            Desc = Colors.Inactive,
+            Muted = Colors.Dim,
+            Line = Colors.Border,
+            Track = Colors.Accent,
+            Accent = Colors.Active,
+            Light = luminance > 0.6,
+        }
+        S.theme = theme
 
         local accent = H.color(S.accent)
         if accent then
-            merged.Accent = accent
+            theme.Accent = accent
         end
-
-        return name, merged
+        return theme
     end
 
-    function H.setTheme(value)
-        S.themeSource = value
-        S.themeName, S.theme = H.resolveTheme(value)
+    function H.refreshTheme()
+        if S.destroyed or not U.container then return end
+        H.buildTheme()
+        H.applyTheme()
+        H.rebuildRows()
     end
 
-    H.setTheme(S.themeSource)
+    H.buildTheme()
 
     -- // Texturas (ID)
 
@@ -887,14 +962,6 @@ Elements.Register("Paragraph", function(section, options)
                 LayoutOrder = 1,
             })
             paint(title, "TextColor3")
-            H.new("Frame", {
-                Name = "Rule",
-                Size = UDim2.new(1, 0, 0, 1),
-                BackgroundColor3 = theme.Line,
-                BackgroundTransparency = 0.3,
-                BorderSizePixel = 0,
-                LayoutOrder = 2,
-            }, frame)
             return row
         end
 
@@ -1241,20 +1308,22 @@ Elements.Register("Paragraph", function(section, options)
                 })
                 paint(value, "TextColor3")
             else
-                H.label(content, {
-                    Name = "Label",
-                    Text = entry.label,
-                    TextSize = K.LABEL,
-                    TextColor3 = labelColor,
+                local name = (entry.label:gsub(":%s*$", ""))
+                local text = name .. ": " .. entry.text
+                if S.rich then
+                    local head = "<b>" .. name .. ":</b>"
+                    local custom = H.color(entry.labelColor)
+                    if custom then
+                        head = string.format('<font color="#%s">%s</font>', custom:ToHex(), head)
+                    end
+                    text = head .. " " .. entry.text
+                end
+                local line = H.label(content, {
+                    Name = "Line",
+                    Text = text,
                     LayoutOrder = 1,
                 })
-                local value = H.label(content, {
-                    Name = "Value",
-                    Text = entry.text,
-                    Font = fontBold,
-                    LayoutOrder = 2,
-                })
-                paint(value, "TextColor3")
+                paint(line, "TextColor3")
             end
         else
             local text = H.label(content, {
@@ -1317,6 +1386,10 @@ Elements.Register("Paragraph", function(section, options)
     H.applyDisabled()
     H.rebuildRows()
 
+    unwatchTheme = watchTheme(function()
+        H.refreshTheme()
+    end)
+
     -- // API
 
     function data:SetTitle(value)
@@ -1367,32 +1440,15 @@ Elements.Register("Paragraph", function(section, options)
         H.applyTheme()
     end
 
-    function data:SetTheme(value)
+    function data:RefreshTheme()
         if S.destroyed then return end
-        H.setTheme(value)
-        H.applyTheme()
-        H.rebuildRows()
-    end
-
-    function data:GetTheme()
-        return S.themeName
-    end
-
-    function data:GetThemes()
-        local names = {}
-        for name in pairs(THEMES) do
-            names[#names + 1] = name
-        end
-        table.sort(names)
-        return names
+        H.refreshTheme()
     end
 
     function data:SetAccent(color)
         if S.destroyed then return end
         S.accent = color
-        H.setTheme(S.themeSource)
-        H.applyTheme()
-        H.rebuildRows()
+        H.refreshTheme()
     end
 
     function data:SetInfo(list)
@@ -1546,12 +1602,7 @@ Elements.Register("Paragraph", function(section, options)
         if fields.tag ~= nil then data:SetTag(fields.tag) end
         if fields.disabled ~= nil then data:SetDisabled(fields.disabled) end
         if fields.visible ~= nil then data:SetVisible(fields.visible) end
-        if fields.accent ~= nil then S.accent = fields.accent end
-        if fields.theme ~= nil then
-            data:SetTheme(fields.theme)
-        elseif fields.accent ~= nil then
-            data:SetAccent(fields.accent)
-        end
+        if fields.accent ~= nil then data:SetAccent(fields.accent) end
         if fields.colors ~= nil or fields.defaultColor ~= nil then
             data:SetColors(fields.colors or S.colors, fields.defaultColor)
         end
@@ -1561,6 +1612,10 @@ Elements.Register("Paragraph", function(section, options)
     function data:Destroy()
         if S.destroyed then return end
         S.destroyed = true
+        if unwatchTheme then
+            unwatchTheme()
+            unwatchTheme = nil
+        end
         for _, connection in ipairs(S.connections) do
             connection:Disconnect()
         end
