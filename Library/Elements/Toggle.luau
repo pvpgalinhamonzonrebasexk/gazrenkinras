@@ -2,6 +2,7 @@
 local userInputService = UserInputService or game:GetService("UserInputService")
 local tweenService = game:GetService("TweenService")
 local runService = game:GetService("RunService")
+local guiService = game:GetService("GuiService")
 local players = game:GetService("Players")
 local env = getgenv and getgenv() or _G
 
@@ -546,10 +547,12 @@ end
 
 -- // KeybindHud
 local HUD_WIDTH = 190
-local HUD_HEADER_H = 30
+local HUD_TOP_H = 40
 local HUD_ROW_H = 28
 local HUD_PILL_W = 52
 local HUD_MARGIN = 12
+local HUD_PAD = 6
+local HUD_GAP = 4
 
 local keybindHud
 
@@ -570,7 +573,7 @@ local function createKeybindHud()
         return nil
     end
 
-    local fontBold = getFonts()
+    local fontBold, fontRegular = getFonts()
 
     local hud = {
         closed = false,
@@ -581,16 +584,20 @@ local function createKeybindHud()
 
     local connections = {}
     local userMoved = false
-    local posX, posY = HUD_MARGIN, HUD_MARGIN
+    local curX, curY = HUD_MARGIN, HUD_MARGIN
+    local frameH = 0
     local dragging = false
-    local dragStart
     local dragInput
-    local startX, startY = 0, 0
+    local dragConnection
 
     local function stopDrag()
         dragging = false
-        dragStart = nil
         dragInput = nil
+
+        if dragConnection then
+            dragConnection:Disconnect()
+            dragConnection = nil
+        end
     end
 
     local gui = Instance.new("ScreenGui")
@@ -606,79 +613,70 @@ local function createKeybindHud()
     local frame = Instance.new("Frame")
     frame.Name = "Hud"
     frame.AnchorPoint = Vector2.new(0, 0)
-    frame.Position = UDim2.new(0, HUD_MARGIN, 0.5, -60)
+    frame.Position = UDim2.new(0, HUD_MARGIN, 0, HUD_MARGIN)
     frame.Size = UDim2.new(0, HUD_WIDTH, 0, 0)
-    frame.AutomaticSize = Enum.AutomaticSize.Y
-    frame.BackgroundColor3 = Default.Background
-    frame.BackgroundTransparency = 0
+    frame.BackgroundTransparency = 1
     frame.BorderSizePixel = 0
     frame.Visible = false
     frame.Parent = gui
 
-    local frameCorner = Instance.new("UICorner")
-    frameCorner.CornerRadius = UDim.new(0, 10)
-    frameCorner.Parent = frame
-
-    local frameStroke = Instance.new("UIStroke")
-    frameStroke.Color = Default.Border
-    frameStroke.Thickness = 1
-    frameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    frameStroke.Parent = frame
-
-    local frameLayout = Instance.new("UIListLayout")
-    frameLayout.FillDirection = Enum.FillDirection.Vertical
-    frameLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    frameLayout.Padding = UDim.new(0, 0)
-    frameLayout.Parent = frame
-
-    -- Header
-    local header = Instance.new("Frame")
-    header.Name = "Header"
-    header.Size = UDim2.new(1, 0, 0, HUD_HEADER_H)
-    header.BackgroundTransparency = 1
-    header.LayoutOrder = 0
-    header.Parent = frame
-
-    local headerPadding = Instance.new("UIPadding")
-    headerPadding.PaddingLeft = UDim.new(0, 12)
-    headerPadding.PaddingRight = UDim.new(0, 6)
-    headerPadding.Parent = header
-
+    -- Topbar
     local dragHandle = Instance.new("TextButton")
     dragHandle.Name = "DragHandle"
-    dragHandle.Size = UDim2.new(1, -26, 1, 0)
+    dragHandle.Position = UDim2.new(0, 0, 0, 0)
+    dragHandle.Size = UDim2.new(1, -30, 0, HUD_TOP_H)
     dragHandle.BackgroundTransparency = 1
     dragHandle.Text = ""
     dragHandle.AutoButtonColor = false
     dragHandle.Selectable = false
     dragHandle.ZIndex = 1
-    dragHandle.Parent = header
+    dragHandle.Parent = frame
 
-    local headerLabel = Instance.new("TextLabel")
-    headerLabel.Name = "Title"
-    headerLabel.Size = UDim2.new(1, -26, 1, 0)
-    headerLabel.BackgroundTransparency = 1
-    headerLabel.Text = "Key Bind"
-    headerLabel.TextColor3 = Default.Active
-    headerLabel.TextSize = 13
-    headerLabel.Font = fontBold
-    headerLabel.TextXAlignment = Enum.TextXAlignment.Left
-    headerLabel.TextYAlignment = Enum.TextYAlignment.Center
-    headerLabel.TextTruncate = Enum.TextTruncate.AtEnd
-    headerLabel.ZIndex = 2
-    headerLabel.Parent = header
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Name = "Title"
+    titleLabel.Position = UDim2.new(0, HUD_PAD, 0, 5)
+    titleLabel.Size = UDim2.new(1, -(HUD_PAD + 30), 0, 18)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "Key Bind"
+    titleLabel.TextColor3 = Default.Active
+    titleLabel.TextSize = 14
+    titleLabel.Font = fontBold
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.TextYAlignment = Enum.TextYAlignment.Center
+    titleLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    titleLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+    titleLabel.TextStrokeTransparency = 0.55
+    titleLabel.ZIndex = 2
+    titleLabel.Parent = frame
+
+    local subtitleLabel = Instance.new("TextLabel")
+    subtitleLabel.Name = "Subtitle"
+    subtitleLabel.Position = UDim2.new(0, HUD_PAD, 0, 22)
+    subtitleLabel.Size = UDim2.new(1, -(HUD_PAD + 30), 0, 14)
+    subtitleLabel.BackgroundTransparency = 1
+    subtitleLabel.Text = "by rip_sheldoohz"
+    subtitleLabel.TextColor3 = Default.Inactive
+    subtitleLabel.TextSize = 11
+    subtitleLabel.Font = fontRegular
+    subtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    subtitleLabel.TextYAlignment = Enum.TextYAlignment.Center
+    subtitleLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    subtitleLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+    subtitleLabel.TextStrokeTransparency = 0.55
+    subtitleLabel.ZIndex = 2
+    subtitleLabel.Parent = frame
 
     local closeBtn = Instance.new("TextButton")
     closeBtn.Name = "Close"
     closeBtn.Size = UDim2.new(0, 22, 0, 22)
-    closeBtn.AnchorPoint = Vector2.new(1, 0.5)
-    closeBtn.Position = UDim2.new(1, 0, 0.5, 0)
+    closeBtn.AnchorPoint = Vector2.new(1, 0)
+    closeBtn.Position = UDim2.new(1, -4, 0, math.floor((HUD_TOP_H - 22) / 2))
     closeBtn.BackgroundTransparency = 1
     closeBtn.Text = ""
     closeBtn.AutoButtonColor = false
     closeBtn.Selectable = false
     closeBtn.ZIndex = 2
-    closeBtn.Parent = header
+    closeBtn.Parent = frame
 
     local closeLines = {}
 
@@ -701,153 +699,145 @@ local function createKeybindHud()
         closeLines[#closeLines + 1] = line
     end
 
-    -- Divider
     local divider = Instance.new("Frame")
     divider.Name = "Divider"
-    divider.Size = UDim2.new(1, 0, 0, 1)
+    divider.Position = UDim2.new(0, HUD_PAD, 0, HUD_TOP_H)
+    divider.Size = UDim2.new(1, -(HUD_PAD * 2), 0, 1)
     divider.BackgroundColor3 = Default.Border
+    divider.BackgroundTransparency = 0.3
     divider.BorderSizePixel = 0
-    divider.LayoutOrder = 1
     divider.Parent = frame
 
-    -- Body
-    local body = Instance.new("Frame")
-    body.Name = "Body"
-    body.Size = UDim2.new(1, 0, 0, 0)
-    body.AutomaticSize = Enum.AutomaticSize.Y
-    body.BackgroundTransparency = 1
-    body.LayoutOrder = 2
-    body.Parent = frame
+    -- Layout
+    local function getScreen()
+        local size = gui.AbsoluteSize
 
-    local bodyPadding = Instance.new("UIPadding")
-    bodyPadding.PaddingTop = UDim.new(0, 6)
-    bodyPadding.PaddingBottom = UDim.new(0, 6)
-    bodyPadding.PaddingLeft = UDim.new(0, 6)
-    bodyPadding.PaddingRight = UDim.new(0, 6)
-    bodyPadding.Parent = body
+        if size.X <= 0 or size.Y <= 0 then
+            local camera = workspace.CurrentCamera
 
-    local bodyLayout = Instance.new("UIListLayout")
-    bodyLayout.FillDirection = Enum.FillDirection.Vertical
-    bodyLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    bodyLayout.Padding = UDim.new(0, 4)
-    bodyLayout.Parent = body
-
-    -- Layout / Refresh
-    local function refresh()
-        local shown = 0
-
-        for entry in pairs(hud.entries) do
-            local visible = entry.active == true and entry.state == true
-
-            if entry.row then
-                entry.row.Visible = visible
-            end
-
-            if visible then
-                shown = shown + 1
+            if camera then
+                return camera.ViewportSize
             end
         end
 
-        frame.Visible = shown > 0 and not hud.closed
+        return size
+    end
+
+    local function clampPosition(x, y)
+        local screen = getScreen()
+
+        x = math.clamp(x, 0, math.max(screen.X - HUD_WIDTH, 0))
+        y = math.clamp(y, 0, math.max(screen.Y - frameH, 0))
+
+        return x, y
+    end
+
+    local function applyPosition(x, y)
+        curX, curY = x, y
+        frame.Position = UDim2.new(0, x, 0, y)
+    end
+
+    local function settle()
+        if userMoved then
+            applyPosition(clampPosition(curX, curY))
+        else
+            local screen = getScreen()
+
+            applyPosition(HUD_MARGIN, math.floor((screen.Y - frameH) / 2))
+        end
+    end
+
+    local function layout()
+        local list = {}
+
+        for entry in pairs(hud.entries) do
+            entry.row.Visible = false
+
+            if entry.active == true and entry.state == true then
+                list[#list + 1] = entry
+            end
+        end
+
+        table.sort(list, function(a, b)
+            return a.order < b.order
+        end)
+
+        local y = HUD_TOP_H + 1 + HUD_PAD
+
+        for _, entry in ipairs(list) do
+            entry.row.Position = UDim2.new(0, 0, 0, y)
+            entry.row.Visible = true
+            y = y + HUD_ROW_H + HUD_GAP
+        end
+
+        if #list > 0 then
+            frameH = y - HUD_GAP + HUD_PAD
+        else
+            frameH = 0
+        end
+
+        frame.Size = UDim2.new(0, HUD_WIDTH, 0, frameH)
+        settle()
+        frame.Visible = #list > 0 and not hud.closed
 
         if not frame.Visible then
             stopDrag()
         end
     end
 
-    local function clampPosition(x, y)
-        local camera = workspace.CurrentCamera
-
-        if not camera then
-            return x, y
-        end
-
-        local viewport = camera.ViewportSize
-        local size = frame.AbsoluteSize
-
-        x = math.clamp(x, 0, math.max(viewport.X - size.X, 0))
-        y = math.clamp(y, 0, math.max(viewport.Y - size.Y, 0))
-
-        return x, y
-    end
-
-    local function place()
-        local camera = workspace.CurrentCamera
-
-        if not camera then
-            return
-        end
-
-        local viewport = camera.ViewportSize
-        local size = frame.AbsoluteSize
-
-        frame.Position = UDim2.new(0, HUD_MARGIN, 0, math.floor((viewport.Y - size.Y) / 2))
-    end
-
-    local function settle()
-        if userMoved then
-            local x, y = clampPosition(posX, posY)
-
-            posX, posY = x, y
-            frame.Position = UDim2.new(0, x, 0, y)
-        else
-            place()
-        end
-    end
-
-    connections[#connections + 1] = frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(settle)
-
-    if workspace.CurrentCamera then
-        connections[#connections + 1] = workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(settle)
-    end
+    connections[#connections + 1] = gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(settle)
 
     -- Drag
-    connections[#connections + 1] = dragHandle.InputBegan:Connect(function(input)
-        if not hud.draggable or dragging then
-            return
+    local function pointerPosition(input)
+        if input and input.UserInputType == Enum.UserInputType.Touch then
+            return Vector2.new(input.Position.X, input.Position.Y) + guiService:GetGuiInset()
         end
 
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1
-        and input.UserInputType ~= Enum.UserInputType.Touch then
-            return
-        end
+        return userInputService:GetMouseLocation()
+    end
+
+    local function startDrag(input)
+        stopDrag()
+
+        local origin = pointerPosition(input)
+        local grabX = origin.X - curX
+        local grabY = origin.Y - curY
 
         dragging = true
         dragInput = input
-        dragStart = input.Position
-        startX = frame.AbsolutePosition.X
-        startY = frame.AbsolutePosition.Y
-    end)
 
-    connections[#connections + 1] = userInputService.InputChanged:Connect(function(input)
-        if not dragging or not dragStart then
-            return
-        end
+        dragConnection = runService.RenderStepped:Connect(function()
+            if not dragging or not dragInput then
+                return
+            end
 
-        if input.UserInputType == Enum.UserInputType.MouseMovement then
-            if not userInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+            local isTouch = dragInput.UserInputType == Enum.UserInputType.Touch
+
+            if not isTouch and not userInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
                 stopDrag()
                 return
             end
-        elseif input.UserInputType == Enum.UserInputType.Touch then
-            if input ~= dragInput then
+
+            local pointer = pointerPosition(dragInput)
+
+            if not userMoved and (pointer - origin).Magnitude < 3 then
                 return
             end
-        else
+
+            userMoved = true
+            applyPosition(clampPosition(pointer.X - grabX, pointer.Y - grabY))
+        end)
+    end
+
+    connections[#connections + 1] = dragHandle.InputBegan:Connect(function(input)
+        if not hud.draggable then
             return
         end
 
-        local delta = input.Position - dragStart
-
-        if not userMoved and delta.Magnitude < 3 then
-            return
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            startDrag(input)
         end
-
-        local x, y = clampPosition(startX + delta.X, startY + delta.Y)
-
-        userMoved = true
-        posX, posY = x, y
-        frame.Position = UDim2.new(0, x, 0, y)
     end)
 
     connections[#connections + 1] = userInputService.InputEnded:Connect(function(input)
@@ -874,7 +864,7 @@ local function createKeybindHud()
     connections[#connections + 1] = closeBtn.Activated:Connect(function()
         stopDrag()
         hud.closed = true
-        refresh()
+        layout()
     end)
 
     function hud:Add()
@@ -883,46 +873,33 @@ local function createKeybindHud()
         local entry = {
             active = false,
             state = false,
+            order = hud.order,
         }
 
         local row = Instance.new("Frame")
         row.Name = "Row"
         row.Size = UDim2.new(1, 0, 0, HUD_ROW_H)
-        row.BackgroundColor3 = Color3.new(1, 1, 1)
+        row.BackgroundTransparency = 1
         row.BorderSizePixel = 0
-        row.LayoutOrder = hud.order
         row.Visible = false
-        row.Parent = body
+        row.Parent = frame
 
         entry.row = row
 
-        local rowCorner = Instance.new("UICorner")
-        rowCorner.CornerRadius = UDim.new(0, 8)
-        rowCorner.Parent = row
-
-        local rowGradient = Instance.new("UIGradient")
-        rowGradient.Color = ColorSequence.new(Default.GradientTop, Default.Palette)
-        rowGradient.Rotation = 90
-        rowGradient.Parent = row
-
-        local rowStroke = Instance.new("UIStroke")
-        rowStroke.Color = Default.Border
-        rowStroke.Thickness = 1
-        rowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        rowStroke.Parent = row
-
         local nameLabel = Instance.new("TextLabel")
         nameLabel.Name = "Name"
-        nameLabel.Position = UDim2.new(0, 10, 0, 0)
-        nameLabel.Size = UDim2.new(1, -(10 + HUD_PILL_W + 14), 1, 0)
+        nameLabel.Position = UDim2.new(0, HUD_PAD, 0, 0)
+        nameLabel.Size = UDim2.new(1, -(HUD_PAD + HUD_PILL_W + 14), 1, 0)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Text = ""
         nameLabel.TextColor3 = Default.Active
-        nameLabel.TextSize = 12
+        nameLabel.TextSize = 13
         nameLabel.Font = fontBold
         nameLabel.TextXAlignment = Enum.TextXAlignment.Left
         nameLabel.TextYAlignment = Enum.TextYAlignment.Center
         nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        nameLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+        nameLabel.TextStrokeTransparency = 0.55
         nameLabel.Parent = row
 
         local keyLabel = Instance.new("TextLabel")
@@ -930,11 +907,12 @@ local function createKeybindHud()
         keyLabel.Size = UDim2.new(0, 0, 0, 20)
         keyLabel.AutomaticSize = Enum.AutomaticSize.X
         keyLabel.AnchorPoint = Vector2.new(1, 0.5)
-        keyLabel.Position = UDim2.new(1, -6, 0.5, 0)
+        keyLabel.Position = UDim2.new(1, -HUD_PAD, 0.5, 0)
         keyLabel.BackgroundColor3 = Default.Palette
+        keyLabel.BackgroundTransparency = 0.25
         keyLabel.BorderSizePixel = 0
         keyLabel.Text = ""
-        keyLabel.TextColor3 = Default.Inactive
+        keyLabel.TextColor3 = Default.Active
         keyLabel.TextSize = 11
         keyLabel.Font = fontBold
         keyLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -947,7 +925,7 @@ local function createKeybindHud()
         keyCorner.Parent = keyLabel
 
         local keyStroke = Instance.new("UIStroke")
-        keyStroke.Color = Default.Border
+        keyStroke.Color = Default.BorderHover
         keyStroke.Thickness = 1
         keyStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         keyStroke.Parent = keyLabel
@@ -980,13 +958,13 @@ local function createKeybindHud()
                 hud.closed = false
             end
 
-            refresh()
+            layout()
         end
 
         function entry:Remove()
             hud.entries[entry] = nil
             row:Destroy()
-            refresh()
+            layout()
         end
 
         hud.entries[entry] = true
@@ -1004,22 +982,22 @@ local function createKeybindHud()
 
     function hud:ResetPosition()
         userMoved = false
-        place()
+        settle()
     end
 
     function hud:Show()
         hud.closed = false
-        refresh()
+        layout()
     end
 
     function hud:Hide()
         hud.closed = true
-        refresh()
+        layout()
     end
 
     function hud:Toggle()
         hud.closed = not hud.closed
-        refresh()
+        layout()
     end
 
     function hud:Destroy()
