@@ -321,45 +321,126 @@ local function breakLongWords(text, maxLen)
 end
 
 -- // Keybinds
-local KEY_NAMES = {
-    [Enum.KeyCode.LeftShift] = "LShift",
-    [Enum.KeyCode.RightShift] = "RShift",
-    [Enum.KeyCode.LeftControl] = "LCtrl",
-    [Enum.KeyCode.RightControl] = "RCtrl",
-    [Enum.KeyCode.LeftAlt] = "LAlt",
-    [Enum.KeyCode.RightAlt] = "RAlt",
-    [Enum.KeyCode.CapsLock] = "Caps",
-    [Enum.KeyCode.Return] = "Enter",
-    [Enum.KeyCode.Backspace] = "Back",
-    [Enum.KeyCode.Delete] = "Del",
-    [Enum.KeyCode.Insert] = "Ins",
-    [Enum.KeyCode.PageUp] = "PgUp",
-    [Enum.KeyCode.PageDown] = "PgDn",
-    [Enum.KeyCode.Escape] = "Esc",
-    [Enum.KeyCode.Zero] = "0",
-    [Enum.KeyCode.One] = "1",
-    [Enum.KeyCode.Two] = "2",
-    [Enum.KeyCode.Three] = "3",
-    [Enum.KeyCode.Four] = "4",
-    [Enum.KeyCode.Five] = "5",
-    [Enum.KeyCode.Six] = "6",
-    [Enum.KeyCode.Seven] = "7",
-    [Enum.KeyCode.Eight] = "8",
-    [Enum.KeyCode.Nine] = "9",
-    [Enum.KeyCode.KeypadZero] = "Num0",
-    [Enum.KeyCode.KeypadOne] = "Num1",
-    [Enum.KeyCode.KeypadTwo] = "Num2",
-    [Enum.KeyCode.KeypadThree] = "Num3",
-    [Enum.KeyCode.KeypadFour] = "Num4",
-    [Enum.KeyCode.KeypadFive] = "Num5",
-    [Enum.KeyCode.KeypadSix] = "Num6",
-    [Enum.KeyCode.KeypadSeven] = "Num7",
-    [Enum.KeyCode.KeypadEight] = "Num8",
-    [Enum.KeyCode.KeypadNine] = "Num9",
-    [Enum.UserInputType.MouseButton1] = "M1",
-    [Enum.UserInputType.MouseButton2] = "M2",
-    [Enum.UserInputType.MouseButton3] = "M3",
+local KEY_ALIASES = {
+    { "KeyCode", "LeftShift", "LShift" },
+    { "KeyCode", "RightShift", "RShift" },
+    { "KeyCode", "LeftControl", "LCtrl" },
+    { "KeyCode", "RightControl", "RCtrl" },
+    { "KeyCode", "LeftAlt", "LAlt" },
+    { "KeyCode", "RightAlt", "RAlt" },
+    { "KeyCode", "LeftMeta", "LMeta" },
+    { "KeyCode", "RightMeta", "RMeta" },
+    { "KeyCode", "LeftSuper", "LWin" },
+    { "KeyCode", "RightSuper", "RWin" },
+    { "KeyCode", "CapsLock", "Caps" },
+    { "KeyCode", "Return", "Enter" },
+    { "KeyCode", "Backspace", "Back" },
+    { "KeyCode", "Delete", "Del" },
+    { "KeyCode", "Insert", "Ins" },
+    { "KeyCode", "PageUp", "PgUp" },
+    { "KeyCode", "PageDown", "PgDn" },
+    { "KeyCode", "Escape", "Esc" },
+    { "KeyCode", "Space", "Space" },
+    { "KeyCode", "Tab", "Tab" },
+    { "KeyCode", "Home", "Home" },
+    { "KeyCode", "End", "End" },
+    { "KeyCode", "Up", "Up" },
+    { "KeyCode", "Down", "Down" },
+    { "KeyCode", "Left", "Left" },
+    { "KeyCode", "Right", "Right" },
+    { "KeyCode", "NumLock", "NumLk" },
+    { "KeyCode", "ScrollLock", "ScrLk" },
+    { "KeyCode", "Print", "Print" },
+    { "KeyCode", "Pause", "Pause" },
+    { "KeyCode", "Backquote", "`" },
+    { "KeyCode", "Tilde", "~" },
+    { "KeyCode", "Minus", "-" },
+    { "KeyCode", "Equals", "=" },
+    { "KeyCode", "LeftBracket", "[" },
+    { "KeyCode", "RightBracket", "]" },
+    { "KeyCode", "BackSlash", "\\" },
+    { "KeyCode", "Semicolon", ";" },
+    { "KeyCode", "Quote", "'" },
+    { "KeyCode", "Comma", "," },
+    { "KeyCode", "Period", "." },
+    { "KeyCode", "Slash", "/" },
+    { "KeyCode", "Zero", "0" },
+    { "KeyCode", "One", "1" },
+    { "KeyCode", "Two", "2" },
+    { "KeyCode", "Three", "3" },
+    { "KeyCode", "Four", "4" },
+    { "KeyCode", "Five", "5" },
+    { "KeyCode", "Six", "6" },
+    { "KeyCode", "Seven", "7" },
+    { "KeyCode", "Eight", "8" },
+    { "KeyCode", "Nine", "9" },
+    { "KeyCode", "KeypadZero", "Num0" },
+    { "KeyCode", "KeypadOne", "Num1" },
+    { "KeyCode", "KeypadTwo", "Num2" },
+    { "KeyCode", "KeypadThree", "Num3" },
+    { "KeyCode", "KeypadFour", "Num4" },
+    { "KeyCode", "KeypadFive", "Num5" },
+    { "KeyCode", "KeypadSix", "Num6" },
+    { "KeyCode", "KeypadSeven", "Num7" },
+    { "KeyCode", "KeypadEight", "Num8" },
+    { "KeyCode", "KeypadNine", "Num9" },
+    { "KeyCode", "KeypadPeriod", "Num." },
+    { "KeyCode", "KeypadPlus", "Num+" },
+    { "KeyCode", "KeypadMinus", "Num-" },
+    { "KeyCode", "KeypadMultiply", "Num*" },
+    { "KeyCode", "KeypadDivide", "Num/" },
+    { "KeyCode", "KeypadEquals", "Num=" },
+    { "KeyCode", "KeypadEnter", "NumEnt" },
+    { "KeyCode", "ButtonA", "PadA" },
+    { "KeyCode", "ButtonB", "PadB" },
+    { "KeyCode", "ButtonX", "PadX" },
+    { "KeyCode", "ButtonY", "PadY" },
+    { "KeyCode", "ButtonL1", "L1" },
+    { "KeyCode", "ButtonR1", "R1" },
+    { "KeyCode", "ButtonL2", "L2" },
+    { "KeyCode", "ButtonR2", "R2" },
+    { "KeyCode", "ButtonL3", "L3" },
+    { "KeyCode", "ButtonR3", "R3" },
+    { "KeyCode", "ButtonStart", "Start" },
+    { "KeyCode", "ButtonSelect", "Select" },
+    { "KeyCode", "DPadUp", "DUp" },
+    { "KeyCode", "DPadDown", "DDown" },
+    { "KeyCode", "DPadLeft", "DLeft" },
+    { "KeyCode", "DPadRight", "DRight" },
+    { "UserInputType", "MouseButton1", "M1" },
+    { "UserInputType", "MouseButton2", "M2" },
+    { "UserInputType", "MouseButton3", "M3" },
 }
+
+local WHEEL_UP = { Kind = "Wheel", Name = "WheelUp", Direction = 1 }
+local WHEEL_DOWN = { Kind = "Wheel", Name = "WheelDown", Direction = -1 }
+
+local KEY_NAMES = {
+    [WHEEL_UP] = "WhUp",
+    [WHEEL_DOWN] = "WhDn",
+}
+
+local KEY_LOOKUP = {
+    whup = WHEEL_UP,
+    wheelup = WHEEL_UP,
+    whdn = WHEEL_DOWN,
+    wheeldown = WHEEL_DOWN,
+}
+
+for _, alias in ipairs(KEY_ALIASES) do
+    local ok, item = pcall(function()
+        return Enum[alias[1]][alias[2]]
+    end)
+
+    if ok and item then
+        KEY_NAMES[item] = alias[3]
+        KEY_LOOKUP[alias[3]:lower()] = item
+    end
+end
+
+local function isWheel(binding)
+    return binding == WHEEL_UP or binding == WHEEL_DOWN
+end
 
 local function getKeyName(binding)
     if not binding then
@@ -384,6 +465,10 @@ local function getKeyName(binding)
 end
 
 local function isValidBinding(binding)
+    if isWheel(binding) then
+        return true
+    end
+
     if typeof(binding) ~= "EnumItem" then
         return false
     end
@@ -392,11 +477,21 @@ local function isValidBinding(binding)
 end
 
 local function normalizeBinding(binding)
+    if isWheel(binding) then
+        return binding
+    end
+
     if typeof(binding) == "EnumItem" then
         return binding
     end
 
     if type(binding) == "string" and binding ~= "" then
+        local alias = KEY_LOOKUP[binding:lower()]
+
+        if alias then
+            return alias
+        end
+
         local candidates = {
             binding,
             binding:upper(),
@@ -426,12 +521,22 @@ local function normalizeBinding(binding)
 end
 
 local function matchInput(binding, input)
+    if isWheel(binding) then
+        if input.UserInputType ~= Enum.UserInputType.MouseWheel then
+            return false
+        end
+
+        local z = input.Position.Z
+
+        return z ~= 0 and (z > 0) == (binding.Direction > 0)
+    end
+
     if typeof(binding) ~= "EnumItem" then
         return false
     end
 
     if binding.EnumType == Enum.KeyCode then
-        return input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == binding
+        return binding ~= Enum.KeyCode.Unknown and input.KeyCode == binding
     elseif binding.EnumType == Enum.UserInputType then
         return input.UserInputType == binding
     end
@@ -476,6 +581,17 @@ local function createKeybindHud()
 
     local connections = {}
     local userMoved = false
+    local posX, posY = HUD_MARGIN, HUD_MARGIN
+    local dragging = false
+    local dragStart
+    local dragInput
+    local startX, startY = 0, 0
+
+    local function stopDrag()
+        dragging = false
+        dragStart = nil
+        dragInput = nil
+    end
 
     local gui = Instance.new("ScreenGui")
     gui.Name = "EcoHubKeybindHud"
@@ -521,13 +637,22 @@ local function createKeybindHud()
     header.Size = UDim2.new(1, 0, 0, HUD_HEADER_H)
     header.BackgroundTransparency = 1
     header.LayoutOrder = 0
-    header.Active = true
     header.Parent = frame
 
     local headerPadding = Instance.new("UIPadding")
     headerPadding.PaddingLeft = UDim.new(0, 12)
     headerPadding.PaddingRight = UDim.new(0, 6)
     headerPadding.Parent = header
+
+    local dragHandle = Instance.new("TextButton")
+    dragHandle.Name = "DragHandle"
+    dragHandle.Size = UDim2.new(1, -26, 1, 0)
+    dragHandle.BackgroundTransparency = 1
+    dragHandle.Text = ""
+    dragHandle.AutoButtonColor = false
+    dragHandle.Selectable = false
+    dragHandle.ZIndex = 1
+    dragHandle.Parent = header
 
     local headerLabel = Instance.new("TextLabel")
     headerLabel.Name = "Title"
@@ -540,6 +665,7 @@ local function createKeybindHud()
     headerLabel.TextXAlignment = Enum.TextXAlignment.Left
     headerLabel.TextYAlignment = Enum.TextYAlignment.Center
     headerLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    headerLabel.ZIndex = 2
     headerLabel.Parent = header
 
     local closeBtn = Instance.new("TextButton")
@@ -623,6 +749,10 @@ local function createKeybindHud()
         end
 
         frame.Visible = shown > 0 and not hud.closed
+
+        if not frame.Visible then
+            stopDrag()
+        end
     end
 
     local function clampPosition(x, y)
@@ -642,10 +772,6 @@ local function createKeybindHud()
     end
 
     local function place()
-        if userMoved then
-            return
-        end
-
         local camera = workspace.CurrentCamera
 
         if not camera then
@@ -658,19 +784,26 @@ local function createKeybindHud()
         frame.Position = UDim2.new(0, HUD_MARGIN, 0, math.floor((viewport.Y - size.Y) / 2))
     end
 
-    connections[#connections + 1] = frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
+    local function settle()
+        if userMoved then
+            local x, y = clampPosition(posX, posY)
+
+            posX, posY = x, y
+            frame.Position = UDim2.new(0, x, 0, y)
+        else
+            place()
+        end
+    end
+
+    connections[#connections + 1] = frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(settle)
 
     if workspace.CurrentCamera then
-        connections[#connections + 1] = workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(place)
+        connections[#connections + 1] = workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(settle)
     end
 
     -- Drag
-    local dragging = false
-    local dragStart
-    local startX, startY = 0, 0
-
-    connections[#connections + 1] = header.InputBegan:Connect(function(input)
-        if not hud.draggable then
+    connections[#connections + 1] = dragHandle.InputBegan:Connect(function(input)
+        if not hud.draggable or dragging then
             return
         end
 
@@ -680,20 +813,10 @@ local function createKeybindHud()
         end
 
         dragging = true
+        dragInput = input
         dragStart = input.Position
         startX = frame.AbsolutePosition.X
         startY = frame.AbsolutePosition.Y
-
-        local changed
-        changed = input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-
-                if changed then
-                    changed:Disconnect()
-                end
-            end
-        end)
     end)
 
     connections[#connections + 1] = userInputService.InputChanged:Connect(function(input)
@@ -701,16 +824,38 @@ local function createKeybindHud()
             return
         end
 
-        if input.UserInputType ~= Enum.UserInputType.MouseMovement
-        and input.UserInputType ~= Enum.UserInputType.Touch then
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            if not userInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+                stopDrag()
+                return
+            end
+        elseif input.UserInputType == Enum.UserInputType.Touch then
+            if input ~= dragInput then
+                return
+            end
+        else
             return
         end
 
         local delta = input.Position - dragStart
+
+        if not userMoved and delta.Magnitude < 3 then
+            return
+        end
+
         local x, y = clampPosition(startX + delta.X, startY + delta.Y)
 
         userMoved = true
+        posX, posY = x, y
         frame.Position = UDim2.new(0, x, 0, y)
+    end)
+
+    connections[#connections + 1] = userInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            stopDrag()
+        elseif input.UserInputType == Enum.UserInputType.Touch and input == dragInput then
+            stopDrag()
+        end
     end)
 
     -- Close
@@ -727,7 +872,7 @@ local function createKeybindHud()
     end)
 
     connections[#connections + 1] = closeBtn.Activated:Connect(function()
-        dragging = false
+        stopDrag()
         hud.closed = true
         refresh()
     end)
@@ -766,30 +911,10 @@ local function createKeybindHud()
         rowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         rowStroke.Parent = row
 
-        local dot = Instance.new("Frame")
-        dot.Name = "Status"
-        dot.Size = UDim2.new(0, 6, 0, 6)
-        dot.AnchorPoint = Vector2.new(0, 0.5)
-        dot.Position = UDim2.new(0, 11, 0.5, 0)
-        dot.BackgroundColor3 = Default.Active
-        dot.BorderSizePixel = 0
-        dot.Parent = row
-
-        local dotCorner = Instance.new("UICorner")
-        dotCorner.CornerRadius = UDim.new(1, 0)
-        dotCorner.Parent = dot
-
-        local dotGlow = Instance.new("UIStroke")
-        dotGlow.Color = Default.Active
-        dotGlow.Thickness = 3
-        dotGlow.Transparency = 0.8
-        dotGlow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        dotGlow.Parent = dot
-
         local nameLabel = Instance.new("TextLabel")
         nameLabel.Name = "Name"
-        nameLabel.Position = UDim2.new(0, 26, 0, 0)
-        nameLabel.Size = UDim2.new(1, -(26 + HUD_PILL_W + 14), 1, 0)
+        nameLabel.Position = UDim2.new(0, 10, 0, 0)
+        nameLabel.Size = UDim2.new(1, -(10 + HUD_PILL_W + 14), 1, 0)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Text = ""
         nameLabel.TextColor3 = Default.Active
@@ -871,6 +996,10 @@ local function createKeybindHud()
 
     function hud:SetDraggable(value)
         hud.draggable = value ~= false
+
+        if not hud.draggable then
+            stopDrag()
+        end
     end
 
     function hud:ResetPosition()
@@ -897,6 +1026,8 @@ local function createKeybindHud()
         if env.EcoHubKeybindHud == hud then
             env.EcoHubKeybindHud = nil
         end
+
+        stopDrag()
 
         for _, conn in ipairs(connections) do
             conn:Disconnect()
@@ -959,6 +1090,7 @@ Elements.Register("Checkbox", function(section, options)
     local connections = {}
     local destroyed = false
     local listeningConnection
+    local listeningWheelConnection
     local listenStartedAt = 0
     local unwatchTheme
 
@@ -1258,11 +1390,20 @@ Elements.Register("Checkbox", function(section, options)
         keyLabel.TextColor3 = Colors.Inactive
     end
 
-    local function stopListening()
+    local function disconnectListening()
         if listeningConnection then
             listeningConnection:Disconnect()
             listeningConnection = nil
         end
+
+        if listeningWheelConnection then
+            listeningWheelConnection:Disconnect()
+            listeningWheelConnection = nil
+        end
+    end
+
+    local function stopListening()
+        disconnectListening()
 
         if data.listening then
             env.EcoHubBinding = nil
@@ -1291,6 +1432,13 @@ Elements.Register("Checkbox", function(section, options)
         keyLabel.Text = "..."
         keyLabel.TextColor3 = Colors.Active
 
+        local function accept(newBind)
+            data.keybind = newBind
+            stopListening()
+            showKeybindHud()
+            notify(("'%s' -> %s"):format(title, getKeyName(newBind)), 3)
+        end
+
         listeningConnection = userInputService.InputBegan:Connect(function(input)
             if destroyed or not data.listening then
                 return
@@ -1300,13 +1448,13 @@ Elements.Register("Checkbox", function(section, options)
                 return
             end
 
-            local newBind
+            local inputType = input.UserInputType
 
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.MouseButton2
-            or input.UserInputType == Enum.UserInputType.MouseButton3 then
-                newBind = input.UserInputType
-            elseif input.UserInputType == Enum.UserInputType.Keyboard then
+            if inputType == Enum.UserInputType.MouseButton1
+            or inputType == Enum.UserInputType.MouseButton2
+            or inputType == Enum.UserInputType.MouseButton3 then
+                accept(inputType)
+            elseif inputType == Enum.UserInputType.Keyboard then
                 if input.KeyCode == Enum.KeyCode.Escape then
                     data.keybind = nil
                     stopListening()
@@ -1314,14 +1462,31 @@ Elements.Register("Checkbox", function(section, options)
                     return
                 end
 
-                newBind = input.KeyCode
+                if input.KeyCode ~= Enum.KeyCode.Unknown then
+                    accept(input.KeyCode)
+                end
+            elseif inputType.Name:find("^Gamepad") and input.KeyCode ~= Enum.KeyCode.Unknown then
+                accept(input.KeyCode)
+            end
+        end)
+
+        listeningWheelConnection = userInputService.InputChanged:Connect(function(input)
+            if destroyed or not data.listening then
+                return
             end
 
-            if newBind then
-                data.keybind = newBind
-                stopListening()
-                showKeybindHud()
-                notify(("'%s' -> %s"):format(title, getKeyName(newBind)), 3)
+            if input.UserInputType ~= Enum.UserInputType.MouseWheel then
+                return
+            end
+
+            if os.clock() - listenStartedAt < 0.15 then
+                return
+            end
+
+            local z = input.Position.Z
+
+            if z ~= 0 then
+                accept(z > 0 and WHEEL_UP or WHEEL_DOWN)
             end
         end)
     end
@@ -1351,7 +1516,7 @@ Elements.Register("Checkbox", function(section, options)
     end
 
     if hasKeybind then
-        connect(userInputService.InputBegan, function(input, gp)
+        local function handleBindInput(input, gp)
             if destroyed or gp or data.disabled or data.listening then
                 return
             end
@@ -1367,6 +1532,14 @@ Elements.Register("Checkbox", function(section, options)
             if matchInput(data.keybind, input) then
                 toggle()
                 fireKeybindCallback(data.state)
+            end
+        end
+
+        connect(userInputService.InputBegan, handleBindInput)
+
+        connect(userInputService.InputChanged, function(input, gp)
+            if input.UserInputType == Enum.UserInputType.MouseWheel then
+                handleBindInput(input, gp)
             end
         end)
 
@@ -1531,10 +1704,7 @@ Elements.Register("Checkbox", function(section, options)
             data.listening = false
         end
 
-        if listeningConnection then
-            listeningConnection:Disconnect()
-            listeningConnection = nil
-        end
+        disconnectListening()
 
         if unwatchTheme then
             unwatchTheme()
