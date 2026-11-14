@@ -1,6 +1,7 @@
 -- // Services
 local userInputService = UserInputService or game:GetService("UserInputService")
 local tweenService = game:GetService("TweenService")
+local runService = game:GetService("RunService")
 local players = game:GetService("Players")
 local env = getgenv and getgenv() or _G
 
@@ -17,29 +18,99 @@ local Default = {
     GradientTop = Color3.fromRGB(38, 38, 38),
 }
 
-local function createColors(panel)
-    local building = true
+local THEME_KEYS = {
+    "Active",
+    "Inactive",
+    "Dim",
+    "Accent",
+    "Border",
+    "BorderHover",
+    "Palette",
+    "Background",
+    "GradientTop",
+}
 
+-- // ThemeWatcher
+local themeWatchers = {}
+local themeConnection
+
+local function startThemeWatcher()
+    if themeConnection then
+        return
+    end
+
+    local elapsed = 0
+
+    themeConnection = runService.Heartbeat:Connect(function(dt)
+        elapsed = elapsed + dt
+
+        if elapsed < 0.25 then
+            return
+        end
+
+        elapsed = 0
+
+        for check in pairs(themeWatchers) do
+            check()
+        end
+    end)
+end
+
+local function stopThemeWatcher()
+    if themeConnection and next(themeWatchers) == nil then
+        themeConnection:Disconnect()
+        themeConnection = nil
+    end
+end
+
+local function createColors(panel)
     local colors = setmetatable({}, {
         __index = function(_, key)
-            if not building then
-                local theme = panel and panel.Theme
-                local live = theme and theme[key]
+            local theme = panel and panel.Theme
+            local live = type(theme) == "table" and theme[key] or nil
 
-                if typeof(live) == "Color3" then
-                    return live
-                end
+            if typeof(live) == "Color3" then
+                return live
             end
 
             return Default[key]
         end
     })
 
-    local function finish()
-        building = false
+    local function signature()
+        local parts = {}
+
+        for index, key in ipairs(THEME_KEYS) do
+            parts[index] = tostring(colors[key])
+        end
+
+        return table.concat(parts, "|")
     end
 
-    return colors, finish
+    local lastSignature = signature()
+
+    local function watch(apply)
+        local function check()
+            local current = signature()
+
+            if current == lastSignature then
+                return
+            end
+
+            lastSignature = current
+            pcall(apply)
+        end
+
+        themeWatchers[check] = true
+        startThemeWatcher()
+
+        return function()
+            themeWatchers[check] = nil
+            stopThemeWatcher()
+        end
+    end
+
+    return colors, watch
 end
 
 -- // Config
@@ -369,10 +440,12 @@ local function matchInput(binding, input)
 end
 
 -- // KeybindHud
-local HUD_WIDTH = 190
-local HUD_HEADER_H = 26
-local HUD_ROW_H = 22
-local HUD_PILL_W = 52
+local HUD_WIDTH = 200
+local HUD_HEADER_H = 32
+local HUD_ROW_H = 24
+local HUD_PILL_W = 54
+local HUD_ON = Color3.fromRGB(74, 222, 128)
+local HUD_OFF = Color3.fromRGB(82, 82, 82)
 
 local keybindHud
 
@@ -401,9 +474,12 @@ local function createKeybindHud()
         order = 0,
     }
 
+    local connections = {}
+
     local gui = Instance.new("ScreenGui")
     gui.Name = "EcoHubKeybindHud"
     gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
     gui.DisplayOrder = 50
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     gui.Parent = parent
@@ -416,15 +492,20 @@ local function createKeybindHud()
     frame.Position = UDim2.new(0, 12, 0, 12)
     frame.Size = UDim2.new(0, HUD_WIDTH, 0, 0)
     frame.AutomaticSize = Enum.AutomaticSize.Y
-    frame.BackgroundColor3 = Default.Background
-    frame.BackgroundTransparency = 0.05
+    frame.BackgroundColor3 = Color3.new(1, 1, 1)
+    frame.BackgroundTransparency = 0.04
     frame.BorderSizePixel = 0
     frame.Visible = false
     frame.Parent = gui
 
     local frameCorner = Instance.new("UICorner")
-    frameCorner.CornerRadius = UDim.new(0, 8)
+    frameCorner.CornerRadius = UDim.new(0, 10)
     frameCorner.Parent = frame
+
+    local frameGradient = Instance.new("UIGradient")
+    frameGradient.Color = ColorSequence.new(Default.GradientTop, Default.Background)
+    frameGradient.Rotation = 90
+    frameGradient.Parent = frame
 
     local frameStroke = Instance.new("UIStroke")
     frameStroke.Color = Default.Border
@@ -432,17 +513,10 @@ local function createKeybindHud()
     frameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     frameStroke.Parent = frame
 
-    local framePadding = Instance.new("UIPadding")
-    framePadding.PaddingTop = UDim.new(0, 6)
-    framePadding.PaddingBottom = UDim.new(0, 6)
-    framePadding.PaddingLeft = UDim.new(0, 8)
-    framePadding.PaddingRight = UDim.new(0, 8)
-    framePadding.Parent = frame
-
     local frameLayout = Instance.new("UIListLayout")
     frameLayout.FillDirection = Enum.FillDirection.Vertical
     frameLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    frameLayout.Padding = UDim.new(0, 2)
+    frameLayout.Padding = UDim.new(0, 0)
     frameLayout.Parent = frame
 
     local header = Instance.new("Frame")
@@ -450,13 +524,19 @@ local function createKeybindHud()
     header.Size = UDim2.new(1, 0, 0, HUD_HEADER_H)
     header.BackgroundTransparency = 1
     header.LayoutOrder = 0
+    header.Active = true
     header.Parent = frame
+
+    local headerPadding = Instance.new("UIPadding")
+    headerPadding.PaddingLeft = UDim.new(0, 12)
+    headerPadding.PaddingRight = UDim.new(0, 8)
+    headerPadding.Parent = header
 
     local headerLabel = Instance.new("TextLabel")
     headerLabel.Name = "Title"
     headerLabel.Size = UDim2.new(1, -26, 1, 0)
     headerLabel.BackgroundTransparency = 1
-    headerLabel.Text = Emoji.Parse(":key: Keybinds")
+    headerLabel.Text = Emoji.Parse(":key: Key Bind")
     headerLabel.TextColor3 = Default.Active
     headerLabel.TextSize = 13
     headerLabel.Font = fontBold
@@ -475,11 +555,18 @@ local function createKeybindHud()
     closeBtn.Text = ""
     closeBtn.AutoButtonColor = false
     closeBtn.Selectable = false
+    closeBtn.ZIndex = 2
     closeBtn.Parent = header
 
     local closeCorner = Instance.new("UICorner")
     closeCorner.CornerRadius = UDim.new(0, 5)
     closeCorner.Parent = closeBtn
+
+    local closeStroke = Instance.new("UIStroke")
+    closeStroke.Color = Default.Border
+    closeStroke.Thickness = 1
+    closeStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    closeStroke.Parent = closeBtn
 
     local closeLines = {}
 
@@ -492,7 +579,7 @@ local function createKeybindHud()
         line.Rotation = rotation
         line.BackgroundColor3 = Default.Inactive
         line.BorderSizePixel = 0
-        line.ZIndex = 2
+        line.ZIndex = 3
         line.Parent = closeBtn
 
         local lineCorner = Instance.new("UICorner")
@@ -502,8 +589,38 @@ local function createKeybindHud()
         closeLines[#closeLines + 1] = line
     end
 
+    local divider = Instance.new("Frame")
+    divider.Name = "Divider"
+    divider.Size = UDim2.new(1, 0, 0, 1)
+    divider.BackgroundColor3 = Default.Border
+    divider.BorderSizePixel = 0
+    divider.LayoutOrder = 1
+    divider.Parent = frame
+
+    local body = Instance.new("Frame")
+    body.Name = "Body"
+    body.Size = UDim2.new(1, 0, 0, 0)
+    body.AutomaticSize = Enum.AutomaticSize.Y
+    body.BackgroundTransparency = 1
+    body.LayoutOrder = 2
+    body.Parent = frame
+
+    local bodyPadding = Instance.new("UIPadding")
+    bodyPadding.PaddingTop = UDim.new(0, 6)
+    bodyPadding.PaddingBottom = UDim.new(0, 6)
+    bodyPadding.PaddingLeft = UDim.new(0, 12)
+    bodyPadding.PaddingRight = UDim.new(0, 8)
+    bodyPadding.Parent = body
+
+    local bodyLayout = Instance.new("UIListLayout")
+    bodyLayout.FillDirection = Enum.FillDirection.Vertical
+    bodyLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    bodyLayout.Padding = UDim.new(0, 2)
+    bodyLayout.Parent = body
+
     local function setCloseHover(hovering)
         closeBtn.BackgroundColor3 = hovering and Default.Accent or Default.Palette
+        closeStroke.Color = hovering and Default.BorderHover or Default.Border
 
         for _, line in ipairs(closeLines) do
             line.BackgroundColor3 = hovering and Default.Active or Default.Inactive
@@ -522,15 +639,75 @@ local function createKeybindHud()
         frame.Visible = count > 0 and not hud.closed
     end
 
-    closeBtn.MouseEnter:Connect(function()
+    local function clampPosition(x, y)
+        local camera = workspace.CurrentCamera
+
+        if not camera then
+            return x, y
+        end
+
+        local viewport = camera.ViewportSize
+        local size = frame.AbsoluteSize
+
+        x = math.clamp(x, 0, math.max(viewport.X - size.X, 0))
+        y = math.clamp(y, 0, math.max(viewport.Y - size.Y, 0))
+
+        return x, y
+    end
+
+    local dragging = false
+    local dragStart
+    local startX, startY = 0, 0
+
+    connections[#connections + 1] = header.InputBegan:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1
+        and input.UserInputType ~= Enum.UserInputType.Touch then
+            return
+        end
+
+        dragging = true
+        dragStart = input.Position
+        startX = frame.Position.X.Offset
+        startY = frame.Position.Y.Offset
+
+        local changed
+        changed = input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+
+                if changed then
+                    changed:Disconnect()
+                end
+            end
+        end)
+    end)
+
+    connections[#connections + 1] = userInputService.InputChanged:Connect(function(input)
+        if not dragging or not dragStart then
+            return
+        end
+
+        if input.UserInputType ~= Enum.UserInputType.MouseMovement
+        and input.UserInputType ~= Enum.UserInputType.Touch then
+            return
+        end
+
+        local delta = input.Position - dragStart
+        local x, y = clampPosition(startX + delta.X, startY + delta.Y)
+
+        frame.Position = UDim2.new(0, x, 0, y)
+    end)
+
+    connections[#connections + 1] = closeBtn.MouseEnter:Connect(function()
         setCloseHover(true)
     end)
 
-    closeBtn.MouseLeave:Connect(function()
+    connections[#connections + 1] = closeBtn.MouseLeave:Connect(function()
         setCloseHover(false)
     end)
 
-    closeBtn.Activated:Connect(function()
+    connections[#connections + 1] = closeBtn.Activated:Connect(function()
+        dragging = false
         hud.closed = true
         refresh()
     end)
@@ -548,14 +725,28 @@ local function createKeybindHud()
         row.BackgroundTransparency = 1
         row.LayoutOrder = hud.order
         row.Visible = false
-        row.Parent = frame
+        row.Parent = body
+
+        local dot = Instance.new("Frame")
+        dot.Name = "Status"
+        dot.Size = UDim2.new(0, 6, 0, 6)
+        dot.AnchorPoint = Vector2.new(0, 0.5)
+        dot.Position = UDim2.new(0, 0, 0.5, 0)
+        dot.BackgroundColor3 = HUD_OFF
+        dot.BorderSizePixel = 0
+        dot.Parent = row
+
+        local dotCorner = Instance.new("UICorner")
+        dotCorner.CornerRadius = UDim.new(1, 0)
+        dotCorner.Parent = dot
 
         local nameLabel = Instance.new("TextLabel")
         nameLabel.Name = "Name"
-        nameLabel.Size = UDim2.new(1, -(HUD_PILL_W + 6), 1, 0)
+        nameLabel.Position = UDim2.new(0, 14, 0, 0)
+        nameLabel.Size = UDim2.new(1, -(14 + HUD_PILL_W + 6), 1, 0)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Text = ""
-        nameLabel.TextColor3 = Default.Active
+        nameLabel.TextColor3 = Default.Dim
         nameLabel.TextSize = 12
         nameLabel.Font = fontBold
         nameLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -565,10 +756,11 @@ local function createKeybindHud()
 
         local keyLabel = Instance.new("TextLabel")
         keyLabel.Name = "Key"
-        keyLabel.Size = UDim2.new(0, HUD_PILL_W, 0, 18)
+        keyLabel.Size = UDim2.new(0, 0, 0, 20)
+        keyLabel.AutomaticSize = Enum.AutomaticSize.X
         keyLabel.AnchorPoint = Vector2.new(1, 0.5)
         keyLabel.Position = UDim2.new(1, 0, 0.5, 0)
-        keyLabel.BackgroundColor3 = Default.Palette
+        keyLabel.BackgroundColor3 = Color3.new(1, 1, 1)
         keyLabel.BorderSizePixel = 0
         keyLabel.Text = ""
         keyLabel.TextColor3 = Default.Inactive
@@ -580,8 +772,13 @@ local function createKeybindHud()
         keyLabel.Parent = row
 
         local keyCorner = Instance.new("UICorner")
-        keyCorner.CornerRadius = UDim.new(0, 4)
+        keyCorner.CornerRadius = UDim.new(0, 5)
         keyCorner.Parent = keyLabel
+
+        local keyGradient = Instance.new("UIGradient")
+        keyGradient.Color = ColorSequence.new(Default.GradientTop, Default.Palette)
+        keyGradient.Rotation = 90
+        keyGradient.Parent = keyLabel
 
         local keyStroke = Instance.new("UIStroke")
         keyStroke.Color = Default.Border
@@ -589,7 +786,20 @@ local function createKeybindHud()
         keyStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         keyStroke.Parent = keyLabel
 
-        function entry:Update(title, keyText)
+        local keyPadding = Instance.new("UIPadding")
+        keyPadding.PaddingLeft = UDim.new(0, 6)
+        keyPadding.PaddingRight = UDim.new(0, 6)
+        keyPadding.Parent = keyLabel
+
+        local keySize = Instance.new("UISizeConstraint")
+        keySize.MinSize = Vector2.new(22, 20)
+        keySize.MaxSize = Vector2.new(HUD_PILL_W, 20)
+        keySize.Parent = keyLabel
+
+        function entry:Update(title, keyText, state)
+            local on = state == true
+            local animate = row.Visible
+
             nameLabel.Text = tostring(title or "")
 
             if keyText then
@@ -598,6 +808,10 @@ local function createKeybindHud()
             else
                 entry.active = false
             end
+
+            play(dot, { BackgroundColor3 = on and HUD_ON or HUD_OFF }, animate)
+            play(nameLabel, { TextColor3 = on and Default.Active or Default.Dim }, animate)
+            play(keyLabel, { TextColor3 = on and Default.Active or Default.Inactive }, animate)
 
             row.Visible = entry.active
             refresh()
@@ -634,6 +848,11 @@ local function createKeybindHud()
             env.EcoHubKeybindHud = nil
         end
 
+        for _, conn in ipairs(connections) do
+            conn:Disconnect()
+        end
+
+        table.clear(connections)
         gui:Destroy()
     end
 
@@ -683,7 +902,7 @@ Elements.Register("Checkbox", function(section, options)
     local PILL_H = 20
     local BASE_H = 30
 
-    local Colors, finishTheme = createColors(section.Panel or Panel)
+    local Colors, watchTheme = createColors(section.Panel or Panel)
     local fontBold, fontRegular = getFonts()
     local isDesktop = userInputService.KeyboardEnabled
 
@@ -691,6 +910,7 @@ Elements.Register("Checkbox", function(section, options)
     local destroyed = false
     local listeningConnection
     local listenStartedAt = 0
+    local unwatchTheme
 
     local function connect(signal, fn)
         local conn = signal:Connect(fn)
@@ -754,7 +974,7 @@ Elements.Register("Checkbox", function(section, options)
             return
         end
 
-        hudEntry:Update(buildTitle(), data.keybind and getKeyName(data.keybind) or nil)
+        hudEntry:Update(buildTitle(), data.keybind and getKeyName(data.keybind) or nil, data.state)
     end
 
     local rightReserve = SWITCH_W + SIDE_PAD + 10
@@ -817,7 +1037,7 @@ Elements.Register("Checkbox", function(section, options)
         descLabel.AutomaticSize = Enum.AutomaticSize.Y
         descLabel.BackgroundTransparency = 1
         descLabel.Text = breakLongWords(text, WORD_MAX)
-        descLabel.TextColor3 = Default.Dim
+        descLabel.TextColor3 = Colors.Dim
         descLabel.TextSize = DESC_SIZE
         descLabel.Font = fontRegular
         descLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -943,6 +1163,8 @@ Elements.Register("Checkbox", function(section, options)
         }, animate)
 
         rowButton.Active = not data.disabled
+
+        syncHud()
     end
 
     local function fireCallback(value)
@@ -1052,6 +1274,30 @@ Elements.Register("Checkbox", function(section, options)
                 notify(("'%s' -> %s"):format(title, getKeyName(newBind)), 3)
             end
         end)
+    end
+
+    local function applyTheme()
+        if destroyed then
+            return
+        end
+
+        label.TextColor3 = Colors.Active
+
+        if descLabel then
+            descLabel.TextColor3 = Colors.Dim
+        end
+
+        updateVisuals(false)
+
+        if keyBtn then
+            if data.listening then
+                keyBtn.BackgroundColor3 = Colors.Accent
+                keyStroke.Color = Colors.Active
+                keyLabel.TextColor3 = Colors.Active
+            else
+                resetKeyVisual()
+            end
+        end
     end
 
     if hasKeybind then
@@ -1240,6 +1486,11 @@ Elements.Register("Checkbox", function(section, options)
             listeningConnection = nil
         end
 
+        if unwatchTheme then
+            unwatchTheme()
+            unwatchTheme = nil
+        end
+
         if hudEntry then
             hudEntry:Remove()
             hudEntry = nil
@@ -1253,7 +1504,7 @@ Elements.Register("Checkbox", function(section, options)
         container:Destroy()
     end
 
-    finishTheme()
+    unwatchTheme = watchTheme(applyTheme)
 
     return data
 end)
