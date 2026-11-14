@@ -41,35 +41,102 @@ local DERIVED = {
 }
 
 -- // ThemeWatcher
-local themeWatchers = {}
+local themeGroups = {}
 local themeConnection
+local NO_PANEL = {}
+
+local function resolveColor(panel, key)
+    local theme = type(panel) == "table" and panel.Theme or nil
+    local live = type(theme) == "table" and theme[key] or nil
+
+    if typeof(live) == "Color3" then
+        return live
+    end
+
+    return Default[key]
+end
+
+local function checkGroup(group)
+    local changed = false
+
+    for _, key in ipairs(THEME_KEYS) do
+        local current = resolveColor(group.panel, key)
+
+        if group.last[key] ~= current then
+            group.last[key] = current
+            changed = true
+        end
+    end
+
+    if not changed then
+        return
+    end
+
+    for apply in pairs(group.callbacks) do
+        pcall(apply)
+    end
+end
 
 local function startThemeWatcher()
     if themeConnection then
         return
     end
 
-    local elapsed = 0
-
-    themeConnection = runService.Heartbeat:Connect(function(dt)
-        elapsed = elapsed + dt
-
-        if elapsed < 0.25 then
-            return
-        end
-
-        elapsed = 0
-
-        for check in pairs(themeWatchers) do
-            check()
+    themeConnection = runService.Heartbeat:Connect(function()
+        for _, group in pairs(themeGroups) do
+            checkGroup(group)
         end
     end)
 end
 
 local function stopThemeWatcher()
-    if themeConnection and next(themeWatchers) == nil then
+    if themeConnection and next(themeGroups) == nil then
         themeConnection:Disconnect()
         themeConnection = nil
+    end
+end
+
+local function watchGroup(panel, apply)
+    local id = panel or NO_PANEL
+    local group = themeGroups[id]
+
+    if not group then
+        group = { panel = panel, last = {}, callbacks = {} }
+
+        for _, key in ipairs(THEME_KEYS) do
+            group.last[key] = resolveColor(panel, key)
+        end
+
+        if type(panel) == "table" then
+            pcall(function()
+                local signal = panel.ThemeChanged
+
+                if typeof(signal) == "RBXScriptSignal" then
+                    group.signal = signal:Connect(function()
+                        checkGroup(group)
+                    end)
+                end
+            end)
+        end
+
+        themeGroups[id] = group
+    end
+
+    group.callbacks[apply] = true
+    startThemeWatcher()
+
+    return function()
+        group.callbacks[apply] = nil
+
+        if next(group.callbacks) == nil then
+            if group.signal then
+                group.signal:Disconnect()
+                group.signal = nil
+            end
+
+            themeGroups[id] = nil
+            stopThemeWatcher()
+        end
     end
 end
 
@@ -78,17 +145,15 @@ local function createColors(panel)
 
     colors = setmetatable({}, {
         __index = function(_, key)
-            local theme = panel and panel.Theme
+            if Default[key] then
+                return resolveColor(panel, key)
+            end
+
+            local theme = type(panel) == "table" and panel.Theme or nil
             local live = type(theme) == "table" and theme[key] or nil
 
             if typeof(live) == "Color3" then
                 return live
-            end
-
-            local base = Default[key]
-
-            if base then
-                return base
             end
 
             local derive = DERIVED[key]
@@ -102,36 +167,7 @@ local function createColors(panel)
     })
 
     local function watch(apply)
-        local last = {}
-
-        for _, key in ipairs(THEME_KEYS) do
-            last[key] = colors[key]
-        end
-
-        local function check()
-            local changed = false
-
-            for _, key in ipairs(THEME_KEYS) do
-                local current = colors[key]
-
-                if last[key] ~= current then
-                    last[key] = current
-                    changed = true
-                end
-            end
-
-            if changed then
-                pcall(apply)
-            end
-        end
-
-        themeWatchers[check] = true
-        startThemeWatcher()
-
-        return function()
-            themeWatchers[check] = nil
-            stopThemeWatcher()
-        end
+        return watchGroup(panel, apply)
     end
 
     return colors, watch
@@ -219,6 +255,7 @@ Elements.Register("Dropdown", function(section, options)
     local unwatchTheme
     local fieldHover = false
     local fieldPressed = false
+    local clearHover = false
     local searchFocused = false
     local openedAt = 0
     local visibleCount = 0
@@ -256,6 +293,18 @@ Elements.Register("Dropdown", function(section, options)
         return table.concat(lines, "\n")
     end
 
+    local running = {}
+
+    local function settle(obj)
+        local tween = running[obj]
+        if tween then
+            running[obj] = nil
+            pcall(function()
+                tween:Cancel()
+            end)
+        end
+    end
+
     local function tw(obj, info, props, force)
         if destroyed or not obj or not obj.Parent then return end
         if LOW_END and not force then
@@ -265,7 +314,15 @@ Elements.Register("Dropdown", function(section, options)
             return
         end
         pcall(function()
-            tweenService:Create(obj, info, props):Play()
+            settle(obj)
+            local tween = tweenService:Create(obj, info, props)
+            running[obj] = tween
+            tween.Completed:Connect(function()
+                if running[obj] == tween then
+                    running[obj] = nil
+                end
+            end)
+            tween:Play()
         end)
     end
 
@@ -291,7 +348,7 @@ Elements.Register("Dropdown", function(section, options)
     local disabled = options.disabled == true
     local callback = options.callback or options.Callback
     local placeholder = tostring(options.placeholder or "Select...")
-    local allowDeselect = options.allowDeselect ~= false
+    local allowDeselect = options.allowDeselect == true
 
     if type(callback) ~= "function" then
         callback = function() end
@@ -652,7 +709,6 @@ Elements.Register("Dropdown", function(section, options)
         if multi then
             local sel = getSelectedList()
             if #sel == 0 then return placeholder end
-            if #sel > 2 then return #sel .. " selected" end
             local names = {}
             for i, v in ipairs(sel) do
                 names[i] = tostring(v)
@@ -729,6 +785,10 @@ Elements.Register("Dropdown", function(section, options)
     local function applyTheme()
         if destroyed then return end
 
+        for _, obj in ipairs({ field, fStroke, fieldText, fieldIcon, searchIcon, clearBtn }) do
+            settle(obj)
+        end
+
         titleLabel.TextColor3 = data.disabled and Colors.BorderHover or Colors.Active
 
         if descLabel then
@@ -737,6 +797,7 @@ Elements.Register("Dropdown", function(section, options)
 
         field.BackgroundColor3 = fieldBgColor()
         fStroke.Color = fieldStrokeColor()
+        fieldIcon.Rotation = data.expanded and 180 or 0
         fieldIcon.ImageColor3 = data.expanded and Colors.Inactive or Colors.Dim
 
         panel.BackgroundColor3 = Colors.Background
@@ -744,11 +805,14 @@ Elements.Register("Dropdown", function(section, options)
         searchIcon.ImageColor3 = searchIconColor()
         searchBox.TextColor3 = Colors.Active
         searchBox.PlaceholderColor3 = Colors.Dim
-        clearBtn.ImageColor3 = Colors.Dim
+        clearBtn.ImageColor3 = clearHover and Colors.Inactive or Colors.Dim
         scroll.ScrollBarImageColor3 = Colors.BorderHover
         emptyLabel.TextColor3 = Colors.Inactive
 
         for _, row in ipairs(optRows) do
+            settle(row.frame)
+            settle(row.label)
+            settle(row.check)
             row.check.ImageColor3 = Colors.Inactive
             updateRow(row, false)
         end
@@ -888,10 +952,21 @@ Elements.Register("Dropdown", function(section, options)
         end)
     end
 
+    local function selectedCount()
+        local count = 0
+        for _ in pairs(data.value) do
+            count = count + 1
+        end
+        return count
+    end
+
     local function selectValue(value)
         if destroyed or data.disabled then return end
         if multi then
             if data.value[value] then
+                if not allowDeselect and selectedCount() <= 1 then
+                    return
+                end
                 data.value[value] = nil
             else
                 data.value[value] = true
@@ -1036,6 +1111,9 @@ Elements.Register("Dropdown", function(section, options)
         local token = buildToken
         clearRowConnections()
         for _, row in ipairs(optRows) do
+            settle(row.frame)
+            settle(row.label)
+            settle(row.check)
             if row.frame then row.frame:Destroy() end
         end
         optRows = {}
@@ -1192,10 +1270,12 @@ Elements.Register("Dropdown", function(section, options)
 
     connect(clearBtn.MouseEnter, function()
         if usingTouch() then return end
+        clearHover = true
         tw(clearBtn, TI_HOVER, { ImageColor3 = Colors.Inactive })
     end)
 
     connect(clearBtn.MouseLeave, function()
+        clearHover = false
         tw(clearBtn, TI_HOVER, { ImageColor3 = Colors.Dim })
     end)
 
@@ -1351,6 +1431,10 @@ Elements.Register("Dropdown", function(section, options)
         applyHeader()
     end
 
+    function data:RefreshTheme()
+        applyTheme()
+    end
+
     function data:Open()
         openOverlay()
     end
@@ -1372,6 +1456,9 @@ Elements.Register("Dropdown", function(section, options)
             unwatchTheme()
             unwatchTheme = nil
         end
+        for obj in pairs(running) do
+            settle(obj)
+        end
         clearRowConnections()
         for _, conn in ipairs(connections) do
             conn:Disconnect()
@@ -1385,6 +1472,8 @@ Elements.Register("Dropdown", function(section, options)
     end)
 
     unwatchTheme = watchTheme(applyTheme)
+
+    applyTheme()
 
     return data
 end)
