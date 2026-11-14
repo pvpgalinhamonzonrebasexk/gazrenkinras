@@ -440,12 +440,30 @@ local function matchInput(binding, input)
 end
 
 -- // KeybindHud
-local HUD_WIDTH = 200
-local HUD_HEADER_H = 32
-local HUD_ROW_H = 24
-local HUD_PILL_W = 54
+local HUD_WIDTH = 232
+local HUD_HEADER_H = 38
+local HUD_ROW_H = 30
+local HUD_PILL_W = 58
+local HUD_MARGIN = 12
+
+local HUD_BG_TOP = Color3.fromRGB(68, 68, 80)
+local HUD_BG_BOTTOM = Color3.fromRGB(46, 46, 56)
+local HUD_BORDER = Color3.fromRGB(104, 104, 122)
+local HUD_ROW = Color3.fromRGB(80, 80, 96)
+local HUD_TEXT = Color3.fromRGB(255, 255, 255)
+local HUD_SUB = Color3.fromRGB(200, 200, 212)
+local HUD_DIM = Color3.fromRGB(150, 150, 166)
 local HUD_ON = Color3.fromRGB(74, 222, 128)
-local HUD_OFF = Color3.fromRGB(82, 82, 82)
+local HUD_OFF = Color3.fromRGB(122, 122, 138)
+local HUD_CLOSE = Color3.fromRGB(255, 110, 110)
+
+local HUD_ACCENTS = {
+    Color3.fromRGB(139, 92, 246),
+    Color3.fromRGB(59, 130, 246),
+    Color3.fromRGB(34, 197, 94),
+    Color3.fromRGB(236, 72, 153),
+    Color3.fromRGB(249, 115, 22),
+}
 
 local keybindHud
 
@@ -472,9 +490,18 @@ local function createKeybindHud()
         closed = false,
         entries = {},
         order = 0,
+        accent = HUD_ACCENTS[1],
+        onlyActive = false,
+        draggable = true,
     }
 
     local connections = {}
+    local userMoved = false
+
+    local function bindHover(button, onEnter, onLeave)
+        connections[#connections + 1] = button.MouseEnter:Connect(onEnter)
+        connections[#connections + 1] = button.MouseLeave:Connect(onLeave)
+    end
 
     local gui = Instance.new("ScreenGui")
     gui.Name = "EcoHubKeybindHud"
@@ -489,29 +516,32 @@ local function createKeybindHud()
     local frame = Instance.new("Frame")
     frame.Name = "Hud"
     frame.AnchorPoint = Vector2.new(0, 0)
-    frame.Position = UDim2.new(0, 12, 0, 12)
+    frame.Position = UDim2.new(0, HUD_MARGIN, 0.5, -60)
     frame.Size = UDim2.new(0, HUD_WIDTH, 0, 0)
     frame.AutomaticSize = Enum.AutomaticSize.Y
     frame.BackgroundColor3 = Color3.new(1, 1, 1)
-    frame.BackgroundTransparency = 0.04
+    frame.BackgroundTransparency = 0.02
     frame.BorderSizePixel = 0
     frame.Visible = false
     frame.Parent = gui
 
     local frameCorner = Instance.new("UICorner")
-    frameCorner.CornerRadius = UDim.new(0, 10)
+    frameCorner.CornerRadius = UDim.new(0, 12)
     frameCorner.Parent = frame
 
     local frameGradient = Instance.new("UIGradient")
-    frameGradient.Color = ColorSequence.new(Default.GradientTop, Default.Background)
     frameGradient.Rotation = 90
     frameGradient.Parent = frame
 
     local frameStroke = Instance.new("UIStroke")
-    frameStroke.Color = Default.Border
-    frameStroke.Thickness = 1
+    frameStroke.Color = Color3.new(1, 1, 1)
+    frameStroke.Thickness = 1.5
     frameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     frameStroke.Parent = frame
+
+    local strokeGradient = Instance.new("UIGradient")
+    strokeGradient.Rotation = 90
+    strokeGradient.Parent = frameStroke
 
     local frameLayout = Instance.new("UIListLayout")
     frameLayout.FillDirection = Enum.FillDirection.Vertical
@@ -519,6 +549,7 @@ local function createKeybindHud()
     frameLayout.Padding = UDim.new(0, 0)
     frameLayout.Parent = frame
 
+    -- Header
     local header = Instance.new("Frame")
     header.Name = "Header"
     header.Size = UDim2.new(1, 0, 0, HUD_HEADER_H)
@@ -532,52 +563,146 @@ local function createKeybindHud()
     headerPadding.PaddingRight = UDim.new(0, 8)
     headerPadding.Parent = header
 
+    local badge = Instance.new("Frame")
+    badge.Name = "Badge"
+    badge.Size = UDim2.new(0, 22, 0, 22)
+    badge.AnchorPoint = Vector2.new(0, 0.5)
+    badge.Position = UDim2.new(0, 0, 0.5, 0)
+    badge.BackgroundColor3 = Color3.new(1, 1, 1)
+    badge.BorderSizePixel = 0
+    badge.Parent = header
+
+    local badgeCorner = Instance.new("UICorner")
+    badgeCorner.CornerRadius = UDim.new(0, 7)
+    badgeCorner.Parent = badge
+
+    local badgeGradient = Instance.new("UIGradient")
+    badgeGradient.Rotation = 45
+    badgeGradient.Parent = badge
+
+    local badgeIcon = Instance.new("TextLabel")
+    badgeIcon.Name = "Icon"
+    badgeIcon.Size = UDim2.new(1, 0, 1, 0)
+    badgeIcon.BackgroundTransparency = 1
+    badgeIcon.Text = Emoji.Parse(":key:")
+    badgeIcon.TextColor3 = HUD_TEXT
+    badgeIcon.TextSize = 12
+    badgeIcon.Font = fontBold
+    badgeIcon.TextXAlignment = Enum.TextXAlignment.Center
+    badgeIcon.TextYAlignment = Enum.TextYAlignment.Center
+    badgeIcon.Parent = badge
+
     local headerLabel = Instance.new("TextLabel")
     headerLabel.Name = "Title"
-    headerLabel.Size = UDim2.new(1, -26, 1, 0)
+    headerLabel.Position = UDim2.new(0, 30, 0, 0)
+    headerLabel.Size = UDim2.new(1, -(30 + 92), 1, 0)
     headerLabel.BackgroundTransparency = 1
-    headerLabel.Text = Emoji.Parse(":key: Key Bind")
-    headerLabel.TextColor3 = Default.Active
-    headerLabel.TextSize = 13
+    headerLabel.Text = "Key Bind"
+    headerLabel.TextColor3 = HUD_TEXT
+    headerLabel.TextSize = 14
     headerLabel.Font = fontBold
     headerLabel.TextXAlignment = Enum.TextXAlignment.Left
     headerLabel.TextYAlignment = Enum.TextYAlignment.Center
     headerLabel.TextTruncate = Enum.TextTruncate.AtEnd
     headerLabel.Parent = header
 
+    local headerRight = Instance.new("Frame")
+    headerRight.Name = "Right"
+    headerRight.AnchorPoint = Vector2.new(1, 0.5)
+    headerRight.Position = UDim2.new(1, 0, 0.5, 0)
+    headerRight.Size = UDim2.new(0, 0, 1, 0)
+    headerRight.AutomaticSize = Enum.AutomaticSize.X
+    headerRight.BackgroundTransparency = 1
+    headerRight.Parent = header
+
+    local rightLayout = Instance.new("UIListLayout")
+    rightLayout.FillDirection = Enum.FillDirection.Horizontal
+    rightLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    rightLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    rightLayout.Padding = UDim.new(0, 4)
+    rightLayout.Parent = headerRight
+
+    local countLabel = Instance.new("TextLabel")
+    countLabel.Name = "Count"
+    countLabel.Size = UDim2.new(0, 0, 0, 20)
+    countLabel.AutomaticSize = Enum.AutomaticSize.X
+    countLabel.BackgroundColor3 = HUD_ROW
+    countLabel.BackgroundTransparency = 0.3
+    countLabel.BorderSizePixel = 0
+    countLabel.Text = "0/0"
+    countLabel.TextColor3 = HUD_TEXT
+    countLabel.TextSize = 11
+    countLabel.Font = fontBold
+    countLabel.LayoutOrder = 0
+    countLabel.Parent = headerRight
+
+    local countCorner = Instance.new("UICorner")
+    countCorner.CornerRadius = UDim.new(1, 0)
+    countCorner.Parent = countLabel
+
+    local countPadding = Instance.new("UIPadding")
+    countPadding.PaddingLeft = UDim.new(0, 8)
+    countPadding.PaddingRight = UDim.new(0, 8)
+    countPadding.Parent = countLabel
+
+    local optionsBtn = Instance.new("TextButton")
+    optionsBtn.Name = "OptionsButton"
+    optionsBtn.Size = UDim2.new(0, 22, 0, 22)
+    optionsBtn.BackgroundTransparency = 1
+    optionsBtn.Text = ""
+    optionsBtn.AutoButtonColor = false
+    optionsBtn.Selectable = false
+    optionsBtn.LayoutOrder = 1
+    optionsBtn.ZIndex = 2
+    optionsBtn.Parent = headerRight
+
+    local optionsDotsLayout = Instance.new("UIListLayout")
+    optionsDotsLayout.FillDirection = Enum.FillDirection.Horizontal
+    optionsDotsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    optionsDotsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    optionsDotsLayout.Padding = UDim.new(0, 3)
+    optionsDotsLayout.Parent = optionsBtn
+
+    local optionsDots = {}
+
+    for index = 1, 3 do
+        local dotPart = Instance.new("Frame")
+        dotPart.Name = "Dot"
+        dotPart.Size = UDim2.new(0, 4, 0, 4)
+        dotPart.BackgroundColor3 = HUD_SUB
+        dotPart.BorderSizePixel = 0
+        dotPart.LayoutOrder = index
+        dotPart.ZIndex = 3
+        dotPart.Parent = optionsBtn
+
+        local dotCorner = Instance.new("UICorner")
+        dotCorner.CornerRadius = UDim.new(1, 0)
+        dotCorner.Parent = dotPart
+
+        optionsDots[#optionsDots + 1] = dotPart
+    end
+
     local closeBtn = Instance.new("TextButton")
     closeBtn.Name = "Close"
-    closeBtn.Size = UDim2.new(0, 20, 0, 20)
-    closeBtn.AnchorPoint = Vector2.new(1, 0.5)
-    closeBtn.Position = UDim2.new(1, 0, 0.5, 0)
-    closeBtn.BackgroundColor3 = Default.Palette
-    closeBtn.BorderSizePixel = 0
+    closeBtn.Size = UDim2.new(0, 22, 0, 22)
+    closeBtn.BackgroundTransparency = 1
     closeBtn.Text = ""
     closeBtn.AutoButtonColor = false
     closeBtn.Selectable = false
+    closeBtn.LayoutOrder = 2
     closeBtn.ZIndex = 2
-    closeBtn.Parent = header
-
-    local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(0, 5)
-    closeCorner.Parent = closeBtn
-
-    local closeStroke = Instance.new("UIStroke")
-    closeStroke.Color = Default.Border
-    closeStroke.Thickness = 1
-    closeStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    closeStroke.Parent = closeBtn
+    closeBtn.Parent = headerRight
 
     local closeLines = {}
 
     for _, rotation in ipairs({ 45, -45 }) do
         local line = Instance.new("Frame")
         line.Name = "Line"
-        line.Size = UDim2.new(0, 10, 0, 2)
+        line.Size = UDim2.new(0, 12, 0, 2)
         line.AnchorPoint = Vector2.new(0.5, 0.5)
         line.Position = UDim2.new(0.5, 0, 0.5, 0)
         line.Rotation = rotation
-        line.BackgroundColor3 = Default.Inactive
+        line.BackgroundColor3 = HUD_SUB
         line.BorderSizePixel = 0
         line.ZIndex = 3
         line.Parent = closeBtn
@@ -589,14 +714,24 @@ local function createKeybindHud()
         closeLines[#closeLines + 1] = line
     end
 
+    -- Divider
     local divider = Instance.new("Frame")
     divider.Name = "Divider"
     divider.Size = UDim2.new(1, 0, 0, 1)
-    divider.BackgroundColor3 = Default.Border
+    divider.BackgroundColor3 = Color3.new(1, 1, 1)
     divider.BorderSizePixel = 0
     divider.LayoutOrder = 1
     divider.Parent = frame
 
+    local dividerGradient = Instance.new("UIGradient")
+    dividerGradient.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 1),
+        NumberSequenceKeypoint.new(0.5, 0.1),
+        NumberSequenceKeypoint.new(1, 1),
+    })
+    dividerGradient.Parent = divider
+
+    -- Body
     local body = Instance.new("Frame")
     body.Name = "Body"
     body.Size = UDim2.new(1, 0, 0, 0)
@@ -606,37 +741,279 @@ local function createKeybindHud()
     body.Parent = frame
 
     local bodyPadding = Instance.new("UIPadding")
-    bodyPadding.PaddingTop = UDim.new(0, 6)
-    bodyPadding.PaddingBottom = UDim.new(0, 6)
-    bodyPadding.PaddingLeft = UDim.new(0, 12)
-    bodyPadding.PaddingRight = UDim.new(0, 8)
+    bodyPadding.PaddingTop = UDim.new(0, 8)
+    bodyPadding.PaddingBottom = UDim.new(0, 8)
+    bodyPadding.PaddingLeft = UDim.new(0, 10)
+    bodyPadding.PaddingRight = UDim.new(0, 10)
     bodyPadding.Parent = body
 
     local bodyLayout = Instance.new("UIListLayout")
     bodyLayout.FillDirection = Enum.FillDirection.Vertical
     bodyLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    bodyLayout.Padding = UDim.new(0, 2)
+    bodyLayout.Padding = UDim.new(0, 4)
     bodyLayout.Parent = body
 
-    local function setCloseHover(hovering)
-        closeBtn.BackgroundColor3 = hovering and Default.Accent or Default.Palette
-        closeStroke.Color = hovering and Default.BorderHover or Default.Border
+    local emptyLabel = Instance.new("TextLabel")
+    emptyLabel.Name = "Empty"
+    emptyLabel.Size = UDim2.new(1, 0, 0, 24)
+    emptyLabel.BackgroundTransparency = 1
+    emptyLabel.Text = "Nenhum ativo"
+    emptyLabel.TextColor3 = HUD_DIM
+    emptyLabel.TextSize = 12
+    emptyLabel.Font = fontBold
+    emptyLabel.LayoutOrder = 0
+    emptyLabel.Visible = false
+    emptyLabel.Parent = body
 
-        for _, line in ipairs(closeLines) do
-            line.BackgroundColor3 = hovering and Default.Active or Default.Inactive
+    -- Options
+    local optionsFrame = Instance.new("Frame")
+    optionsFrame.Name = "Options"
+    optionsFrame.Size = UDim2.new(1, 0, 0, 0)
+    optionsFrame.AutomaticSize = Enum.AutomaticSize.Y
+    optionsFrame.BackgroundTransparency = 1
+    optionsFrame.LayoutOrder = 3
+    optionsFrame.Visible = false
+    optionsFrame.Parent = frame
+
+    local optionsLayout = Instance.new("UIListLayout")
+    optionsLayout.FillDirection = Enum.FillDirection.Vertical
+    optionsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    optionsLayout.Parent = optionsFrame
+
+    local optionsDivider = Instance.new("Frame")
+    optionsDivider.Name = "Divider"
+    optionsDivider.Size = UDim2.new(1, 0, 0, 1)
+    optionsDivider.BackgroundColor3 = HUD_BORDER
+    optionsDivider.BackgroundTransparency = 0.4
+    optionsDivider.BorderSizePixel = 0
+    optionsDivider.LayoutOrder = 0
+    optionsDivider.Parent = optionsFrame
+
+    local optionsBody = Instance.new("Frame")
+    optionsBody.Name = "Body"
+    optionsBody.Size = UDim2.new(1, 0, 0, 0)
+    optionsBody.AutomaticSize = Enum.AutomaticSize.Y
+    optionsBody.BackgroundTransparency = 1
+    optionsBody.LayoutOrder = 1
+    optionsBody.Parent = optionsFrame
+
+    local optionsBodyPadding = Instance.new("UIPadding")
+    optionsBodyPadding.PaddingTop = UDim.new(0, 10)
+    optionsBodyPadding.PaddingBottom = UDim.new(0, 12)
+    optionsBodyPadding.PaddingLeft = UDim.new(0, 12)
+    optionsBodyPadding.PaddingRight = UDim.new(0, 12)
+    optionsBodyPadding.Parent = optionsBody
+
+    local optionsBodyLayout = Instance.new("UIListLayout")
+    optionsBodyLayout.FillDirection = Enum.FillDirection.Vertical
+    optionsBodyLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    optionsBodyLayout.Padding = UDim.new(0, 8)
+    optionsBodyLayout.Parent = optionsBody
+
+    local function makeOptionRow(text, order)
+        local optionRow = Instance.new("Frame")
+        optionRow.Size = UDim2.new(1, 0, 0, 22)
+        optionRow.BackgroundTransparency = 1
+        optionRow.LayoutOrder = order
+        optionRow.Parent = optionsBody
+
+        local optionLabel = Instance.new("TextLabel")
+        optionLabel.Size = UDim2.new(0.5, 0, 1, 0)
+        optionLabel.BackgroundTransparency = 1
+        optionLabel.Text = text
+        optionLabel.TextColor3 = HUD_SUB
+        optionLabel.TextSize = 12
+        optionLabel.Font = fontBold
+        optionLabel.TextXAlignment = Enum.TextXAlignment.Left
+        optionLabel.TextYAlignment = Enum.TextYAlignment.Center
+        optionLabel.ZIndex = 2
+        optionLabel.Parent = optionRow
+
+        return optionRow
+    end
+
+    local colorRow = makeOptionRow("Cor", 0)
+
+    local swatchHolder = Instance.new("Frame")
+    swatchHolder.Name = "Swatches"
+    swatchHolder.AnchorPoint = Vector2.new(1, 0.5)
+    swatchHolder.Position = UDim2.new(1, 0, 0.5, 0)
+    swatchHolder.Size = UDim2.new(0, 0, 1, 0)
+    swatchHolder.AutomaticSize = Enum.AutomaticSize.X
+    swatchHolder.BackgroundTransparency = 1
+    swatchHolder.Parent = colorRow
+
+    local swatchLayout = Instance.new("UIListLayout")
+    swatchLayout.FillDirection = Enum.FillDirection.Horizontal
+    swatchLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    swatchLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    swatchLayout.Padding = UDim.new(0, 7)
+    swatchLayout.Parent = swatchHolder
+
+    local swatches = {}
+
+    for index, color in ipairs(HUD_ACCENTS) do
+        local swatch = Instance.new("TextButton")
+        swatch.Name = "Swatch"
+        swatch.Size = UDim2.new(0, 16, 0, 16)
+        swatch.BackgroundColor3 = color
+        swatch.BorderSizePixel = 0
+        swatch.Text = ""
+        swatch.AutoButtonColor = false
+        swatch.Selectable = false
+        swatch.LayoutOrder = index
+        swatch.ZIndex = 2
+        swatch.Parent = swatchHolder
+
+        local swatchCorner = Instance.new("UICorner")
+        swatchCorner.CornerRadius = UDim.new(1, 0)
+        swatchCorner.Parent = swatch
+
+        local swatchStroke = Instance.new("UIStroke")
+        swatchStroke.Color = HUD_TEXT
+        swatchStroke.Thickness = 2
+        swatchStroke.Transparency = 1
+        swatchStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        swatchStroke.Parent = swatch
+
+        swatches[#swatches + 1] = { color = color, stroke = swatchStroke }
+
+        connections[#connections + 1] = swatch.Activated:Connect(function()
+            hud:SetAccent(color)
+        end)
+    end
+
+    local onlyRow = makeOptionRow("Só ativos", 1)
+
+    local onlyButton = Instance.new("TextButton")
+    onlyButton.Name = "OnlyActive"
+    onlyButton.Size = UDim2.new(1, 0, 1, 0)
+    onlyButton.BackgroundTransparency = 1
+    onlyButton.Text = ""
+    onlyButton.AutoButtonColor = false
+    onlyButton.Selectable = false
+    onlyButton.ZIndex = 1
+    onlyButton.Parent = onlyRow
+
+    local onlyTrack = Instance.new("Frame")
+    onlyTrack.Name = "Track"
+    onlyTrack.AnchorPoint = Vector2.new(1, 0.5)
+    onlyTrack.Position = UDim2.new(1, 0, 0.5, 0)
+    onlyTrack.Size = UDim2.new(0, 32, 0, 18)
+    onlyTrack.BackgroundColor3 = HUD_OFF
+    onlyTrack.BorderSizePixel = 0
+    onlyTrack.ZIndex = 2
+    onlyTrack.Parent = onlyRow
+
+    local onlyTrackCorner = Instance.new("UICorner")
+    onlyTrackCorner.CornerRadius = UDim.new(1, 0)
+    onlyTrackCorner.Parent = onlyTrack
+
+    local onlyKnob = Instance.new("Frame")
+    onlyKnob.Name = "Knob"
+    onlyKnob.AnchorPoint = Vector2.new(0, 0.5)
+    onlyKnob.Position = UDim2.new(0, 3, 0.5, 0)
+    onlyKnob.Size = UDim2.new(0, 12, 0, 12)
+    onlyKnob.BackgroundColor3 = HUD_TEXT
+    onlyKnob.BorderSizePixel = 0
+    onlyKnob.ZIndex = 3
+    onlyKnob.Parent = onlyTrack
+
+    local onlyKnobCorner = Instance.new("UICorner")
+    onlyKnobCorner.CornerRadius = UDim.new(1, 0)
+    onlyKnobCorner.Parent = onlyKnob
+
+    local resetButton = Instance.new("TextButton")
+    resetButton.Name = "ResetPosition"
+    resetButton.Size = UDim2.new(1, 0, 0, 26)
+    resetButton.BackgroundColor3 = HUD_ROW
+    resetButton.BackgroundTransparency = 0.3
+    resetButton.BorderSizePixel = 0
+    resetButton.Text = "Resetar posição"
+    resetButton.TextColor3 = HUD_TEXT
+    resetButton.TextSize = 12
+    resetButton.Font = fontBold
+    resetButton.AutoButtonColor = false
+    resetButton.Selectable = false
+    resetButton.LayoutOrder = 2
+    resetButton.Parent = optionsBody
+
+    local resetCorner = Instance.new("UICorner")
+    resetCorner.CornerRadius = UDim.new(0, 7)
+    resetCorner.Parent = resetButton
+
+    local resetStroke = Instance.new("UIStroke")
+    resetStroke.Color = HUD_BORDER
+    resetStroke.Thickness = 1
+    resetStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    resetStroke.Parent = resetButton
+
+    -- Layout / Refresh
+    local function refreshOptions()
+        for _, swatch in ipairs(swatches) do
+            swatch.stroke.Transparency = swatch.color == hud.accent and 0 or 1
+        end
+
+        play(onlyTrack, { BackgroundColor3 = hud.onlyActive and hud.accent or HUD_OFF }, true)
+        play(onlyKnob, {
+            Position = hud.onlyActive and UDim2.new(1, -15, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)
+        }, true)
+
+        for _, dotPart in ipairs(optionsDots) do
+            dotPart.BackgroundColor3 = optionsFrame.Visible and hud.accent or HUD_SUB
         end
     end
 
     local function refresh()
-        local count = 0
+        local total = 0
+        local on = 0
+        local shown = 0
 
         for entry in pairs(hud.entries) do
+            local visible = false
+
             if entry.active then
-                count = count + 1
+                total = total + 1
+
+                if entry.state then
+                    on = on + 1
+                end
+
+                visible = not hud.onlyActive or entry.state == true
+
+                if visible then
+                    shown = shown + 1
+                end
+            end
+
+            if entry.row then
+                entry.row.Visible = visible
             end
         end
 
-        frame.Visible = count > 0 and not hud.closed
+        countLabel.Text = on .. "/" .. total
+        emptyLabel.Visible = total > 0 and shown == 0
+        frame.Visible = total > 0 and not hud.closed
+    end
+
+    local function applyAccent()
+        local accent = hud.accent
+
+        frameGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, accent:Lerp(HUD_BG_TOP, 0.72)),
+            ColorSequenceKeypoint.new(0.4, HUD_BG_TOP),
+            ColorSequenceKeypoint.new(1, HUD_BG_BOTTOM),
+        })
+        strokeGradient.Color = ColorSequence.new(accent, HUD_BORDER)
+        badgeGradient.Color = ColorSequence.new(accent, accent:Lerp(Color3.new(0, 0, 0), 0.35))
+        dividerGradient.Color = ColorSequence.new(accent)
+        countLabel.TextColor3 = accent:Lerp(Color3.new(1, 1, 1), 0.45)
+
+        for entry in pairs(hud.entries) do
+            entry:Restyle(false)
+        end
+
+        refreshOptions()
     end
 
     local function clampPosition(x, y)
@@ -655,11 +1032,39 @@ local function createKeybindHud()
         return x, y
     end
 
+    local function place()
+        if userMoved then
+            return
+        end
+
+        local camera = workspace.CurrentCamera
+
+        if not camera then
+            return
+        end
+
+        local viewport = camera.ViewportSize
+        local size = frame.AbsoluteSize
+
+        frame.Position = UDim2.new(0, HUD_MARGIN, 0, math.floor((viewport.Y - size.Y) / 2))
+    end
+
+    connections[#connections + 1] = frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
+
+    if workspace.CurrentCamera then
+        connections[#connections + 1] = workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(place)
+    end
+
+    -- Drag
     local dragging = false
     local dragStart
     local startX, startY = 0, 0
 
     connections[#connections + 1] = header.InputBegan:Connect(function(input)
+        if not hud.draggable then
+            return
+        end
+
         if input.UserInputType ~= Enum.UserInputType.MouseButton1
         and input.UserInputType ~= Enum.UserInputType.Touch then
             return
@@ -667,8 +1072,8 @@ local function createKeybindHud()
 
         dragging = true
         dragStart = input.Position
-        startX = frame.Position.X.Offset
-        startY = frame.Position.Y.Offset
+        startX = frame.AbsolutePosition.X
+        startY = frame.AbsolutePosition.Y
 
         local changed
         changed = input.Changed:Connect(function()
@@ -695,15 +1100,35 @@ local function createKeybindHud()
         local delta = input.Position - dragStart
         local x, y = clampPosition(startX + delta.X, startY + delta.Y)
 
+        userMoved = true
         frame.Position = UDim2.new(0, x, 0, y)
     end)
 
-    connections[#connections + 1] = closeBtn.MouseEnter:Connect(function()
-        setCloseHover(true)
+    -- Buttons
+    bindHover(closeBtn, function()
+        for _, line in ipairs(closeLines) do
+            line.BackgroundColor3 = HUD_CLOSE
+        end
+    end, function()
+        for _, line in ipairs(closeLines) do
+            line.BackgroundColor3 = HUD_SUB
+        end
     end)
 
-    connections[#connections + 1] = closeBtn.MouseLeave:Connect(function()
-        setCloseHover(false)
+    bindHover(optionsBtn, function()
+        for _, dotPart in ipairs(optionsDots) do
+            dotPart.BackgroundColor3 = HUD_TEXT
+        end
+    end, function()
+        refreshOptions()
+    end)
+
+    bindHover(resetButton, function()
+        resetButton.BackgroundTransparency = 0.05
+        resetStroke.Color = hud.accent
+    end, function()
+        resetButton.BackgroundTransparency = 0.3
+        resetStroke.Color = HUD_BORDER
     end)
 
     connections[#connections + 1] = closeBtn.Activated:Connect(function()
@@ -712,26 +1137,55 @@ local function createKeybindHud()
         refresh()
     end)
 
+    connections[#connections + 1] = optionsBtn.Activated:Connect(function()
+        optionsFrame.Visible = not optionsFrame.Visible
+        refreshOptions()
+    end)
+
+    connections[#connections + 1] = onlyButton.Activated:Connect(function()
+        hud:SetOnlyActive(not hud.onlyActive)
+    end)
+
+    connections[#connections + 1] = resetButton.Activated:Connect(function()
+        hud:ResetPosition()
+    end)
+
     function hud:Add()
         hud.order = hud.order + 1
 
         local entry = {
-            active = false
+            active = false,
+            state = false,
         }
 
         local row = Instance.new("Frame")
         row.Name = "Row"
         row.Size = UDim2.new(1, 0, 0, HUD_ROW_H)
-        row.BackgroundTransparency = 1
+        row.BackgroundColor3 = HUD_ROW
+        row.BackgroundTransparency = 0.5
+        row.BorderSizePixel = 0
         row.LayoutOrder = hud.order
         row.Visible = false
         row.Parent = body
 
+        entry.row = row
+
+        local rowCorner = Instance.new("UICorner")
+        rowCorner.CornerRadius = UDim.new(0, 8)
+        rowCorner.Parent = row
+
+        local rowStroke = Instance.new("UIStroke")
+        rowStroke.Color = hud.accent
+        rowStroke.Thickness = 1
+        rowStroke.Transparency = 1
+        rowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        rowStroke.Parent = row
+
         local dot = Instance.new("Frame")
         dot.Name = "Status"
-        dot.Size = UDim2.new(0, 6, 0, 6)
+        dot.Size = UDim2.new(0, 8, 0, 8)
         dot.AnchorPoint = Vector2.new(0, 0.5)
-        dot.Position = UDim2.new(0, 0, 0.5, 0)
+        dot.Position = UDim2.new(0, 11, 0.5, 0)
         dot.BackgroundColor3 = HUD_OFF
         dot.BorderSizePixel = 0
         dot.Parent = row
@@ -740,14 +1194,21 @@ local function createKeybindHud()
         dotCorner.CornerRadius = UDim.new(1, 0)
         dotCorner.Parent = dot
 
+        local dotGlow = Instance.new("UIStroke")
+        dotGlow.Color = HUD_ON
+        dotGlow.Thickness = 3
+        dotGlow.Transparency = 1
+        dotGlow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        dotGlow.Parent = dot
+
         local nameLabel = Instance.new("TextLabel")
         nameLabel.Name = "Name"
-        nameLabel.Position = UDim2.new(0, 14, 0, 0)
-        nameLabel.Size = UDim2.new(1, -(14 + HUD_PILL_W + 6), 1, 0)
+        nameLabel.Position = UDim2.new(0, 28, 0, 0)
+        nameLabel.Size = UDim2.new(1, -(28 + HUD_PILL_W + 14), 1, 0)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Text = ""
-        nameLabel.TextColor3 = Default.Dim
-        nameLabel.TextSize = 12
+        nameLabel.TextColor3 = HUD_DIM
+        nameLabel.TextSize = 13
         nameLabel.Font = fontBold
         nameLabel.TextXAlignment = Enum.TextXAlignment.Left
         nameLabel.TextYAlignment = Enum.TextYAlignment.Center
@@ -756,14 +1217,14 @@ local function createKeybindHud()
 
         local keyLabel = Instance.new("TextLabel")
         keyLabel.Name = "Key"
-        keyLabel.Size = UDim2.new(0, 0, 0, 20)
+        keyLabel.Size = UDim2.new(0, 0, 0, 22)
         keyLabel.AutomaticSize = Enum.AutomaticSize.X
         keyLabel.AnchorPoint = Vector2.new(1, 0.5)
-        keyLabel.Position = UDim2.new(1, 0, 0.5, 0)
+        keyLabel.Position = UDim2.new(1, -8, 0.5, 0)
         keyLabel.BackgroundColor3 = Color3.new(1, 1, 1)
         keyLabel.BorderSizePixel = 0
         keyLabel.Text = ""
-        keyLabel.TextColor3 = Default.Inactive
+        keyLabel.TextColor3 = HUD_SUB
         keyLabel.TextSize = 11
         keyLabel.Font = fontBold
         keyLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -772,32 +1233,50 @@ local function createKeybindHud()
         keyLabel.Parent = row
 
         local keyCorner = Instance.new("UICorner")
-        keyCorner.CornerRadius = UDim.new(0, 5)
+        keyCorner.CornerRadius = UDim.new(0, 6)
         keyCorner.Parent = keyLabel
 
         local keyGradient = Instance.new("UIGradient")
-        keyGradient.Color = ColorSequence.new(Default.GradientTop, Default.Palette)
+        keyGradient.Color = ColorSequence.new(Color3.fromRGB(108, 108, 124), Color3.fromRGB(80, 80, 96))
         keyGradient.Rotation = 90
         keyGradient.Parent = keyLabel
 
         local keyStroke = Instance.new("UIStroke")
-        keyStroke.Color = Default.Border
+        keyStroke.Color = Color3.fromRGB(132, 132, 150)
         keyStroke.Thickness = 1
         keyStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         keyStroke.Parent = keyLabel
 
         local keyPadding = Instance.new("UIPadding")
-        keyPadding.PaddingLeft = UDim.new(0, 6)
-        keyPadding.PaddingRight = UDim.new(0, 6)
+        keyPadding.PaddingLeft = UDim.new(0, 7)
+        keyPadding.PaddingRight = UDim.new(0, 7)
         keyPadding.Parent = keyLabel
 
         local keySize = Instance.new("UISizeConstraint")
-        keySize.MinSize = Vector2.new(22, 20)
-        keySize.MaxSize = Vector2.new(HUD_PILL_W, 20)
+        keySize.MinSize = Vector2.new(24, 22)
+        keySize.MaxSize = Vector2.new(HUD_PILL_W, 22)
         keySize.Parent = keyLabel
 
+        local function style(animate)
+            local on = entry.state
+            local accent = hud.accent
+
+            play(row, {
+                BackgroundColor3 = on and accent:Lerp(HUD_BG_BOTTOM, 0.7) or HUD_ROW,
+                BackgroundTransparency = on and 0.1 or 0.5
+            }, animate)
+            play(rowStroke, { Color = accent, Transparency = on and 0.45 or 1 }, animate)
+            play(dot, { BackgroundColor3 = on and HUD_ON or HUD_OFF }, animate)
+            play(dotGlow, { Transparency = on and 0.55 or 1 }, animate)
+            play(nameLabel, { TextColor3 = on and HUD_TEXT or HUD_DIM }, animate)
+            play(keyLabel, { TextColor3 = on and HUD_TEXT or HUD_SUB }, animate)
+        end
+
+        function entry:Restyle(animate)
+            style(animate)
+        end
+
         function entry:Update(title, keyText, state)
-            local on = state == true
             local animate = row.Visible
 
             nameLabel.Text = tostring(title or "")
@@ -809,11 +1288,8 @@ local function createKeybindHud()
                 entry.active = false
             end
 
-            play(dot, { BackgroundColor3 = on and HUD_ON or HUD_OFF }, animate)
-            play(nameLabel, { TextColor3 = on and Default.Active or Default.Dim }, animate)
-            play(keyLabel, { TextColor3 = on and Default.Active or Default.Inactive }, animate)
-
-            row.Visible = entry.active
+            entry.state = state == true
+            style(animate)
             refresh()
         end
 
@@ -826,6 +1302,56 @@ local function createKeybindHud()
         hud.entries[entry] = true
 
         return entry
+    end
+
+    function hud:SetAccent(color)
+        if typeof(color) ~= "Color3" then
+            return
+        end
+
+        hud.accent = color
+        applyAccent()
+    end
+
+    function hud:SetOnlyActive(value)
+        hud.onlyActive = value == true
+        refresh()
+        refreshOptions()
+    end
+
+    function hud:SetTransparency(value)
+        frame.BackgroundTransparency = math.clamp(tonumber(value) or 0.02, 0, 0.9)
+    end
+
+    function hud:SetDraggable(value)
+        hud.draggable = value ~= false
+    end
+
+    function hud:ResetPosition()
+        userMoved = false
+        place()
+    end
+
+    function hud:Configure(settings)
+        if type(settings) ~= "table" then
+            return
+        end
+
+        if settings.Accent ~= nil then
+            hud:SetAccent(settings.Accent)
+        end
+
+        if settings.OnlyActive ~= nil then
+            hud:SetOnlyActive(settings.OnlyActive)
+        end
+
+        if settings.Transparency ~= nil then
+            hud:SetTransparency(settings.Transparency)
+        end
+
+        if settings.Draggable ~= nil then
+            hud:SetDraggable(settings.Draggable)
+        end
     end
 
     function hud:Show()
@@ -855,6 +1381,8 @@ local function createKeybindHud()
         table.clear(connections)
         gui:Destroy()
     end
+
+    applyAccent()
 
     return hud
 end
