@@ -1,32 +1,119 @@
--- // Button
-Elements.Register("Button", function(section, options)
-    options = type(options) == "table" and options or {}
+-- // Services
+local tweenService = game:GetService("TweenService")
+local userInputService = game:GetService("UserInputService")
+local runService = game:GetService("RunService")
 
-    local Default = {
-        Active = Color3.fromRGB(240, 240, 240),
-        Text = Color3.fromRGB(230, 230, 230),
-        TabHover = Color3.fromRGB(200, 200, 200),
-        Dim = Color3.fromRGB(115, 115, 115),
-        Background = Color3.fromRGB(24, 24, 24),
-    }
+-- // Themes
+local Default = {
+    Active = Color3.fromRGB(240, 240, 240),
+    Inactive = Color3.fromRGB(165, 165, 165),
+    Dim = Color3.fromRGB(115, 115, 115),
+    Accent = Color3.fromRGB(42, 42, 42),
+    Border = Color3.fromRGB(55, 55, 55),
+    BorderHover = Color3.fromRGB(88, 88, 88),
+    Palette = Color3.fromRGB(28, 28, 28),
+    Background = Color3.fromRGB(24, 24, 24),
+    GradientTop = Color3.fromRGB(38, 38, 38),
+}
 
-    local panel = section.Panel or Panel
-    local building = true
+local THEME_KEYS = {
+    "Active",
+    "Inactive",
+    "Dim",
+    "Accent",
+    "Border",
+    "BorderHover",
+    "Palette",
+    "Background",
+    "GradientTop",
+}
 
-    local Colors = setmetatable({}, {
+-- // ThemeWatcher
+local themeWatchers = {}
+local themeConnection
+
+local function startThemeWatcher()
+    if themeConnection then
+        return
+    end
+
+    local elapsed = 0
+
+    themeConnection = runService.Heartbeat:Connect(function(dt)
+        elapsed = elapsed + dt
+
+        if elapsed < 0.25 then
+            return
+        end
+
+        elapsed = 0
+
+        for check in pairs(themeWatchers) do
+            check()
+        end
+    end)
+end
+
+local function stopThemeWatcher()
+    if themeConnection and next(themeWatchers) == nil then
+        themeConnection:Disconnect()
+        themeConnection = nil
+    end
+end
+
+local function createColors(panel)
+    local colors = setmetatable({}, {
         __index = function(_, key)
-            if not building then
-                local theme = panel and panel.Theme
-                local live = theme and theme[key]
+            local theme = panel and panel.Theme
+            local live = type(theme) == "table" and theme[key] or nil
 
-                if typeof(live) == "Color3" then
-                    return live
-                end
+            if typeof(live) == "Color3" then
+                return live
             end
 
             return Default[key]
         end
     })
+
+    local function signature()
+        local parts = {}
+
+        for index, key in ipairs(THEME_KEYS) do
+            parts[index] = tostring(colors[key])
+        end
+
+        return table.concat(parts, "|")
+    end
+
+    local lastSignature = signature()
+
+    local function watch(apply)
+        local function check()
+            local current = signature()
+
+            if current == lastSignature then
+                return
+            end
+
+            lastSignature = current
+            pcall(apply)
+        end
+
+        themeWatchers[check] = true
+        startThemeWatcher()
+
+        return function()
+            themeWatchers[check] = nil
+            stopThemeWatcher()
+        end
+    end
+
+    return colors, watch
+end
+
+-- // Button
+Elements.Register("Button", function(section, options)
+    options = type(options) == "table" and options or {}
 
     local SIZES = {
         xs = { height = 22, text = 11, pad = 8 },
@@ -40,9 +127,7 @@ Elements.Register("Button", function(section, options)
     local SPINNER = 12
     local NOTIFY_TITLE = "Sistema"
 
-    local tweenService = TweenService or game:GetService("TweenService")
-    local userInputService = UserInputService or game:GetService("UserInputService")
-    local runService = game:GetService("RunService")
+    local Colors, watchTheme = createColors(section.Panel or Panel)
     local fontBold = FONT_BOLD or Enum.Font.SourceSansSemibold
     local fontRegular = FONT or Enum.Font.SourceSans
     local tweenInfo = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -50,6 +135,7 @@ Elements.Register("Button", function(section, options)
 
     local connections = {}
     local spinnerConnection
+    local unwatchTheme
     local destroyed = false
     local hovering = false
     local pressed = false
@@ -119,6 +205,7 @@ Elements.Register("Button", function(section, options)
     local container = Instance.new("Frame")
     container.Name = title .. "_Button"
     container.Size = UDim2.new(1, 0, 0, baseHeight())
+    container.BackgroundColor3 = Colors.Accent
     container.BorderSizePixel = 0
     container.ClipsDescendants = true
     container.Parent = section.frame
@@ -126,6 +213,12 @@ Elements.Register("Button", function(section, options)
     local containerCorner = Instance.new("UICorner")
     containerCorner.CornerRadius = UDim.new(0, 6)
     containerCorner.Parent = container
+
+    local containerStroke = Instance.new("UIStroke")
+    containerStroke.Color = Colors.Border
+    containerStroke.Thickness = 1
+    containerStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    containerStroke.Parent = container
 
     local textFrame = Instance.new("Frame")
     textFrame.Name = "TextFrame"
@@ -137,7 +230,6 @@ Elements.Register("Button", function(section, options)
     textFrame.Parent = container
 
     local textLayout = Instance.new("UIListLayout")
-    textLayout.FillDirection = Enum.FillDirection.Vertical
     textLayout.SortOrder = Enum.SortOrder.LayoutOrder
     textLayout.Padding = UDim.new(0, 1)
     textLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -148,8 +240,7 @@ Elements.Register("Button", function(section, options)
     label.Name = "Title"
     label.BackgroundTransparency = 1
     label.Font = fontBold
-    label.TextXAlignment = Enum.TextXAlignment.Center
-    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.TextColor3 = Colors.Active
     label.TextTruncate = Enum.TextTruncate.AtEnd
     label.LayoutOrder = 0
     label.ZIndex = 1
@@ -168,10 +259,9 @@ Elements.Register("Button", function(section, options)
         descLabel.AutomaticSize = Enum.AutomaticSize.Y
         descLabel.BackgroundTransparency = 1
         descLabel.Text = breakLongWords(text, WORD_MAX)
-        descLabel.TextColor3 = Default.Dim
+        descLabel.TextColor3 = Colors.Dim
         descLabel.TextSize = descSize()
         descLabel.Font = fontRegular
-        descLabel.TextXAlignment = Enum.TextXAlignment.Center
         descLabel.TextYAlignment = Enum.TextYAlignment.Top
         descLabel.TextWrapped = true
         descLabel.LineHeight = 1.1
@@ -195,6 +285,7 @@ Elements.Register("Button", function(section, options)
     spinnerCorner.Parent = spinner
 
     local spinnerStroke = Instance.new("UIStroke")
+    spinnerStroke.Color = Colors.Active
     spinnerStroke.Thickness = 2
     spinnerStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     spinnerStroke.Parent = spinner
@@ -249,31 +340,36 @@ Elements.Register("Button", function(section, options)
 
         local live = not data.disabled and not data.loading
 
-        local bg = Colors.Active
+        local bg = Colors.Accent
+        local border = Colors.Border
+
         if live and pressed then
-            bg = Colors.TabHover
+            bg = Colors.BorderHover
+            border = Colors.Inactive
         elseif live and hovering then
-            bg = Colors.Text
+            bg = Colors.Border
+            border = Colors.BorderHover
         end
 
-        local bgT = 0
-        local textT = 0
+        local fade = data.disabled and DISABLED_FADE or 0
 
-        if data.disabled then
-            bgT = DISABLED_FADE
-            textT = DISABLED_FADE
+        spinnerStroke.Color = Colors.Active
+
+        if descLabel then
+            descLabel.TextColor3 = Colors.Dim
         end
 
-        spinnerStroke.Color = Colors.Background
-
-        local containerProps = { BackgroundColor3 = bg, BackgroundTransparency = bgT }
-        local labelProps = { TextColor3 = Colors.Background, TextTransparency = textT }
+        local containerProps = { BackgroundColor3 = bg, BackgroundTransparency = fade }
+        local strokeProps = { Color = border, Transparency = fade }
+        local labelProps = { TextColor3 = Colors.Active, TextTransparency = fade }
 
         if animate then
             tweenService:Create(container, tweenInfo, containerProps):Play()
+            tweenService:Create(containerStroke, tweenInfo, strokeProps):Play()
             tweenService:Create(label, tweenInfo, labelProps):Play()
         else
             for k, val in pairs(containerProps) do container[k] = val end
+            for k, val in pairs(strokeProps) do containerStroke[k] = val end
             for k, val in pairs(labelProps) do label[k] = val end
         end
     end
@@ -409,6 +505,10 @@ Elements.Register("Button", function(section, options)
         if destroyed then return end
         destroyed = true
         stopSpinner()
+        if unwatchTheme then
+            unwatchTheme()
+            unwatchTheme = nil
+        end
         for _, conn in ipairs(connections) do
             conn:Disconnect()
         end
@@ -416,7 +516,9 @@ Elements.Register("Button", function(section, options)
         container:Destroy()
     end
 
-    building = false
+    unwatchTheme = watchTheme(function()
+        render(false)
+    end)
 
     return data
 end)
