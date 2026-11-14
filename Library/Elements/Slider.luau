@@ -38,15 +38,16 @@ Elements.Register("Slider", function(section, options)
 
     local TITLE_SIZE = MOBILE and 14 or 13
     local DESC_SIZE = MOBILE and 12 or 11
-    local BADGE_SIZE = MOBILE and 12 or 11
+    local BADGE_SIZE = MOBILE and 13 or 11
     local TRACK_H = MOBILE and 8 or 6
     local THUMB_SIZE = MOBILE and 22 or 16
     local THUMB_HOVER = MOBILE and 4 or 3
     local TRACK_PAD = MOBILE and 18 or 10
     local BASE_H = MOBILE and 48 or 40
-    local TOP_H = MOBILE and 22 or 18
+    local TOP_H = MOBILE and 26 or 18
     local WORD_MAX = 20
-    local BADGE_MIN_W = 42
+    local BADGE_MIN_W = MOBILE and 52 or 44
+    local INPUT_MAX_LEN = 12
     local NOTIFY_TITLE = "Sistema"
 
     local TI_FILL = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -56,6 +57,8 @@ Elements.Register("Slider", function(section, options)
     local destroyed = false
     local dragging = false
     local hovering = false
+    local badgeHovering = false
+    local sanitizing = false
     local activeInput
     local lockedScroll
     local lockedScrollWas = true
@@ -138,11 +141,26 @@ Elements.Register("Slider", function(section, options)
         disabled = disabled,
     }
 
-    local function formatValue(v)
+    local function formatNumber(v)
         if rounding <= 0 then
-            return tostring(math.floor(v + 0.5)) .. suffix
+            return tostring(math.floor(v + 0.5))
         end
-        return string.format("%." .. rounding .. "f", v) .. suffix
+        return string.format("%." .. rounding .. "f", v)
+    end
+
+    local function formatValue(v)
+        return formatNumber(v) .. suffix
+    end
+
+    local function parseInput(text)
+        text = tostring(text or ""):gsub("%s", ""):gsub(",", ".")
+        local number = tonumber(text)
+
+        if isFiniteNumber(number) then
+            return number
+        end
+
+        return nil
     end
 
     local container = Instance.new("Frame")
@@ -152,7 +170,6 @@ Elements.Register("Slider", function(section, options)
     container.Parent = section.frame
 
     local mainLayout = Instance.new("UIListLayout")
-    mainLayout.FillDirection = Enum.FillDirection.Vertical
     mainLayout.SortOrder = Enum.SortOrder.LayoutOrder
     mainLayout.Padding = UDim.new(0, 4)
     mainLayout.VerticalAlignment = Enum.VerticalAlignment.Top
@@ -173,7 +190,7 @@ Elements.Register("Slider", function(section, options)
     topLayout.Padding = UDim.new(0, 8)
     topLayout.Parent = topRow
 
-    local valueBadge = Instance.new("TextLabel")
+    local valueBadge = Instance.new("TextBox")
     valueBadge.Name = "ValueBadge"
     valueBadge.Size = UDim2.new(0, BADGE_MIN_W, 1, 0)
     valueBadge.AutomaticSize = Enum.AutomaticSize.X
@@ -183,8 +200,10 @@ Elements.Register("Slider", function(section, options)
     valueBadge.TextColor3 = Colors.Text
     valueBadge.TextSize = BADGE_SIZE
     valueBadge.Font = fontBold
-    valueBadge.TextXAlignment = Enum.TextXAlignment.Center
-    valueBadge.TextYAlignment = Enum.TextYAlignment.Center
+    valueBadge.ClearTextOnFocus = false
+    valueBadge.MultiLine = false
+    valueBadge.TextWrapped = false
+    valueBadge.TextEditable = not disabled
     valueBadge.LayoutOrder = 2
     valueBadge.Parent = topRow
 
@@ -197,6 +216,12 @@ Elements.Register("Slider", function(section, options)
     badgeCorner.CornerRadius = UDim.new(0, 6)
     badgeCorner.Parent = valueBadge
 
+    local badgeStroke = Instance.new("UIStroke")
+    badgeStroke.Color = Colors.Accent
+    badgeStroke.Thickness = 1
+    badgeStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    badgeStroke.Parent = valueBadge
+
     local label = Instance.new("TextLabel")
     label.Name = "Title"
     label.Size = UDim2.new(1, 0, 1, 0)
@@ -206,7 +231,6 @@ Elements.Register("Slider", function(section, options)
     label.TextSize = TITLE_SIZE
     label.Font = fontBold
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.TextYAlignment = Enum.TextYAlignment.Center
     label.TextTruncate = Enum.TextTruncate.AtEnd
     label.LayoutOrder = 1
     label.Parent = topRow
@@ -340,6 +364,22 @@ Elements.Register("Slider", function(section, options)
         tweenService:Create(thumb, TI_HOVER, { Size = UDim2.new(0, size, 0, size) }):Play()
     end
 
+    local function updateBadgeStroke()
+        if destroyed then return end
+
+        local color = Colors.Accent
+
+        if not data.disabled then
+            if valueBadge:IsFocused() then
+                color = Colors.Active
+            elseif badgeHovering then
+                color = Colors.BorderHover
+            end
+        end
+
+        tweenService:Create(badgeStroke, TI_HOVER, { Color = color }):Play()
+    end
+
     local function updateVisuals(animate)
         if destroyed then return end
 
@@ -349,8 +389,12 @@ Elements.Register("Slider", function(section, options)
         local textColor = data.disabled and Colors.BorderHover or Colors.Active
         local badgeColor = data.disabled and Colors.BorderHover or Colors.Text
 
-        valueBadge.Text = formatValue(data.value)
+        if not valueBadge:IsFocused() then
+            valueBadge.Text = formatValue(data.value)
+        end
+
         valueBadge.TextColor3 = badgeColor
+        valueBadge.TextEditable = not data.disabled
         label.TextColor3 = textColor
         clickArea.Active = not data.disabled
 
@@ -363,6 +407,8 @@ Elements.Register("Slider", function(section, options)
             thumb.Position = UDim2.new(alpha, 0, 0.5, 0)
             thumb.BackgroundColor3 = thumbColor
         end
+
+        updateBadgeStroke()
     end
 
     local function fireCallback(value)
@@ -403,9 +449,62 @@ Elements.Register("Slider", function(section, options)
         updateThumbSize()
     end
 
+    connect(valueBadge.Focused, function()
+        if destroyed then return end
+
+        valueBadge.Text = formatNumber(data.value)
+        updateBadgeStroke()
+
+        task.defer(function()
+            if destroyed or not valueBadge:IsFocused() then return end
+            valueBadge.SelectionStart = 1
+            valueBadge.CursorPosition = #valueBadge.Text + 1
+        end)
+    end)
+
+    connect(valueBadge.FocusLost, function()
+        if destroyed then return end
+
+        local number = parseInput(valueBadge.Text)
+
+        if number then
+            setValue(number, true)
+        end
+
+        updateVisuals(false)
+    end)
+
+    connect(valueBadge:GetPropertyChangedSignal("Text"), function()
+        if sanitizing or destroyed or not valueBadge:IsFocused() then return end
+
+        local pattern = min < 0 and "[^%d%.,%-]" or "[^%d%.,]"
+        local cleaned = valueBadge.Text:gsub(pattern, ""):sub(1, INPUT_MAX_LEN)
+
+        if cleaned ~= valueBadge.Text then
+            sanitizing = true
+            valueBadge.Text = cleaned
+            sanitizing = false
+        end
+    end)
+
+    connect(valueBadge.MouseEnter, function()
+        if usingTouch() then return end
+        badgeHovering = true
+        updateBadgeStroke()
+    end)
+
+    connect(valueBadge.MouseLeave, function()
+        badgeHovering = false
+        updateBadgeStroke()
+    end)
+
     connect(clickArea.InputBegan, function(input)
         if destroyed or data.disabled or dragging then return end
         if isPointerInput(input) then
+            if valueBadge:IsFocused() then
+                valueBadge:ReleaseFocus()
+            end
+
             activeInput = input
             dragging = true
             lockScroll(true)
@@ -491,6 +590,10 @@ Elements.Register("Slider", function(section, options)
         data.disabled = value == true
         if data.disabled then
             stopDragging()
+
+            if valueBadge:IsFocused() then
+                valueBadge:ReleaseFocus()
+            end
         end
         updateVisuals(true)
         updateThumbSize()
