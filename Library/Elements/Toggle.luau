@@ -553,7 +553,10 @@ local HUD_PILL_W = 52
 local HUD_MARGIN = 12
 local HUD_PAD = 6
 local HUD_GAP = 4
-local HUD_SETTINGS_H = HUD_TOP_H + 1 + HUD_PAD + (HUD_ROW_H * 3) + (HUD_GAP * 2) + HUD_PAD
+local HUD_CARD_H = 40
+local HUD_BUTTON_H = 30
+local HUD_CARD_GAP = 6
+local HUD_SETTINGS_H = HUD_TOP_H + 1 + HUD_PAD + (HUD_CARD_H * 2) + HUD_BUTTON_H + (HUD_CARD_GAP * 2) + HUD_PAD
 
 local keybindHud
 
@@ -699,22 +702,6 @@ local function createKeybindHud()
     subtitleLabel.ZIndex = 2
     subtitleLabel.Parent = frame
 
-    local backBtn = Instance.new("TextButton")
-    backBtn.Name = "Back"
-    backBtn.Position = UDim2.new(0, HUD_PAD, 0, 21)
-    backBtn.Size = UDim2.new(0, 64, 0, 15)
-    backBtn.BackgroundTransparency = 1
-    backBtn.Text = "< Voltar"
-    backBtn.TextColor3 = Default.Inactive
-    backBtn.TextSize = 12
-    backBtn.Font = fontBold
-    backBtn.TextXAlignment = Enum.TextXAlignment.Left
-    backBtn.AutoButtonColor = false
-    backBtn.Selectable = false
-    backBtn.Visible = false
-    backBtn.ZIndex = 3
-    backBtn.Parent = frame
-
     local closeBtn = Instance.new("TextButton")
     closeBtn.Name = "Close"
     closeBtn.Size = UDim2.new(0, 22, 0, 22)
@@ -811,6 +798,79 @@ local function createKeybindHud()
     gearHoleCorner.CornerRadius = UDim.new(1, 0)
     gearHoleCorner.Parent = gearHole
 
+    local backBtn = Instance.new("TextButton")
+    backBtn.Name = "Back"
+    backBtn.Size = UDim2.new(0, 22, 0, 22)
+    backBtn.AnchorPoint = Vector2.new(1, 0)
+    backBtn.Position = UDim2.new(1, -30, 0, math.floor((HUD_TOP_H - 22) / 2))
+    backBtn.BackgroundTransparency = 1
+    backBtn.Text = ""
+    backBtn.AutoButtonColor = false
+    backBtn.Selectable = false
+    backBtn.Visible = false
+    backBtn.ZIndex = 2
+    backBtn.Parent = frame
+
+    local backParts = {}
+
+    for _, rotation in ipairs({ -45, 45 }) do
+        local arm = Instance.new("Frame")
+        arm.Name = "Arm"
+        arm.Size = UDim2.new(0, 9, 0, 2)
+        arm.AnchorPoint = Vector2.new(0.5, 0.5)
+        arm.Position = UDim2.new(0.5, -1, 0.5, rotation < 0 and -3 or 3)
+        arm.Rotation = rotation
+        arm.BackgroundColor3 = Default.Inactive
+        arm.BorderSizePixel = 0
+        arm.ZIndex = 3
+        arm.Parent = backBtn
+
+        local armCorner = Instance.new("UICorner")
+        armCorner.CornerRadius = UDim.new(1, 0)
+        armCorner.Parent = arm
+
+        backParts[#backParts + 1] = arm
+    end
+
+    local function styleIconButton(button, parts, holes)
+        holes = holes or {}
+
+        button.BackgroundColor3 = Default.Accent
+
+        local buttonCorner = Instance.new("UICorner")
+        buttonCorner.CornerRadius = UDim.new(0, 5)
+        buttonCorner.Parent = button
+
+        local function setHover(on, animate)
+            play(button, { BackgroundTransparency = on and 0 or 1 }, animate)
+
+            for _, part in ipairs(parts) do
+                part.BackgroundColor3 = on and Default.Active or Default.Inactive
+            end
+
+            for _, hole in ipairs(holes) do
+                hole.BackgroundColor3 = on and Default.Accent or Default.Background
+            end
+        end
+
+        connections[#connections + 1] = button.MouseEnter:Connect(function()
+            setHover(true, true)
+        end)
+
+        connections[#connections + 1] = button.MouseLeave:Connect(function()
+            setHover(false, true)
+        end)
+
+        return function()
+            setHover(false, false)
+        end
+    end
+
+    styleIconButton(closeBtn, closeLines)
+
+    local resetSettingsHover = styleIconButton(settingsBtn, gearParts, { gearHole })
+    local resetBackHover = styleIconButton(backBtn, backParts)
+
     local divider = Instance.new("Frame")
     divider.Name = "Divider"
     divider.Position = UDim2.new(0, HUD_PAD, 0, HUD_TOP_H)
@@ -905,9 +965,11 @@ local function createKeybindHud()
         settingsOpen = open == true
 
         titleLabel.Text = settingsOpen and "Configurações" or "Key Bind"
-        subtitleLabel.Visible = not settingsOpen
+        subtitleLabel.Text = settingsOpen and "Painel de Key Bind" or "by rip_sheldoohz"
         backBtn.Visible = settingsOpen
         settingsBtn.Visible = not settingsOpen
+        resetSettingsHover()
+        resetBackHover()
         listView.Visible = not settingsOpen
         settingsView.Visible = settingsOpen
 
@@ -916,21 +978,50 @@ local function createKeybindHud()
 
     connections[#connections + 1] = gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(settle)
 
-    local function createToggle(text, index, initial, onChange)
-        local row = Instance.new("TextButton")
-        row.Name = "Toggle"
-        row.Position = UDim2.new(0, 0, 0, HUD_TOP_H + 1 + HUD_PAD + (index - 1) * (HUD_ROW_H + HUD_GAP))
-        row.Size = UDim2.new(1, 0, 0, HUD_ROW_H)
-        row.BackgroundTransparency = 1
-        row.Text = ""
-        row.AutoButtonColor = false
-        row.Selectable = false
-        row.Parent = settingsView
+    local settingsY = HUD_TOP_H + 1 + HUD_PAD
+
+    local function createCard(height)
+        local card = Instance.new("TextButton")
+        card.Position = UDim2.new(0, HUD_PAD, 0, settingsY)
+        card.Size = UDim2.new(1, -(HUD_PAD * 2), 0, height)
+        card.BackgroundColor3 = Default.Palette
+        card.BackgroundTransparency = 0.2
+        card.BorderSizePixel = 0
+        card.Text = ""
+        card.AutoButtonColor = false
+        card.Selectable = false
+        card.Parent = settingsView
+
+        local cardCorner = Instance.new("UICorner")
+        cardCorner.CornerRadius = UDim.new(0, 6)
+        cardCorner.Parent = card
+
+        local cardStroke = Instance.new("UIStroke")
+        cardStroke.Color = Default.Border
+        cardStroke.Thickness = 1
+        cardStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        cardStroke.Parent = card
+
+        connections[#connections + 1] = card.MouseEnter:Connect(function()
+            play(cardStroke, { Color = Default.BorderHover }, true)
+        end)
+
+        connections[#connections + 1] = card.MouseLeave:Connect(function()
+            play(cardStroke, { Color = Default.Border }, true)
+        end)
+
+        settingsY = settingsY + height + HUD_CARD_GAP
+
+        return card
+    end
+
+    local function createToggle(text, description, initial, onChange)
+        local card = createCard(HUD_CARD_H)
 
         local label = Instance.new("TextLabel")
         label.Name = "Label"
-        label.Position = UDim2.new(0, HUD_PAD, 0, 0)
-        label.Size = UDim2.new(1, -(HUD_PAD + 46), 1, 0)
+        label.Position = UDim2.new(0, 8, 0, 6)
+        label.Size = UDim2.new(1, -52, 0, 16)
         label.BackgroundTransparency = 1
         label.Text = text
         label.TextColor3 = Default.Active
@@ -938,15 +1029,28 @@ local function createKeybindHud()
         label.Font = fontBold
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.TextTruncate = Enum.TextTruncate.AtEnd
-        label.Parent = row
+        label.Parent = card
+
+        local hint = Instance.new("TextLabel")
+        hint.Name = "Description"
+        hint.Position = UDim2.new(0, 8, 0, 22)
+        hint.Size = UDim2.new(1, -52, 0, 12)
+        hint.BackgroundTransparency = 1
+        hint.Text = description
+        hint.TextColor3 = Default.Dim
+        hint.TextSize = 10
+        hint.Font = fontRegular
+        hint.TextXAlignment = Enum.TextXAlignment.Left
+        hint.TextTruncate = Enum.TextTruncate.AtEnd
+        hint.Parent = card
 
         local track = Instance.new("Frame")
         track.Name = "Track"
         track.Size = UDim2.new(0, 32, 0, 18)
         track.AnchorPoint = Vector2.new(1, 0.5)
-        track.Position = UDim2.new(1, -HUD_PAD, 0.5, 0)
+        track.Position = UDim2.new(1, -8, 0.5, 0)
         track.BorderSizePixel = 0
-        track.Parent = row
+        track.Parent = card
 
         local trackCorner = Instance.new("UICorner")
         trackCorner.CornerRadius = UDim.new(1, 0)
@@ -978,7 +1082,7 @@ local function createKeybindHud()
 
         render(false)
 
-        connections[#connections + 1] = row.Activated:Connect(function()
+        connections[#connections + 1] = card.Activated:Connect(function()
             state = not state
             render(true)
             onChange(state)
@@ -996,7 +1100,7 @@ local function createKeybindHud()
         end
     end
 
-    setNeverToggle = createToggle("Não mostrar mais", 1, settings.neverShow, function(value)
+    setNeverToggle = createToggle("Não mostrar mais", "Oculta este painel", settings.neverShow, function(value)
         settings.neverShow = value
         layout()
 
@@ -1005,42 +1109,22 @@ local function createKeybindHud()
         end
     end)
 
-    setDragToggle = createToggle("Permitir arrastar", 2, hud.draggable, function(value)
+    setDragToggle = createToggle("Permitir arrastar", "Move pela barra superior", hud.draggable, function(value)
         hud:SetDraggable(value)
     end)
 
-    local resetBtn = Instance.new("TextButton")
-    resetBtn.Name = "ResetPosition"
-    resetBtn.Position = UDim2.new(0, HUD_PAD, 0, HUD_TOP_H + 1 + HUD_PAD + 2 * (HUD_ROW_H + HUD_GAP))
-    resetBtn.Size = UDim2.new(1, -(HUD_PAD * 2), 0, HUD_ROW_H)
-    resetBtn.BackgroundColor3 = Default.Palette
-    resetBtn.BorderSizePixel = 0
+    local resetBtn = createCard(HUD_BUTTON_H)
     resetBtn.Text = "Resetar posição"
     resetBtn.TextColor3 = Default.Inactive
     resetBtn.TextSize = 12
     resetBtn.Font = fontBold
-    resetBtn.AutoButtonColor = false
-    resetBtn.Selectable = false
-    resetBtn.Parent = settingsView
-
-    local resetCorner = Instance.new("UICorner")
-    resetCorner.CornerRadius = UDim.new(0, 5)
-    resetCorner.Parent = resetBtn
-
-    local resetStroke = Instance.new("UIStroke")
-    resetStroke.Color = Default.Border
-    resetStroke.Thickness = 1
-    resetStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    resetStroke.Parent = resetBtn
 
     connections[#connections + 1] = resetBtn.MouseEnter:Connect(function()
-        resetStroke.Color = Default.BorderHover
-        resetBtn.TextColor3 = Default.Active
+        play(resetBtn, { TextColor3 = Default.Active }, true)
     end)
 
     connections[#connections + 1] = resetBtn.MouseLeave:Connect(function()
-        resetStroke.Color = Default.Border
-        resetBtn.TextColor3 = Default.Inactive
+        play(resetBtn, { TextColor3 = Default.Inactive }, true)
     end)
 
     connections[#connections + 1] = resetBtn.Activated:Connect(function()
@@ -1107,47 +1191,15 @@ local function createKeybindHud()
         end
     end)
 
-    connections[#connections + 1] = closeBtn.MouseEnter:Connect(function()
-        for _, line in ipairs(closeLines) do
-            line.BackgroundColor3 = Default.Active
-        end
-    end)
-
-    connections[#connections + 1] = closeBtn.MouseLeave:Connect(function()
-        for _, line in ipairs(closeLines) do
-            line.BackgroundColor3 = Default.Inactive
-        end
-    end)
-
     connections[#connections + 1] = closeBtn.Activated:Connect(function()
         stopDrag()
         hud.closed = true
         setView(false)
     end)
 
-    connections[#connections + 1] = settingsBtn.MouseEnter:Connect(function()
-        for _, part in ipairs(gearParts) do
-            part.BackgroundColor3 = Default.Active
-        end
-    end)
-
-    connections[#connections + 1] = settingsBtn.MouseLeave:Connect(function()
-        for _, part in ipairs(gearParts) do
-            part.BackgroundColor3 = Default.Inactive
-        end
-    end)
-
     connections[#connections + 1] = settingsBtn.Activated:Connect(function()
         stopDrag()
         setView(true)
-    end)
-
-    connections[#connections + 1] = backBtn.MouseEnter:Connect(function()
-        backBtn.TextColor3 = Default.Active
-    end)
-
-    connections[#connections + 1] = backBtn.MouseLeave:Connect(function()
-        backBtn.TextColor3 = Default.Inactive
     end)
 
     connections[#connections + 1] = backBtn.Activated:Connect(function()
