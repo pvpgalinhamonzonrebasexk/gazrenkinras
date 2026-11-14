@@ -1,61 +1,153 @@
 -- // Paragraph
+
+local THEMES = {
+    dark = {
+        Title = Color3.fromRGB(248, 248, 252),
+        Text = Color3.fromRGB(236, 236, 243),
+        Desc = Color3.fromRGB(168, 168, 184),
+        Muted = Color3.fromRGB(124, 124, 140),
+        Line = Color3.fromRGB(54, 54, 66),
+        Track = Color3.fromRGB(44, 44, 56),
+        Accent = Color3.fromRGB(120, 160, 255),
+        Light = false,
+    },
+    light = {
+        Title = Color3.fromRGB(18, 18, 24),
+        Text = Color3.fromRGB(36, 36, 48),
+        Desc = Color3.fromRGB(88, 88, 104),
+        Muted = Color3.fromRGB(120, 120, 136),
+        Line = Color3.fromRGB(206, 206, 216),
+        Track = Color3.fromRGB(224, 224, 232),
+        Accent = Color3.fromRGB(50, 96, 230),
+        Light = true,
+    },
+    midnight = {
+        Title = Color3.fromRGB(235, 240, 255),
+        Text = Color3.fromRGB(214, 224, 250),
+        Desc = Color3.fromRGB(150, 166, 205),
+        Muted = Color3.fromRGB(104, 120, 160),
+        Line = Color3.fromRGB(40, 52, 92),
+        Track = Color3.fromRGB(30, 40, 74),
+        Accent = Color3.fromRGB(110, 140, 255),
+        Light = false,
+    },
+    ocean = {
+        Title = Color3.fromRGB(232, 250, 255),
+        Text = Color3.fromRGB(210, 240, 248),
+        Desc = Color3.fromRGB(140, 184, 198),
+        Muted = Color3.fromRGB(98, 140, 156),
+        Line = Color3.fromRGB(30, 70, 86),
+        Track = Color3.fromRGB(24, 56, 70),
+        Accent = Color3.fromRGB(56, 200, 230),
+        Light = false,
+    },
+    rose = {
+        Title = Color3.fromRGB(255, 240, 245),
+        Text = Color3.fromRGB(250, 222, 232),
+        Desc = Color3.fromRGB(200, 150, 168),
+        Muted = Color3.fromRGB(158, 108, 126),
+        Line = Color3.fromRGB(86, 40, 58),
+        Track = Color3.fromRGB(64, 30, 44),
+        Accent = Color3.fromRGB(255, 110, 160),
+        Light = false,
+    },
+    forest = {
+        Title = Color3.fromRGB(238, 252, 242),
+        Text = Color3.fromRGB(218, 242, 226),
+        Desc = Color3.fromRGB(150, 190, 162),
+        Muted = Color3.fromRGB(108, 150, 120),
+        Line = Color3.fromRGB(36, 74, 48),
+        Track = Color3.fromRGB(28, 56, 38),
+        Accent = Color3.fromRGB(80, 210, 120),
+        Light = false,
+    },
+    amber = {
+        Title = Color3.fromRGB(255, 248, 232),
+        Text = Color3.fromRGB(250, 236, 208),
+        Desc = Color3.fromRGB(204, 176, 132),
+        Muted = Color3.fromRGB(160, 134, 96),
+        Line = Color3.fromRGB(84, 64, 30),
+        Track = Color3.fromRGB(64, 48, 24),
+        Accent = Color3.fromRGB(255, 180, 50),
+        Light = false,
+    },
+}
+
+local THEME_ALIAS = {
+    default = "dark", escuro = "dark", claro = "light", noite = "midnight",
+    oceano = "ocean", rosa = "rose", floresta = "forest", ambar = "amber",
+}
+
+local THEME_KEYS = { "Title", "Text", "Desc", "Muted", "Line", "Track", "Accent" }
+
+local PALETTE_DARK = {
+    red = Color3.fromRGB(255, 82, 82),
+    yellow = Color3.fromRGB(255, 210, 64),
+    green = Color3.fromRGB(88, 222, 130),
+    blue = Color3.fromRGB(96, 165, 255),
+    orange = Color3.fromRGB(255, 152, 60),
+    purple = Color3.fromRGB(186, 130, 255),
+    pink = Color3.fromRGB(255, 122, 190),
+    cyan = Color3.fromRGB(64, 220, 235),
+    white = Color3.fromRGB(247, 247, 250),
+    gray = Color3.fromRGB(156, 156, 170),
+}
+
+local PALETTE_LIGHT = {
+    red = Color3.fromRGB(214, 40, 40),
+    yellow = Color3.fromRGB(184, 134, 0),
+    green = Color3.fromRGB(22, 140, 70),
+    blue = Color3.fromRGB(30, 100, 220),
+    orange = Color3.fromRGB(214, 100, 10),
+    purple = Color3.fromRGB(130, 60, 210),
+    pink = Color3.fromRGB(200, 50, 130),
+    cyan = Color3.fromRGB(0, 140, 160),
+    white = Color3.fromRGB(60, 60, 70),
+    gray = Color3.fromRGB(110, 110, 125),
+}
+
+local COLOR_ALIAS = {
+    vermelho = "red", amarelo = "yellow", verde = "green", azul = "blue",
+    laranja = "orange", roxo = "purple", rosa = "pink", ciano = "cyan",
+    branco = "white", cinza = "gray", grey = "gray", magenta = "pink",
+    gold = "yellow", dourado = "yellow",
+}
+
+local THEME_ROLE = {
+    accent = "Accent", text = "Text", muted = "Muted",
+    desc = "Desc", title = "Title", line = "Line",
+}
+
+local function pick(source, ...)
+    for index = 1, select("#", ...) do
+        local value = source[select(index, ...)]
+        if value ~= nil then
+            return value
+        end
+    end
+    return nil
+end
+
+local function copyTable(source)
+    local result = {}
+    if type(source) == "table" then
+        for key, value in pairs(source) do
+            result[key] = value
+        end
+    end
+    return result
+end
+
 Elements.Register("Paragraph", function(section, options)
     options = type(options) == "table" and options or {}
 
-    local accentOption = options.accent or options.Accent
-
-    local C = {
-        Accent = typeof(accentOption) == "Color3" and accentOption or Color3.fromRGB(230, 230, 236),
-        Card = Color3.fromRGB(13, 13, 16),
-        CardTop = Color3.fromRGB(22, 22, 28),
-        CardStroke = Color3.fromRGB(40, 40, 48),
-        Row = Color3.fromRGB(20, 20, 25),
-        RowStroke = Color3.fromRGB(36, 36, 44),
-        HoloBg = Color3.fromRGB(9, 9, 12),
-        TextActive = Color3.fromRGB(247, 247, 250),
-        TextDisabled = Color3.fromRGB(82, 82, 91),
-        DescText = Color3.fromRGB(156, 156, 170),
-        DescDisabled = Color3.fromRGB(82, 82, 91),
-        Muted = Color3.fromRGB(112, 112, 126),
-        ThumbBg = Color3.fromRGB(22, 22, 27),
-        CornerText = Color3.fromRGB(205, 205, 216),
-        Bar = Color3.fromRGB(32, 32, 39),
-        Black = Color3.fromRGB(0, 0, 0),
-        White = Color3.fromRGB(255, 255, 255),
-    }
-
-    local REMOVABLE = {
-        Script = true, LocalScript = true, ModuleScript = true, Sound = true,
-        ForceField = true, BillboardGui = true, SurfaceGui = true, ParticleEmitter = true,
-        Trail = true, Beam = true, Highlight = true, SelectionBox = true,
-        PointLight = true, SpotLight = true, SurfaceLight = true, Smoke = true,
-        Fire = true, Sparkles = true, Atmosphere = true, Sky = true, PostEffect = true,
-    }
-
-    local KIND_MAP = {
-        character = "character", player = "character", user = "character", avatar = "character",
-        item = "model", asset = "model", model = "model", mesh = "model",
-        accessory = "model", hat = "model", tool = "model",
-        image = "image", texture = "image", icon = "image", decal = "image", img = "image",
-        thumbnail = "thumbnail", thumb = "thumbnail",
-    }
-
-    local THUMB_TYPES = {
-        asset = "Asset", avatar = "Avatar", bust = "AvatarBust", avatarbust = "AvatarBust",
-        headshot = "AvatarHeadShot", avatarheadshot = "AvatarHeadShot",
-        bundle = "BundleThumbnail", bundlethumbnail = "BundleThumbnail",
-        game = "GameIcon", gameicon = "GameIcon", gamepass = "GamePass",
-        badge = "BadgeIcon", badgeicon = "BadgeIcon", group = "GroupIcon", groupicon = "GroupIcon",
-        outfit = "Outfit", product = "DeveloperProduct", developerproduct = "DeveloperProduct",
-    }
+    local function opt(...)
+        return pick(options, ...)
+    end
 
     local Svc = {
-        players = Players or game:GetService("Players"),
         input = UserInputService or game:GetService("UserInputService"),
         tween = TweenService or game:GetService("TweenService"),
-        run = RunService or game:GetService("RunService"),
-        content = game:GetService("ContentProvider"),
-        insert = game:GetService("InsertService"),
     }
 
     local fontBold = FONT_BOLD or Enum.Font.GothamBold
@@ -63,46 +155,25 @@ Elements.Register("Paragraph", function(section, options)
     local fontMedium = Enum.Font.GothamMedium
 
     local MOBILE = Svc.input.TouchEnabled and not Svc.input.KeyboardEnabled
-    local sizeOption = tonumber(options.size or options.Size)
 
     local K = {
-        TAG = MOBILE and 10 or 9,
-        TITLE = MOBILE and 17 or 16,
-        DESC = MOBILE and 12 or 11,
-        STAT = MOBILE and 11 or 10,
-        STAT_VALUE = MOBILE and 14 or 13,
-        HEAD = MOBILE and 11 or 10,
-        CORNER = MOBILE and 10 or 9,
-
-        CARD_H = math.clamp(sizeOption or (MOBILE and 160 or 150), 90, 420),
-        MIN_H = 36,
-        PAD = 12,
+        TAG = MOBILE and 11 or 10,
+        TITLE = MOBILE and 18 or 17,
+        DESC = MOBILE and 13 or 12,
+        INFO = MOBILE and 14 or 13,
+        LABEL = MOBILE and 12 or 11,
+        HEAD = MOBILE and 12 or 11,
+        BADGE = MOBILE and 12 or 11,
+        ICON = MOBILE and 24 or 22,
+        TILE = MOBILE and 60 or 54,
+        PREVIEW_H = MOBILE and 150 or 140,
+        BAR_H = 5,
+        DIVIDER_H = 11,
         GAP = 8,
-        THUMB = MOBILE and 44 or 42,
-        THUMB_GAP = 10,
-        ROW_H = MOBILE and 46 or 44,
-        EDGE = 12,
-        IMAGE_ALPHA = 0.05,
-
-        FOV = 40,
-        SPEED = 40,
-        MARGIN = 1.12,
-        PITCH_ITEM = 14,
-        PITCH_CHAR = 4,
-        DRAG = 0.45,
-        TILT_MIN = -15,
-        TILT_MAX = 30,
-        RESUME = 2,
-
-        ATTEMPTS = 3,
-        RETRY = 0.8,
-        PRELOAD = 10,
-        IMAGE_ALT = 3,
-        STABLE = 3,
-        STREAM = 2,
-        UPDATE = 3,
-        WORD_MAX = 30,
-        HIDDEN_ALPHA = 0.99,
+        ROW_GAP = MOBILE and 10 or 9,
+        PAD = 2,
+        MIN_H = 4,
+        LOAD_WAIT = 4,
     }
 
     local TI = {
@@ -112,37 +183,48 @@ Elements.Register("Paragraph", function(section, options)
 
     local S = {
         connections = {},
-        watch = {},
         tweens = setmetatable({}, { __mode = "k" }),
         destroyed = false,
-        liveToken = 0,
-        holoToken = 0,
-        loopToken = 0,
-        busy = nil,
-        model = nil,
-        size = nil,
-        pitch = K.PITCH_ITEM,
-        tilt = 0,
-        angle = 0,
-        lastAngle = nil,
-        distance = 0,
-        light = Vector3.new(0.3, -0.5, 1),
-        signature = nil,
-        images = {},
-        version = 0,
-        reloadPending = false,
-        status = {},
+        theme = nil,
+        themeName = "dark",
+        themeSource = opt("theme", "Theme"),
+        accent = opt("accent", "Accent"),
+        titleColor = opt("titleColor", "TitleColor"),
+        descColor = opt("descriptionColor", "DescriptionColor", "descColor"),
+        colors = {},
+        defaultColor = opt("defaultColor", "DefaultColor", "color", "Color"),
+        items = {},
         rows = {},
+        textures = {},
         rich = options.richText ~= false,
-        statusTitle = tostring(options.statusTitle or options.StatusTitle or "Status"),
-        dragging = false,
-        dragInput = nil,
-        velocity = 0,
-        lastDrag = -1e9,
+        marker = "bar",
+        rule = options.rule ~= false,
     }
+
+    local markerOption = opt("marker", "Marker")
+    if type(markerOption) == "string" then
+        local mode = markerOption:lower()
+        if mode == "bar" or mode == "dot" or mode == "none" then
+            S.marker = mode
+        end
+    end
+    if options.bullets == false then
+        S.marker = "none"
+    end
+
+    local colorsOption = opt("colors", "Colors")
+    if type(colorsOption) == "table" then
+        for key, value in pairs(colorsOption) do
+            if type(key) == "number" then
+                S.colors[key] = value
+            end
+        end
+    end
 
     local H = {}
     local U = {}
+
+    -- // Helpers
 
     function H.new(class, props, parent)
         local instance = Instance.new(class)
@@ -168,12 +250,6 @@ Elements.Register("Paragraph", function(section, options)
         }, instance)
     end
 
-    function H.connect(signal, fn)
-        local conn = signal:Connect(fn)
-        S.connections[#S.connections + 1] = conn
-        return conn
-    end
-
     function H.stopTween(object)
         local running = S.tweens[object]
         if running then
@@ -192,87 +268,6 @@ Elements.Register("Paragraph", function(section, options)
         end
     end
 
-    function H.breakWords(text, maxLen)
-        text = tostring(text or "")
-        local lines = {}
-        for line in (text .. "\n"):gmatch("(.-)\n") do
-            local result = {}
-            for token in line:gmatch("%S+") do
-                local word = token
-                while #word > maxLen do
-                    result[#result + 1] = word:sub(1, maxLen)
-                    word = word:sub(maxLen + 1)
-                end
-                result[#result + 1] = word
-            end
-            lines[#lines + 1] = table.concat(result, " ")
-        end
-        return table.concat(lines, "\n")
-    end
-
-    function H.text(text)
-        text = tostring(text or "")
-        if S.rich then
-            return text
-        end
-        return H.breakWords(text, K.WORD_MAX)
-    end
-
-    function H.normalizeImage(value)
-        if value == nil or value == "" then return "" end
-        local text = tostring(value)
-        if text:match("^%d+$") then
-            return "rbxassetid://" .. text
-        end
-        return text
-    end
-
-    function H.textOf(value)
-        if type(value) == "number" then
-            return string.format("%.0f", value)
-        end
-        return tostring(value)
-    end
-
-    function H.assetId(target)
-        if typeof(target) == "Instance" then return nil end
-        local text = H.textOf(target)
-        if text:match("^rbxthumb://") then
-            return text:match("[?&]id=(%d+)")
-        end
-        return text:match("^%d+$")
-            or text:match("^rbxassetid://(%d+)")
-            or text:match("/library/(%d+)")
-            or text:match("/catalog/(%d+)")
-            or text:match("[?&]id=(%d+)")
-    end
-
-    function H.kind(kind)
-        if type(kind) ~= "string" then return nil end
-        return KIND_MAP[kind:lower()]
-    end
-
-    function H.thumbType(value)
-        if type(value) ~= "string" then return "Asset" end
-        return THUMB_TYPES[value:lower()] or "Asset"
-    end
-
-    function H.thumbUrl(id, thumbType)
-        return string.format("rbxthumb://type=%s&id=%s&w=420&h=420", H.thumbType(thumbType), tostring(id))
-    end
-
-    function H.isChar(kind)
-        return kind == "character"
-    end
-
-    function H.isImage(kind)
-        return kind == "image"
-    end
-
-    function H.isAsset(kind)
-        return kind == "model" or kind == "image" or kind == "thumbnail"
-    end
-
     function H.number(value)
         local number = tonumber(value)
         if not number then return tostring(value) end
@@ -285,269 +280,456 @@ Elements.Register("Paragraph", function(section, options)
         return string.format("%.1f", number)
     end
 
-    function H.copy(source)
-        local result = {}
-        if type(source) == "table" then
-            for key, value in pairs(source) do
-                result[key] = value
+    function H.display(value)
+        if type(value) == "number" then
+            return H.number(value)
+        end
+        return tostring(value)
+    end
+
+    function H.color(value)
+        local kind = typeof(value)
+        if kind == "Color3" then
+            return value
+        end
+        if kind == "BrickColor" then
+            return value.Color
+        end
+        if kind == "string" then
+            local key = (value:lower():gsub("[%s_%-]", ""))
+            key = COLOR_ALIAS[key] or key
+            local theme = S.theme
+            local palette = (theme and theme.Light) and PALETTE_LIGHT or PALETTE_DARK
+            if palette[key] then
+                return palette[key]
+            end
+            if theme and THEME_ROLE[key] then
+                return theme[THEME_ROLE[key]]
+            end
+            local hex = key:match("^#?(%x%x%x%x%x%x)$")
+            if hex then
+                return Color3.fromRGB(
+                    tonumber(hex:sub(1, 2), 16),
+                    tonumber(hex:sub(3, 4), 16),
+                    tonumber(hex:sub(5, 6), 16)
+                )
+            end
+        elseif kind == "table" then
+            local r = value.r or value.R or value[1]
+            local g = value.g or value.G or value[2]
+            local b = value.b or value.B or value[3]
+            if type(r) == "number" and type(g) == "number" and type(b) == "number" then
+                if r <= 1 and g <= 1 and b <= 1 then
+                    return Color3.new(r, g, b)
+                end
+                return Color3.fromRGB(math.clamp(r, 0, 255), math.clamp(g, 0, 255), math.clamp(b, 0, 255))
             end
         end
-        return result
+        return nil
     end
 
-    function H.hologram(config)
-        if config == nil then return nil end
-        if type(config) ~= "table" then
-            config = { target = config }
-        end
-        local tint = config.tint or config.Tint
-        local speed = tonumber(config.speed or config.Speed)
-        return {
-            target = config.target or config.Target,
-            type = H.kind(config.type or config.Type),
-            thumbType = H.thumbType(config.thumbType or config.thumbnailType or config.thumb),
-            corners = H.copy(config.corners or config.info),
-            rotate = config.rotate == true or config.Rotate == true,
-            speed = speed or K.SPEED,
-            tint = typeof(tint) == "Color3" and tint or nil,
-            live = config.live == true or config.Live == true,
-            nonce = config.nonce,
-        }
-    end
+    -- // Temas
 
-    function H.stat(entry)
-        if type(entry) ~= "table" then return nil end
-        local name = entry.name or entry.Name or entry[1]
-        if name == nil then return nil end
-        local value = entry.value
-        if value == nil then value = entry.Value end
-        if value == nil then value = entry[2] end
-        if value == nil then value = "" end
-        local max = entry.max or entry.Max or entry[3]
-        return { name = tostring(name), value = value, max = tonumber(max) }
-    end
+    function H.resolveTheme(value)
+        local name = "dark"
+        local base = THEMES.dark
+        local overrides = nil
 
-    function H.statusList(list)
-        local result = {}
-        if type(list) == "table" then
-            for _, entry in ipairs(list) do
-                local stat = H.stat(entry)
-                if stat then
-                    result[#result + 1] = stat
+        if type(value) == "string" then
+            local key = (value:lower():gsub("%s", ""))
+            key = THEME_ALIAS[key] or key
+            if THEMES[key] then
+                name = key
+                base = THEMES[key]
+            end
+        elseif type(value) == "table" then
+            local baseName = pick(value, "base", "Base")
+            if type(baseName) == "string" then
+                local key = (baseName:lower():gsub("%s", ""))
+                key = THEME_ALIAS[key] or key
+                if THEMES[key] then
+                    base = THEMES[key]
                 end
             end
+            name = "custom"
+            overrides = value
+        end
+
+        local merged = copyTable(base)
+        if overrides then
+            for _, key in ipairs(THEME_KEYS) do
+                local color = H.color(pick(overrides, key, key:lower()))
+                if color then
+                    merged[key] = color
+                end
+            end
+            local light = pick(overrides, "light", "Light")
+            if type(light) == "boolean" then
+                merged.Light = light
+            end
+        end
+
+        local accent = H.color(S.accent)
+        if accent then
+            merged.Accent = accent
+        end
+
+        return name, merged
+    end
+
+    function H.setTheme(value)
+        S.themeSource = value
+        S.themeName, S.theme = H.resolveTheme(value)
+    end
+
+    H.setTheme(S.themeSource)
+
+    -- // Texturas (ID)
+
+    function H.thumbUrl(id)
+        return string.format("rbxthumb://type=Asset&id=%s&w=420&h=420", tostring(id))
+    end
+
+    function H.textureSource(value)
+        if typeof(value) == "Instance" then
+            if value:IsA("Decal") or value:IsA("Texture") then
+                return H.textureSource(value.Texture)
+            end
+            if value:IsA("ImageLabel") or value:IsA("ImageButton") then
+                return H.textureSource(value.Image)
+            end
+            return nil, nil
+        end
+        if value == nil or value == "" then
+            return nil, nil
+        end
+
+        local text = type(value) == "number" and string.format("%.0f", value) or tostring(value)
+        if text:match("^%d+$") then
+            return "rbxassetid://" .. text, text
+        end
+
+        local id = text:match("^rbxassetid://(%d+)")
+            or text:match("[?&]id=(%d+)")
+            or text:match("/library/(%d+)")
+            or text:match("/catalog/(%d+)")
+
+        if text:match("^https?://") and id then
+            return "rbxassetid://" .. id, id
+        end
+        return text, id
+    end
+
+    function H.extractTexture(id)
+        local ok, objects = pcall(function()
+            return game:GetObjects("rbxassetid://" .. id)
+        end)
+        if not ok or type(objects) ~= "table" then
+            return nil
+        end
+
+        local found = nil
+        for _, object in ipairs(objects) do
+            if object:IsA("Decal") or object:IsA("Texture") then
+                found = object.Texture
+            elseif object:IsA("Shirt") then
+                found = object.ShirtTemplate
+            elseif object:IsA("Pants") then
+                found = object.PantsTemplate
+            elseif object:IsA("ShirtGraphic") then
+                found = object.Graphic
+            else
+                local nested = object:FindFirstChildWhichIsA("Decal", true)
+                    or object:FindFirstChildWhichIsA("Texture", true)
+                if nested then
+                    found = nested.Texture
+                end
+            end
+            if found and found ~= "" then
+                break
+            end
+        end
+
+        for _, object in ipairs(objects) do
+            pcall(object.Destroy, object)
+        end
+        return found
+    end
+
+    function H.applyTexture(image, value)
+        local source, id = H.textureSource(value)
+        if not source then return end
+
+        local cached = id and S.textures[id] or nil
+        image.Image = cached or source
+
+        task.spawn(function()
+            local function alive()
+                return not S.destroyed and image.Parent ~= nil
+            end
+
+            local function waitLoaded(seconds)
+                local started = os.clock()
+                while alive() and not image.IsLoaded and os.clock() - started < seconds do
+                    task.wait(0.1)
+                end
+                return alive() and image.IsLoaded
+            end
+
+            local loaded = waitLoaded(K.LOAD_WAIT)
+
+            if not loaded and alive() and id and not cached then
+                local extracted = H.extractTexture(id)
+                if extracted and extracted ~= "" and alive() then
+                    image.Image = extracted
+                    loaded = waitLoaded(K.LOAD_WAIT)
+                    if loaded then
+                        S.textures[id] = extracted
+                    end
+                end
+            end
+
+            if not loaded and alive() and id then
+                image.Image = H.thumbUrl(id)
+                waitLoaded(K.LOAD_WAIT)
+            end
+
+            if alive() then
+                H.tween(image, TI.FADE, { ImageTransparency = 0 })
+            end
+        end)
+    end
+
+    -- // Normalizacao das informacoes
+
+    function H.entry(raw)
+        if raw == nil then return nil end
+        if type(raw) ~= "table" then
+            raw = { text = tostring(raw) }
+        else
+            raw = copyTable(raw)
+        end
+
+        local e = { raw = raw }
+
+        local kindText = pick(raw, "type", "Type", "kind", "Kind")
+        kindText = type(kindText) == "string" and kindText:lower() or nil
+
+        local label = pick(raw, "label", "Label", "name", "Name")
+        local main = pick(raw, "value", "Value", "text", "Text", "info", "Info")
+        local max = pick(raw, "max", "Max")
+
+        if label == nil and main == nil and raw[1] ~= nil then
+            if raw[2] ~= nil then
+                label, main = raw[1], raw[2]
+                if max == nil then max = raw[3] end
+            else
+                main = raw[1]
+            end
+        end
+        if main == nil and label ~= nil then
+            main, label = label, nil
+        end
+
+        e.label = label ~= nil and tostring(label) or nil
+        e.text = main ~= nil and H.display(main) or nil
+        e.value = tonumber(main)
+        e.max = tonumber(max)
+        e.color = pick(raw, "color", "Color")
+        e.labelColor = pick(raw, "labelColor", "LabelColor")
+        e.tint = pick(raw, "tint", "Tint")
+        e.tex = pick(raw, "texture", "Texture", "textureId", "TextureId", "textureID", "image", "Image", "icon", "Icon")
+        e.list = pick(raw, "items", "Items", "tags", "Tags", "badges", "Badges", "textures", "Textures")
+        e.inline = pick(raw, "inline", "Inline") == true
+        e.preview = pick(raw, "preview", "Preview") == true
+        e.height = tonumber(pick(raw, "height", "Height"))
+        e.size = tonumber(pick(raw, "size", "Size"))
+        e.fit = pick(raw, "fit", "Fit", "scale", "Scale")
+        e.bullet = pick(raw, "bullet", "Bullet")
+        e.visible = pick(raw, "visible", "Visible") ~= false
+
+        local hintGallery = raw.textures ~= nil or raw.Textures ~= nil
+        local hintList = pick(raw, "items", "Items", "tags", "Tags", "badges", "Badges") ~= nil
+
+        local kind = nil
+        if kindText == "divider" or kindText == "line" or kindText == "separator" then
+            kind = "divider"
+        elseif kindText == "header" or kindText == "section" or kindText == "heading" then
+            kind = "header"
+        elseif kindText == "gallery" or kindText == "images" or kindText == "textures" then
+            kind = "gallery"
+        elseif kindText == "badge" or kindText == "badges" or kindText == "chips" or kindText == "tags" or kindText == "tag" then
+            kind = "badges"
+        elseif kindText == "bar" or kindText == "progress" then
+            kind = "bar"
+        elseif kindText == "preview" then
+            kind = "preview"
+        end
+
+        if not kind then
+            if hintGallery then
+                kind = "gallery"
+            elseif hintList then
+                kind = "badges"
+            elseif e.tex ~= nil and (e.preview or (e.text == nil and e.label == nil and kindText ~= "icon")) then
+                kind = "preview"
+            elseif e.max and e.value then
+                kind = "bar"
+            else
+                kind = "text"
+            end
+        end
+
+        if kind == "badges" and not e.list and e.text then
+            e.list = { e.text }
+        end
+        if kind == "bar" and not (e.max and e.max > 0 and e.value) then
+            kind = "text"
+        end
+        if kind == "preview" and e.tex == nil then
+            kind = "text"
+        end
+
+        e.kind = kind
+        return e
+    end
+
+    function H.entries(list)
+        local result = {}
+        if type(list) ~= "table" then
+            return result
+        end
+        if list[1] == nil and next(list) ~= nil then
+            list = { list }
+        end
+        for _, raw in ipairs(list) do
+            local entry = H.entry(raw)
+            if entry then
+                result[#result + 1] = entry
+            end
         end
         return result
     end
 
-    local data = {
-        disabled = options.disabled == true or options.Disabled == true,
-        title = tostring(options.title or options.Name or ""),
-        description = tostring(options.description or options.Description or ""),
-        tag = tostring(options.tag or options.Tag or ""),
-        thumbnail = options.thumbnail or options.Thumbnail,
-        hologram = H.hologram(options.hologram or options.Hologram),
-    }
+    function H.entryColor(entry, index)
+        local own = H.color(entry.color)
+        if own then return own end
 
-    if data.thumbnail ~= nil and type(data.thumbnail) ~= "string" and type(data.thumbnail) ~= "number" and type(data.thumbnail) ~= "table" then
-        data.thumbnail = nil
+        if entry.kind == "header" then
+            return S.theme.Accent
+        end
+        if entry.kind == "divider" then
+            return S.theme.Line
+        end
+
+        local byIndex = S.colors[index]
+        if byIndex ~= nil then
+            local color = H.color(byIndex)
+            if color then return color end
+        end
+
+        if S.defaultColor ~= nil then
+            local color = H.color(S.defaultColor)
+            if color then return color end
+        end
+
+        return S.theme.Text
     end
 
-    S.status = H.statusList(options.status or options.Status)
+    -- // Dados
+
+    local data = {
+        disabled = opt("disabled", "Disabled") == true,
+        title = tostring(opt("title", "Title", "Name") or ""),
+        description = tostring(opt("description", "Description", "content", "Content") or ""),
+        tag = tostring(opt("tag", "Tag") or ""),
+    }
+
+    -- // UI base
+
+    function H.label(parent, props)
+        local base = {
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, 0, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            TextWrapped = true,
+            RichText = S.rich,
+            Font = fontMedium,
+            TextSize = K.INFO,
+            TextColor3 = S.theme.Text,
+            LineHeight = 1.1,
+        }
+        for key, value in pairs(props) do
+            base[key] = value
+        end
+        return H.new("TextLabel", base, parent)
+    end
+
+    local function vlist(instance, padding)
+        return H.new("UIListLayout", {
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Padding = UDim.new(0, padding),
+        }, instance)
+    end
 
     U.container = H.new("Frame", {
         Name = (data.title ~= "" and data.title or "Paragraph") .. "_Paragraph",
-        Size = UDim2.new(1, 0, 0, K.CARD_H),
-        BackgroundColor3 = C.Card,
+        Size = UDim2.new(1, 0, 0, 24),
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ClipsDescendants = true,
     }, section.frame)
-    H.corner(U.container, 12)
-    H.stroke(U.container, C.CardStroke, 1)
-    H.new("UIGradient", {
-        Rotation = 90,
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, C.CardTop),
-            ColorSequenceKeypoint.new(0.4, C.Card),
-            ColorSequenceKeypoint.new(1, C.Card),
-        }),
-    }, U.container)
 
-    U.content = H.new("Frame", {
+    U.content = H.new("CanvasGroup", {
         Name = "Content",
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
-    }, U.container)
-    U.contentLayout = H.new("UIListLayout", {
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 0),
-    }, U.content)
-
-    U.holo = H.new("Frame", {
-        Name = "Hologram",
-        Size = UDim2.new(1, 0, 0, K.CARD_H),
-        BackgroundColor3 = C.HoloBg,
         BorderSizePixel = 0,
-        ClipsDescendants = true,
-        LayoutOrder = 1,
-        Visible = false,
-    }, U.content)
+        GroupTransparency = 0,
+    }, U.container)
+    U.contentLayout = vlist(U.content, 0)
 
-    U.viewport = H.new("ViewportFrame", {
-        Name = "Viewport",
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        ImageTransparency = 0,
-        Ambient = Color3.fromRGB(205, 205, 215),
-        LightColor = Color3.fromRGB(255, 255, 255),
-        LightDirection = S.light,
-        ZIndex = 2,
-    }, U.holo)
-
-    U.camera = H.new("Camera", { FieldOfView = K.FOV }, U.viewport)
-    U.viewport.CurrentCamera = U.camera
-
-    U.fallback = H.new("ImageLabel", {
-        Name = "Fallback",
-        Size = UDim2.new(0.8, 0, 0.8, 0),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundTransparency = 1,
-        Image = "",
-        ImageTransparency = K.IMAGE_ALPHA,
-        ScaleType = Enum.ScaleType.Fit,
-        Visible = false,
-        ZIndex = 2,
-    }, U.holo)
-    H.new("UIAspectRatioConstraint", {
-        AspectRatio = 1,
-        AspectType = Enum.AspectType.FitWithinMaxSize,
-    }, U.fallback)
-
-    function H.cornerLabel(name, position, anchor, alignX, alignY, font, color)
-        return H.new("TextLabel", {
-            Name = name,
-            Size = UDim2.new(0.4, -(K.EDGE + 4), 0, 14),
-            AnchorPoint = anchor,
-            Position = position,
-            BackgroundTransparency = 1,
-            Text = "",
-            TextColor3 = color,
-            TextSize = K.CORNER,
-            Font = font,
-            TextXAlignment = alignX,
-            TextYAlignment = alignY,
-            TextTruncate = Enum.TextTruncate.AtEnd,
-            TextStrokeTransparency = 0.6,
-            TextStrokeColor3 = C.Black,
-            RichText = S.rich,
-            Visible = false,
-            ZIndex = 5,
-        }, U.holo)
-    end
-
-    U.corners = {
-        topLeft = H.cornerLabel("TopLeft", UDim2.new(0, K.EDGE, 0, K.EDGE), Vector2.new(0, 0), Enum.TextXAlignment.Left, Enum.TextYAlignment.Top, fontBold, C.TextActive),
-        topRight = H.cornerLabel("TopRight", UDim2.new(1, -K.EDGE, 0, K.EDGE), Vector2.new(1, 0), Enum.TextXAlignment.Right, Enum.TextYAlignment.Top, fontBold, C.Accent),
-        bottomLeft = H.cornerLabel("BottomLeft", UDim2.new(0, K.EDGE, 1, -K.EDGE), Vector2.new(0, 1), Enum.TextXAlignment.Left, Enum.TextYAlignment.Bottom, fontMedium, C.CornerText),
-        bottomRight = H.cornerLabel("BottomRight", UDim2.new(1, -K.EDGE, 1, -K.EDGE), Vector2.new(1, 1), Enum.TextXAlignment.Right, Enum.TextYAlignment.Bottom, fontMedium, C.DescText),
-    }
-
-    U.loading = H.new("TextLabel", {
-        Name = "Loading",
-        Size = UDim2.new(1, 0, 0, 14),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        BackgroundTransparency = 1,
-        Text = "Loading...",
-        TextColor3 = C.Muted,
-        TextSize = K.CORNER + 1,
-        Font = fontMedium,
-        Visible = false,
-        ZIndex = 4,
-    }, U.holo)
-
-    U.drag = H.new("TextButton", {
-        Name = "Drag",
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        Text = "",
-        AutoButtonColor = false,
-        Selectable = false,
-        ZIndex = 7,
-    }, U.holo)
-
-    U.info = H.new("Frame", {
-        Name = "Info",
+    U.body = H.new("Frame", {
+        Name = "Body",
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
-        LayoutOrder = 2,
-        Visible = false,
+        BorderSizePixel = 0,
+        LayoutOrder = 1,
     }, U.content)
-    H.new("UIListLayout", {
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, K.GAP),
-    }, U.info)
-    U.infoPad = H.new("UIPadding", {
+    vlist(U.body, K.GAP)
+    H.new("UIPadding", {
         PaddingTop = UDim.new(0, K.PAD),
         PaddingBottom = UDim.new(0, K.PAD),
-        PaddingLeft = UDim.new(0, K.PAD + 2),
-        PaddingRight = UDim.new(0, K.PAD + 2),
-    }, U.info)
+        PaddingLeft = UDim.new(0, K.PAD),
+        PaddingRight = UDim.new(0, K.PAD),
+    }, U.body)
 
     U.header = H.new("Frame", {
         Name = "Header",
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
-        LayoutOrder = 1,
-    }, U.info)
-    U.headerConstraint = H.new("UISizeConstraint", { MinSize = Vector2.new(0, 0) }, U.header)
-
-    U.thumbFrame = H.new("Frame", {
-        Name = "Thumbnail",
-        Size = UDim2.fromOffset(K.THUMB, K.THUMB),
-        BackgroundColor3 = C.ThumbBg,
         BorderSizePixel = 0,
-        Visible = false,
-    }, U.header)
-    H.corner(U.thumbFrame, 10)
-    H.stroke(U.thumbFrame, C.CardStroke, 1)
-
-    U.thumbImage = H.new("ImageLabel", {
-        Name = "Image",
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        Image = "",
-        ScaleType = Enum.ScaleType.Crop,
-        ZIndex = 2,
-    }, U.thumbFrame)
-    H.corner(U.thumbImage, 10)
-
-    U.textFrame = H.new("Frame", {
-        Name = "TextBlock",
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 0, 0, 0),
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-    }, U.header)
-    H.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 3) }, U.textFrame)
+        LayoutOrder = 1,
+    }, U.body)
+    vlist(U.header, 4)
 
     U.tagPill = H.new("Frame", {
         Name = "TagPill",
         Size = UDim2.new(0, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.XY,
-        BackgroundColor3 = C.Row,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         LayoutOrder = 1,
-        Visible = data.tag ~= "",
-    }, U.textFrame)
+    }, U.header)
     H.corner(U.tagPill, 99)
-    H.stroke(U.tagPill, C.RowStroke, 1)
+    U.tagStroke = H.stroke(U.tagPill, S.theme.Accent, 1, 0.4)
     H.new("UIPadding", {
-        PaddingLeft = UDim.new(0, 8),
-        PaddingRight = UDim.new(0, 8),
+        PaddingLeft = UDim.new(0, 9),
+        PaddingRight = UDim.new(0, 9),
         PaddingTop = UDim.new(0, 2),
         PaddingBottom = UDim.new(0, 2),
     }, U.tagPill)
@@ -557,130 +739,52 @@ Elements.Register("Paragraph", function(section, options)
         Size = UDim2.new(0, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.XY,
         BackgroundTransparency = 1,
-        Text = H.text(data.tag),
-        TextColor3 = C.DescText,
+        Text = data.tag,
+        TextColor3 = S.theme.Accent,
         TextSize = K.TAG,
         Font = fontBold,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center,
         TextWrapped = false,
         RichText = S.rich,
     }, U.tagPill)
 
-    U.title = H.new("TextLabel", {
+    U.title = H.label(U.header, {
         Name = "Title",
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-        Text = H.text(data.title),
-        TextColor3 = C.TextActive,
+        Text = data.title,
         TextSize = K.TITLE,
         Font = fontBold,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top,
-        TextWrapped = true,
-        RichText = S.rich,
+        LineHeight = 1.05,
         LayoutOrder = 2,
-        Visible = data.title ~= "",
-    }, U.textFrame)
+    })
 
-    U.desc = H.new("TextLabel", {
+    U.desc = H.label(U.header, {
         Name = "Description",
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-        Text = H.text(data.description),
-        TextColor3 = C.DescText,
+        Text = data.description,
         TextSize = K.DESC,
         Font = fontRegular,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top,
-        TextWrapped = true,
-        LineHeight = 1.18,
-        RichText = S.rich,
+        LineHeight = 1.2,
         LayoutOrder = 3,
-        Visible = data.description ~= "",
-    }, U.textFrame)
+    })
 
-    U.stats = H.new("Frame", {
-        Name = "Stats",
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-        LayoutOrder = 2,
-        Visible = false,
-    }, U.info)
-    H.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8) }, U.stats)
-
-    U.statusHead = H.new("Frame", {
-        Name = "Header",
-        Size = UDim2.new(1, 0, 0, 16),
-        BackgroundTransparency = 1,
-        LayoutOrder = 0,
-    }, U.stats)
-
-    U.statusHeader = H.new("TextLabel", {
-        Name = "Title",
-        Size = UDim2.new(1, -34, 1, 0),
-        BackgroundTransparency = 1,
-        Text = S.statusTitle,
-        TextColor3 = C.TextActive,
-        TextSize = K.HEAD,
-        Font = fontBold,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd,
-    }, U.statusHead)
-
-    U.statusCount = H.new("TextLabel", {
-        Name = "Count",
-        Size = UDim2.new(0, 30, 1, 0),
-        AnchorPoint = Vector2.new(1, 0),
-        Position = UDim2.new(1, 0, 0, 0),
-        BackgroundTransparency = 1,
-        Text = "",
-        TextColor3 = C.Muted,
-        TextSize = K.HEAD,
-        Font = fontMedium,
-        TextXAlignment = Enum.TextXAlignment.Right,
-    }, U.statusHead)
-
-    U.statGrid = H.new("Frame", {
-        Name = "Grid",
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-        LayoutOrder = 1,
-    }, U.stats)
-    U.statGridLayout = H.new("UIGridLayout", {
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        CellSize = UDim2.new(0.5, -3, 0, K.ROW_H),
-        CellPadding = UDim2.new(0, 6, 0, 6),
-        FillDirection = Enum.FillDirection.Horizontal,
-    }, U.statGrid)
-
-    U.veil = H.new("Frame", {
-        Name = "Veil",
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundColor3 = C.Black,
-        BackgroundTransparency = 0.5,
+    U.rule = H.new("Frame", {
+        Name = "Rule",
+        Size = UDim2.new(1, 0, 0, 1),
+        BackgroundColor3 = S.theme.Line,
+        BackgroundTransparency = 0.25,
         BorderSizePixel = 0,
-        Active = true,
-        Visible = false,
-        ZIndex = 20,
-    }, U.container)
-    H.corner(U.veil, 12)
+        LayoutOrder = 2,
+    }, U.body)
 
-    function H.hasHologram()
-        return data.hologram ~= nil
-    end
+    U.list = H.new("Frame", {
+        Name = "Info",
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        LayoutOrder = 3,
+    }, U.body)
+    vlist(U.list, K.ROW_GAP)
 
-    function H.hasStatus()
-        return #S.status > 0
-    end
-
-    function H.hasHeader()
-        return U.title.Visible or U.desc.Visible or U.tagPill.Visible or U.thumbFrame.Visible
-    end
+    -- // Layout / tema
 
     function H.resize()
         if S.destroyed then return end
@@ -690,1234 +794,732 @@ Elements.Register("Paragraph", function(section, options)
         end
     end
 
-    function H.updateGrid()
-        local single = #S.status == 1
-        U.statGridLayout.CellSize = UDim2.new(single and 1 or 0.5, single and 0 or -3, 0, K.ROW_H)
-    end
-
     function H.layout()
-        local hasHolo = H.hasHologram()
-        local hasHeader = H.hasHeader()
-        local hasStatus = H.hasStatus()
+        if S.destroyed then return end
+        local hasHeader = data.tag ~= "" or data.title ~= "" or data.description ~= ""
+        local hasItems = #S.items > 0
 
+        U.tagPill.Visible = data.tag ~= ""
+        U.title.Visible = data.title ~= ""
+        U.desc.Visible = data.description ~= ""
         U.header.Visible = hasHeader
-        U.stats.Visible = hasStatus
-        U.info.Visible = hasHeader or hasStatus
-        U.holo.Visible = hasHolo
-        U.holo.Size = UDim2.new(1, 0, 0, K.CARD_H)
-        U.infoPad.PaddingTop = UDim.new(0, hasHolo and 10 or K.PAD)
-
+        U.rule.Visible = S.rule and hasHeader and hasItems
+        U.list.Visible = hasItems
         H.resize()
     end
 
-    H.connect(U.contentLayout:GetPropertyChangedSignal("AbsoluteContentSize"), H.resize)
+    function H.applyTheme()
+        local theme = S.theme
+        U.title.TextColor3 = H.color(S.titleColor) or theme.Title
+        U.desc.TextColor3 = H.color(S.descColor) or theme.Desc
+        U.tag.TextColor3 = theme.Accent
+        U.tagStroke.Color = theme.Accent
+        U.rule.BackgroundColor3 = theme.Line
+    end
 
     function H.applyDisabled()
-        U.title.TextColor3 = data.disabled and C.TextDisabled or C.TextActive
-        U.desc.TextColor3 = data.disabled and C.DescDisabled or C.DescText
-        U.thumbImage.ImageTransparency = data.disabled and 0.5 or 0
-        U.veil.Visible = data.disabled
+        U.content.GroupTransparency = data.disabled and 0.55 or 0
     end
 
-    function H.setBusy(value)
-        S.busy = value
-        H.refreshLoading()
-    end
+    U.contentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(H.resize)
 
-    function H.refreshLoading()
-        U.loading.Visible = S.busy ~= nil and S.model == nil and not U.fallback.Visible
-    end
+    -- // Linhas de informacao
 
-    function H.layoutThumb(hasThumb)
-        U.headerConstraint.MinSize = Vector2.new(0, hasThumb and K.THUMB or 0)
-        if hasThumb then
-            local offset = K.THUMB + K.THUMB_GAP
-            U.thumbFrame.Visible = true
-            U.textFrame.Position = UDim2.new(0, offset, 0, 0)
-            U.textFrame.Size = UDim2.new(1, -offset, 0, 0)
-        else
-            U.thumbFrame.Visible = false
-            U.thumbImage.Image = ""
-            U.textFrame.Position = UDim2.new(0, 0, 0, 0)
-            U.textFrame.Size = UDim2.new(1, 0, 0, 0)
+    function H.createRow(entry, index)
+        local theme = S.theme
+        local color = H.entryColor(entry, index)
+        local kind = entry.kind
+        local row = { paints = {} }
+
+        local function paint(instance, property)
+            row.paints[#row.paints + 1] = { instance, property }
+            instance[property] = color
         end
-    end
 
-    function H.fetchUserThumb(userId)
-        local ok, result, ready = pcall(function()
-            return Svc.players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-        end)
-        if ok and result then
-            return result, ready ~= false
-        end
-        return nil, false
-    end
-
-    function H.stopThumbLive()
-        S.liveToken = S.liveToken + 1
-    end
-
-    function H.startThumbLive(userId)
-        S.liveToken = S.liveToken + 1
-        local token = S.liveToken
-        task.spawn(function()
-            while not S.destroyed and S.liveToken == token do
-                local image, ready = H.fetchUserThumb(userId)
-                if S.destroyed or S.liveToken ~= token then return end
-                if image and U.thumbImage.Image ~= image then
-                    U.thumbImage.Image = image
+        function row.recolor(newColor)
+            color = newColor
+            for _, item in ipairs(row.paints) do
+                if item[1].Parent then
+                    item[1][item[2]] = newColor
                 end
-                if image and ready then return end
-                task.wait(K.UPDATE)
             end
-        end)
-    end
-
-    function H.thumbValue(value)
-        if type(value) == "table" then
-            local id, kind
-            local asset = value.asset or value.Asset
-            local user = value.user or value.User
-            if asset ~= nil then
-                id, kind = H.assetId(asset), "Asset"
-            elseif user ~= nil then
-                id, kind = H.assetId(user), "AvatarHeadShot"
-            else
-                id = H.assetId(value.id or value.Id)
-                kind = H.thumbType(value.type or value.Type)
-            end
-            if not id then return nil end
-            return H.thumbUrl(id, kind)
         end
-        if type(value) == "number" or type(value) == "string" then
-            return value
-        end
-        return nil
-    end
-
-    function H.setThumbnail(value)
-        H.stopThumbLive()
-        data.thumbnail = value
-
-        local resolved = H.thumbValue(value)
-
-        if resolved == nil or resolved == "" then
-            H.layoutThumb(false)
-            H.layout()
-            return
-        end
-
-        H.layoutThumb(true)
-
-        if type(resolved) == "number" then
-            U.thumbImage.Image = ""
-            H.startThumbLive(resolved)
-        else
-            U.thumbImage.Image = H.normalizeImage(resolved)
-        end
-
-        H.layout()
-    end
-
-    function H.formatStat(stat)
-        if stat.max ~= nil and tonumber(stat.value) ~= nil then
-            return H.number(stat.value) .. "/" .. H.number(stat.max)
-        end
-        if type(stat.value) == "number" then
-            return H.number(stat.value)
-        end
-        return tostring(stat.value)
-    end
-
-    function H.ratio(stat)
-        local value = tonumber(stat.value)
-        local max = stat.max
-        if value and max and max > 0 then
-            return math.clamp(value / max, 0, 1)
-        end
-        return nil
-    end
-
-    function H.percent(ratio)
-        return string.format("%d%%", math.floor(ratio * 100 + 0.5))
-    end
-
-    function H.createStatRow(stat, index)
-        local ratio = H.ratio(stat)
 
         local frame = H.new("Frame", {
-            Name = "Stat_" .. index,
-            BackgroundColor3 = C.Row,
+            Name = "Info_" .. index,
+            BackgroundTransparency = 1,
             BorderSizePixel = 0,
+            Size = UDim2.new(1, 0, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y,
             LayoutOrder = index,
-        }, U.statGrid)
-        H.corner(frame, 8)
-        H.stroke(frame, C.RowStroke, 1)
+            Visible = entry.visible,
+        }, U.list)
+        row.frame = frame
 
-        local nameLabel = H.new("TextLabel", {
-            Name = "Name",
-            Size = UDim2.new(1, -20, 0, 12),
-            Position = UDim2.new(0, 10, 0, ratio and 6 or 8),
-            BackgroundTransparency = 1,
-            Text = stat.name,
-            TextColor3 = C.Muted,
-            TextSize = K.STAT,
-            Font = fontMedium,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            TextTruncate = Enum.TextTruncate.AtEnd,
-            RichText = S.rich,
-        }, frame)
+        local labelColor = H.color(entry.labelColor) or theme.Muted
 
-        local valueLabel = H.new("TextLabel", {
-            Name = "Value",
-            Size = UDim2.new(ratio and 0.64 or 1, ratio and -10 or -20, 0, 18),
-            Position = UDim2.new(0, 10, 0, ratio and 18 or 21),
-            BackgroundTransparency = 1,
-            Text = H.formatStat(stat),
-            TextColor3 = C.TextActive,
-            TextSize = K.STAT_VALUE,
-            Font = fontBold,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            TextTruncate = Enum.TextTruncate.AtEnd,
-            RichText = S.rich,
-        }, frame)
+        if kind == "text" and entry.text == nil and entry.tex == nil then
+            frame.Visible = false
+            return row
+        end
 
-        local percentLabel
-        local fill
-        if ratio then
-            percentLabel = H.new("TextLabel", {
-                Name = "Percent",
-                Size = UDim2.new(0.36, -10, 0, 18),
-                Position = UDim2.new(0.64, 0, 0, 18),
+        if kind == "divider" then
+            frame.AutomaticSize = Enum.AutomaticSize.None
+            frame.Size = UDim2.new(1, 0, 0, K.DIVIDER_H)
+            local line = H.new("Frame", {
+                Name = "Line",
+                AnchorPoint = Vector2.new(0, 0.5),
+                Position = UDim2.new(0, 0, 0.5, 0),
+                Size = UDim2.new(1, 0, 0, 1),
+                BorderSizePixel = 0,
+            }, frame)
+            paint(line, "BackgroundColor3")
+            return row
+        end
+
+        if kind == "header" then
+            vlist(frame, 4)
+            local title = H.label(frame, {
+                Name = "Header",
+                Text = entry.text or entry.label or "",
+                TextSize = K.HEAD,
+                Font = fontBold,
+                LayoutOrder = 1,
+            })
+            paint(title, "TextColor3")
+            H.new("Frame", {
+                Name = "Rule",
+                Size = UDim2.new(1, 0, 0, 1),
+                BackgroundColor3 = theme.Line,
+                BackgroundTransparency = 0.3,
+                BorderSizePixel = 0,
+                LayoutOrder = 2,
+            }, frame)
+            return row
+        end
+
+        if kind == "badges" then
+            vlist(frame, 5)
+            if entry.label then
+                H.label(frame, {
+                    Text = entry.label,
+                    TextSize = K.LABEL,
+                    TextColor3 = labelColor,
+                    LayoutOrder = 1,
+                })
+            end
+            local wrap = H.new("Frame", {
+                Name = "Badges",
                 BackgroundTransparency = 1,
-                Text = H.percent(ratio),
-                TextColor3 = C.DescText,
-                TextSize = K.STAT,
+                BorderSizePixel = 0,
+                Size = UDim2.new(1, 0, 0, 0),
+                AutomaticSize = Enum.AutomaticSize.Y,
+                LayoutOrder = 2,
+            }, frame)
+            H.new("UIListLayout", {
+                FillDirection = Enum.FillDirection.Horizontal,
+                Wraps = true,
+                SortOrder = Enum.SortOrder.LayoutOrder,
+                Padding = UDim.new(0, 6),
+            }, wrap)
+
+            for i, item in ipairs(entry.list or {}) do
+                local text = item
+                local own = nil
+                if type(item) == "table" then
+                    text = pick(item, "text", "Text", "name", "Name", "label", "Label", "value", "Value")
+                    own = H.color(pick(item, "color", "Color"))
+                end
+                local tone = own or color
+
+                local pill = H.new("Frame", {
+                    Name = "Badge_" .. i,
+                    Size = UDim2.new(0, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.XY,
+                    BackgroundColor3 = tone,
+                    BackgroundTransparency = 0.88,
+                    BorderSizePixel = 0,
+                    LayoutOrder = i,
+                }, wrap)
+                H.corner(pill, 99)
+                local pillStroke = H.stroke(pill, tone, 1, 0.55)
+                H.new("UIPadding", {
+                    PaddingLeft = UDim.new(0, 10),
+                    PaddingRight = UDim.new(0, 10),
+                    PaddingTop = UDim.new(0, 3),
+                    PaddingBottom = UDim.new(0, 3),
+                }, pill)
+                local pillText = H.new("TextLabel", {
+                    Size = UDim2.new(0, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.XY,
+                    BackgroundTransparency = 1,
+                    Text = H.display(text == nil and "" or text),
+                    TextColor3 = tone,
+                    TextSize = K.BADGE,
+                    Font = fontBold,
+                    TextWrapped = false,
+                    RichText = S.rich,
+                }, pill)
+
+                if not own then
+                    paint(pill, "BackgroundColor3")
+                    paint(pillStroke, "Color")
+                    paint(pillText, "TextColor3")
+                end
+            end
+            return row
+        end
+
+        if kind == "gallery" then
+            vlist(frame, 5)
+            if entry.label then
+                H.label(frame, {
+                    Text = entry.label,
+                    TextSize = K.LABEL,
+                    TextColor3 = labelColor,
+                    LayoutOrder = 1,
+                })
+            end
+            local wrap = H.new("Frame", {
+                Name = "Gallery",
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                Size = UDim2.new(1, 0, 0, 0),
+                AutomaticSize = Enum.AutomaticSize.Y,
+                LayoutOrder = 2,
+            }, frame)
+            H.new("UIListLayout", {
+                FillDirection = Enum.FillDirection.Horizontal,
+                Wraps = true,
+                SortOrder = Enum.SortOrder.LayoutOrder,
+                Padding = UDim.new(0, 8),
+            }, wrap)
+
+            local tile = entry.size or K.TILE
+            for i, item in ipairs(entry.list or {}) do
+                local texture = item
+                local tint = nil
+                if type(item) == "table" then
+                    texture = pick(item, "texture", "Texture", "image", "Image", "id", "Id")
+                    tint = H.color(pick(item, "tint", "Tint"))
+                end
+
+                local holder = H.new("Frame", {
+                    Name = "Tile_" .. i,
+                    Size = UDim2.fromOffset(tile, tile),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    LayoutOrder = i,
+                }, wrap)
+                H.corner(holder, 8)
+                H.stroke(holder, theme.Line, 1, 0.2)
+
+                local image = H.new("ImageLabel", {
+                    Size = UDim2.new(1, -10, 1, -10),
+                    Position = UDim2.new(0.5, 0, 0.5, 0),
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    BackgroundTransparency = 1,
+                    ScaleType = Enum.ScaleType.Fit,
+                    ImageTransparency = 1,
+                }, holder)
+                if tint then
+                    image.ImageColor3 = tint
+                end
+                H.applyTexture(image, texture)
+            end
+            return row
+        end
+
+        if kind == "preview" then
+            vlist(frame, 6)
+            local height = entry.height or K.PREVIEW_H
+            local holder = H.new("Frame", {
+                Name = "Preview",
+                Size = UDim2.new(1, 0, 0, height),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                ClipsDescendants = true,
+                LayoutOrder = 1,
+            }, frame)
+            H.corner(holder, 10)
+            H.stroke(holder, theme.Line, 1, 0.1)
+
+            local fit = type(entry.fit) == "string" and entry.fit:lower() or "fit"
+            local scaleType = Enum.ScaleType.Fit
+            if fit == "crop" then
+                scaleType = Enum.ScaleType.Crop
+            elseif fit == "stretch" then
+                scaleType = Enum.ScaleType.Stretch
+            end
+
+            local image = H.new("ImageLabel", {
+                Size = UDim2.new(1, -12, 1, -12),
+                Position = UDim2.new(0.5, 0, 0.5, 0),
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                ScaleType = scaleType,
+                ImageTransparency = 1,
+            }, holder)
+            if entry.tint == true then
+                paint(image, "ImageColor3")
+            else
+                local tint = H.color(entry.tint)
+                if tint then
+                    image.ImageColor3 = tint
+                end
+            end
+            H.applyTexture(image, entry.tex)
+
+            if entry.label then
+                H.label(frame, {
+                    Text = entry.label,
+                    TextSize = K.LABEL,
+                    TextColor3 = labelColor,
+                    LayoutOrder = 2,
+                })
+            end
+            if entry.text then
+                local caption = H.label(frame, {
+                    Text = entry.text,
+                    TextSize = K.INFO,
+                    Font = fontBold,
+                    LayoutOrder = 3,
+                })
+                paint(caption, "TextColor3")
+            end
+            return row
+        end
+
+        local indent = 0
+        local style = S.marker
+        if entry.bullet == false then
+            style = "none"
+        elseif entry.bullet == true and style == "none" then
+            style = "bar"
+        end
+
+        local hasIcon = entry.tex ~= nil
+        if hasIcon then
+            local size = entry.size or K.ICON
+            local icon = H.new("ImageLabel", {
+                Name = "Icon",
+                Size = UDim2.fromOffset(size, size),
+                Position = UDim2.new(0, 0, 0, 0),
+                BackgroundTransparency = 1,
+                ScaleType = Enum.ScaleType.Fit,
+                ImageTransparency = 1,
+            }, frame)
+            if entry.tint == true then
+                paint(icon, "ImageColor3")
+            else
+                local tint = H.color(entry.tint)
+                if tint then
+                    icon.ImageColor3 = tint
+                end
+            end
+            H.applyTexture(icon, entry.tex)
+            indent = size + 10
+        elseif style == "bar" then
+            local marker = H.new("Frame", {
+                Name = "Marker",
+                Size = UDim2.new(0, 3, 1, 0),
+                BorderSizePixel = 0,
+            }, frame)
+            H.corner(marker, 99)
+            paint(marker, "BackgroundColor3")
+            indent = 13
+        elseif style == "dot" then
+            local marker = H.new("Frame", {
+                Name = "Marker",
+                Position = UDim2.new(0, 1, 0, 5),
+                Size = UDim2.fromOffset(6, 6),
+                BorderSizePixel = 0,
+            }, frame)
+            H.corner(marker, 99)
+            paint(marker, "BackgroundColor3")
+            indent = 14
+        end
+
+        local content = H.new("Frame", {
+            Name = "Content",
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Position = UDim2.new(0, indent, 0, 0),
+            Size = UDim2.new(1, -indent, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y,
+        }, frame)
+        vlist(content, kind == "bar" and 5 or 2)
+        if hasIcon then
+            H.new("UIPadding", { PaddingTop = UDim.new(0, 2) }, content)
+        end
+
+        if kind == "bar" then
+            local ratio = math.clamp(entry.value / entry.max, 0, 1)
+
+            local top = H.new("Frame", {
+                Name = "Top",
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                Size = UDim2.new(1, 0, 0, 0),
+                AutomaticSize = Enum.AutomaticSize.Y,
+                LayoutOrder = 1,
+            }, content)
+            H.new("UIListLayout", {
+                FillDirection = Enum.FillDirection.Horizontal,
+                SortOrder = Enum.SortOrder.LayoutOrder,
+                Padding = UDim.new(0, 8),
+            }, top)
+
+            H.label(top, {
+                Name = "Name",
+                Size = UDim2.new(0.5, -4, 0, 0),
+                Text = entry.label or "",
+                TextSize = K.LABEL,
+                TextColor3 = labelColor,
+                LayoutOrder = 1,
+            })
+            local amount = H.label(top, {
+                Name = "Value",
+                Size = UDim2.new(0.5, -4, 0, 0),
+                Text = string.format("%s/%s  •  %d%%", H.number(entry.value), H.number(entry.max), math.floor(ratio * 100 + 0.5)),
+                TextSize = K.INFO,
                 Font = fontBold,
                 TextXAlignment = Enum.TextXAlignment.Right,
-            }, frame)
+                LayoutOrder = 2,
+            })
+            paint(amount, "TextColor3")
 
             local track = H.new("Frame", {
                 Name = "Track",
-                Size = UDim2.new(1, -20, 0, 3),
-                Position = UDim2.new(0, 10, 1, -9),
-                BackgroundColor3 = C.Bar,
+                Size = UDim2.new(1, 0, 0, K.BAR_H),
+                BackgroundColor3 = theme.Track,
                 BorderSizePixel = 0,
-            }, frame)
+                LayoutOrder = 2,
+            }, content)
             H.corner(track, 99)
-            fill = H.new("Frame", {
+            local fill = H.new("Frame", {
                 Name = "Fill",
                 Size = UDim2.new(0, 0, 1, 0),
-                BackgroundColor3 = C.Accent,
                 BorderSizePixel = 0,
             }, track)
             H.corner(fill, 99)
+            paint(fill, "BackgroundColor3")
             H.tween(fill, TI.BAR, { Size = UDim2.new(ratio, 0, 1, 0) })
+            return row
         end
 
-        return {
-            frame = frame,
-            nameLabel = nameLabel,
-            valueLabel = valueLabel,
-            percentLabel = percentLabel,
-            fill = fill,
-            hasBar = ratio ~= nil,
-        }
-    end
-
-    function H.refreshStat(index)
-        local stat = S.status[index]
-        local row = S.rows[index]
-        if not stat or not row then return end
-
-        local ratio = H.ratio(stat)
-        if (ratio ~= nil) ~= row.hasBar then
-            row.frame:Destroy()
-            S.rows[index] = H.createStatRow(stat, index)
-            return
-        end
-
-        local text = H.formatStat(stat)
-        if row.nameLabel.Text ~= stat.name then
-            row.nameLabel.Text = stat.name
-        end
-        if row.valueLabel.Text ~= text then
-            row.valueLabel.Text = text
-        end
-        if row.fill and ratio then
-            row.percentLabel.Text = H.percent(ratio)
-            H.tween(row.fill, TI.BAR, { Size = UDim2.new(ratio, 0, 1, 0) })
-        end
-    end
-
-    function H.updateCount()
-        U.statusCount.Text = #S.status > 0 and tostring(#S.status) or ""
-    end
-
-    function H.rebuildStatus()
-        for index = #S.rows, #S.status + 1, -1 do
-            S.rows[index].frame:Destroy()
-            S.rows[index] = nil
-        end
-        for index, stat in ipairs(S.status) do
-            local row = S.rows[index]
-            if row then
-                row.frame.Name = "Stat_" .. index
-                row.frame.LayoutOrder = index
-                H.refreshStat(index)
+        if entry.label and entry.text then
+            if entry.inline then
+                local line = H.new("Frame", {
+                    Name = "Line",
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Size = UDim2.new(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    LayoutOrder = 1,
+                }, content)
+                H.new("UIListLayout", {
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDim.new(0, 8),
+                }, line)
+                H.label(line, {
+                    Name = "Label",
+                    Size = UDim2.new(0.42, -4, 0, 0),
+                    Text = entry.label,
+                    TextSize = K.LABEL + 1,
+                    TextColor3 = labelColor,
+                    LayoutOrder = 1,
+                })
+                local value = H.label(line, {
+                    Name = "Value",
+                    Size = UDim2.new(0.58, -4, 0, 0),
+                    Text = entry.text,
+                    Font = fontBold,
+                    TextXAlignment = Enum.TextXAlignment.Right,
+                    LayoutOrder = 2,
+                })
+                paint(value, "TextColor3")
             else
-                S.rows[index] = H.createStatRow(stat, index)
+                H.label(content, {
+                    Name = "Label",
+                    Text = entry.label,
+                    TextSize = K.LABEL,
+                    TextColor3 = labelColor,
+                    LayoutOrder = 1,
+                })
+                local value = H.label(content, {
+                    Name = "Value",
+                    Text = entry.text,
+                    Font = fontBold,
+                    LayoutOrder = 2,
+                })
+                paint(value, "TextColor3")
+            end
+        else
+            local text = H.label(content, {
+                Name = "Text",
+                Text = entry.text or entry.label or "",
+                LayoutOrder = 1,
+            })
+            paint(text, "TextColor3")
+        end
+
+        return row
+    end
+
+    function H.clearRows()
+        for _, row in ipairs(S.rows) do
+            if row.frame then
+                row.frame:Destroy()
             end
         end
-        H.updateCount()
-        H.updateGrid()
+        S.rows = {}
+    end
+
+    function H.rebuildRows()
+        H.clearRows()
+        for index, entry in ipairs(S.items) do
+            S.rows[index] = H.createRow(entry, index)
+        end
         H.layout()
     end
 
-    function H.applyCorners()
-        local corners = data.hologram and data.hologram.corners or {}
-        for name, label in pairs(U.corners) do
-            local text = corners[name]
-            text = text == nil and "" or tostring(text)
-            if label.Text ~= text then
-                label.Text = text
-            end
-            local visible = text ~= ""
-            if label.Visible ~= visible then
-                label.Visible = visible
+    function H.rebuildRow(index)
+        local old = S.rows[index]
+        if old and old.frame then
+            old.frame:Destroy()
+        end
+        S.rows[index] = H.createRow(S.items[index], index)
+        H.layout()
+    end
+
+    function H.recolorAll()
+        for index, row in ipairs(S.rows) do
+            local entry = S.items[index]
+            if entry and row.recolor then
+                row.recolor(H.entryColor(entry, index))
             end
         end
     end
 
-    function H.applyOrbit()
-        local rotation = CFrame.Angles(0, -math.rad(S.angle), 0)
-        local pitch = math.rad(S.pitch + S.tilt)
-        local offset = Vector3.new(0, math.sin(pitch) * S.distance, -math.cos(pitch) * S.distance)
-        U.camera.CFrame = CFrame.lookAt(rotation * offset, Vector3.zero)
-        if S.lastAngle ~= S.angle then
-            S.lastAngle = S.angle
-            U.viewport.LightDirection = rotation * S.light
+    -- // Inicializacao
+
+    do
+        local items = H.entries(opt("info", "Info", "lines", "Lines", "items", "Items"))
+        for _, entry in ipairs(H.entries(opt("status", "Status"))) do
+            items[#items + 1] = entry
         end
+        S.items = items
     end
 
-    function H.fitCamera()
-        if not S.size then return end
-        local size = S.size
-        local pitch = math.rad(S.pitch)
-        local tanHalf = math.tan(math.rad(U.camera.FieldOfView * 0.5))
-        local view = U.viewport.AbsoluteSize
-        local aspect = view.Y > 0 and view.X / view.Y or 1
-        local radius = math.sqrt(size.X * size.X + size.Z * size.Z) * 0.5
-        local extentY = size.Y * math.cos(pitch) + 2 * radius * math.sin(pitch)
-        local fitY = extentY * 0.5 / tanHalf
-        local fitX = radius / (tanHalf * aspect)
-        S.distance = math.max((math.max(fitY, fitX) + radius) * K.MARGIN, 0.5)
-        H.applyOrbit()
-    end
-
-    function H.clearHologram()
-        local old = S.model
-        S.model = nil
-        S.size = nil
-        S.signature = nil
-        S.velocity = 0
-        S.tilt = 0
-        if old then
-            old.Parent = nil
-            task.defer(old.Destroy, old)
-        end
-        U.fallback.Image = ""
-        U.fallback.ImageColor3 = Color3.new(1, 1, 1)
-        U.fallback.Visible = false
-        H.refreshLoading()
-    end
-
-    function H.mountHolder(holder, size, isCharacter)
-        S.pitch = isCharacter and K.PITCH_CHAR or K.PITCH_ITEM
-        S.size = size
-        S.tilt = 0
-        H.stopTween(U.viewport)
-        U.viewport.ImageTransparency = 1
-        holder.Parent = U.viewport
-        S.model = holder
-        S.lastAngle = nil
-        H.fitCamera()
-        U.fallback.Visible = false
-        H.tween(U.viewport, TI.FADE, { ImageTransparency = 0 })
-        H.refreshLoading()
-    end
-
-    function H.resetPose(model)
-        local root = model:FindFirstChild("HumanoidRootPart")
-        if not root or not root:IsA("BasePart") then return end
-
-        local joints = {}
-        for _, descendant in ipairs(model:GetDescendants()) do
-            if descendant:IsA("JointInstance") and descendant.Part0 and descendant.Part1 then
-                joints[#joints + 1] = descendant
-            end
-        end
-
-        local targets = { [root] = root.CFrame }
-        local progress = true
-        local guard = 0
-        while progress and guard < 64 do
-            progress = false
-            guard = guard + 1
-            for _, joint in ipairs(joints) do
-                local part0 = joint.Part0
-                local part1 = joint.Part1
-                if targets[part0] and not targets[part1] then
-                    targets[part1] = targets[part0] * joint.C0 * joint.C1:Inverse()
-                    progress = true
-                elseif targets[part1] and not targets[part0] then
-                    targets[part0] = targets[part1] * joint.C1 * joint.C0:Inverse()
-                    progress = true
-                end
-            end
-        end
-
-        for _, joint in ipairs(joints) do
-            joint:Destroy()
-        end
-        for part, cframe in pairs(targets) do
-            part.CFrame = cframe
-        end
-    end
-
-    function H.collectParts(model)
-        local isCharacter = model:FindFirstChildOfClass("Humanoid") ~= nil
-
-        if isCharacter then
-            for _, child in ipairs(model:GetChildren()) do
-                if child:IsA("Tool") then
-                    child:Destroy()
-                end
-            end
-        end
-
-        pcall(function()
-            model.LevelOfDetail = Enum.ModelLevelOfDetail.Disabled
-        end)
-
-        local parts = {}
-        for _, descendant in ipairs(model:GetDescendants()) do
-            if descendant:IsA("BasePart") then
-                parts[#parts + 1] = descendant
-            elseif REMOVABLE[descendant.ClassName] or descendant:IsA("PostEffect") then
-                descendant:Destroy()
-            end
-        end
-
-        return parts, isCharacter
-    end
-
-    function H.tuneParts(parts, tint)
-        for _, part in ipairs(parts) do
-            if part.Parent then
-                part.Anchored = true
-                part.CanCollide = false
-                part.CanTouch = false
-                part.CanQuery = false
-                part.CastShadow = false
-                if tint then
-                    part.Color = part.Color:Lerp(tint, 0.4)
-                end
-                if part:IsA("MeshPart") then
-                    pcall(function()
-                        part.RenderFidelity = Enum.RenderFidelity.Precise
-                    end)
-                end
-            end
-        end
-    end
-
-    function H.dropInvisible(parts)
-        local kept = {}
-        for _, part in ipairs(parts) do
-            if part.Parent then
-                if part.Transparency >= K.HIDDEN_ALPHA then
-                    part:Destroy()
-                else
-                    kept[#kept + 1] = part
-                end
-            end
-        end
-        return kept
-    end
-
-    function H.measure(holder)
-        local root = holder:FindFirstChild("HumanoidRootPart")
-        if root and root:IsA("BasePart") then
-            holder.PrimaryPart = root
-        else
-            holder.PrimaryPart = nil
-            holder.WorldPivot = CFrame.new()
-        end
-        local measured, boxCFrame, boxSize = pcall(function()
-            return holder:GetBoundingBox()
-        end)
-        holder.PrimaryPart = nil
-        if not measured or boxSize.Magnitude <= 0 then
-            return nil, nil
-        end
-        return boxCFrame, boxSize
-    end
-
-    function H.waitStable(source, token)
-        if not workspace.StreamingEnabled or not source:IsDescendantOf(workspace) then
-            return
-        end
-
-        pcall(function()
-            local localPlayer = Svc.players.LocalPlayer
-            if localPlayer then
-                local position
-                if source:IsA("Model") then
-                    position = source:GetPivot().Position
-                elseif source:IsA("BasePart") then
-                    position = source.Position
-                end
-                if position then
-                    localPlayer:RequestStreamAroundAsync(position, K.STREAM)
-                end
-            end
-        end)
-
-        local lastChange = os.clock()
-        local watcher = source.DescendantAdded:Connect(function()
-            lastChange = os.clock()
-        end)
-        local started = os.clock()
-        while os.clock() - started < K.STABLE do
-            if S.destroyed or S.holoToken ~= token then
-                break
-            end
-            if os.clock() - lastChange >= 0.6 then
-                break
-            end
-            task.wait(0.2)
-        end
-        watcher:Disconnect()
-    end
-
-    function H.cloneSource(source)
-        local changed = {}
-
-        local function force(instance)
-            if not instance.Archivable then
-                changed[#changed + 1] = instance
-                pcall(function()
-                    instance.Archivable = true
-                end)
-            end
-        end
-
-        force(source)
-        for _, descendant in ipairs(source:GetDescendants()) do
-            force(descendant)
-        end
-
-        local ok, clone = pcall(function()
-            return source:Clone()
-        end)
-
-        for _, instance in ipairs(changed) do
-            pcall(function()
-                instance.Archivable = false
-            end)
-        end
-
-        if ok then
-            return clone
-        end
-        return nil
-    end
-
-    function H.preload(holder, token)
-        local finished = false
-        task.spawn(function()
-            pcall(function()
-                Svc.content:PreloadAsync({ holder })
-            end)
-            finished = true
-        end)
-        local started = os.clock()
-        while not finished and os.clock() - started < K.PRELOAD do
-            if S.destroyed or S.holoToken ~= token then return end
-            task.wait(0.1)
-        end
-    end
-
-    function H.buildHolder(source, tint, token, temporary)
-        if not temporary and not source:FindFirstChildOfClass("Humanoid") then
-            H.waitStable(source, token)
-        end
-        if S.destroyed or S.holoToken ~= token then return nil end
-
-        local clone = temporary and source or H.cloneSource(source)
-        if not clone then return nil end
-
-        local holder = clone
-        if not clone:IsA("Model") then
-            holder = Instance.new("Model")
-            clone.Parent = holder
-        end
-
-        local parts, isCharacter = H.collectParts(holder)
-
-        if not isCharacter then
-            parts = H.dropInvisible(parts)
-        end
-
-        if #parts == 0 then
-            holder:Destroy()
-            return nil
-        end
-
-        H.tuneParts(parts, tint)
-
-        if isCharacter then
-            H.resetPose(holder)
-        end
-
-        H.preload(holder, token)
-        if S.destroyed or S.holoToken ~= token then
-            holder:Destroy()
-            return nil
-        end
-
-        local boxCFrame, boxSize = H.measure(holder)
-        if not boxCFrame then
-            holder:Destroy()
-            return nil
-        end
-
-        holder.WorldPivot = boxCFrame
-        holder:PivotTo(CFrame.new())
-        return holder, boxSize, isCharacter
-    end
-
-    function H.resolveTarget(target, kind)
-        if typeof(target) == "Instance" then
-            if target:IsA("Player") then
-                return target, target.UserId
-            end
-            if target:IsA("Model") then
-                local owner = Svc.players:GetPlayerFromCharacter(target)
-                if owner then
-                    return owner, owner.UserId
-                end
-            end
-            return nil, nil
-        end
-
-        if H.isAsset(kind) then return nil, nil end
-
-        if type(target) == "number" then
-            local found = Svc.players:GetPlayerByUserId(target)
-            if found or H.isChar(kind) then
-                return found, target
-            end
-            return nil, nil
-        end
-
-        if type(target) == "string" then
-            local lower = target:lower()
-            if lower == "localplayer" and Svc.players.LocalPlayer then
-                return Svc.players.LocalPlayer, Svc.players.LocalPlayer.UserId
-            end
-            local number = tonumber(target)
-            if number then
-                local found = Svc.players:GetPlayerByUserId(number)
-                if found or H.isChar(kind) then
-                    return found, number
-                end
-                return nil, nil
-            end
-            for _, candidate in ipairs(Svc.players:GetPlayers()) do
-                if candidate.Name:lower() == lower or candidate.DisplayName:lower() == lower then
-                    return candidate, candidate.UserId
-                end
-            end
-        end
-
-        return nil, nil
-    end
-
-    function H.findByPath(text)
-        local lowered = text:lower()
-        local node, rest
-        if lowered:sub(1, 5) == "game." then
-            node = game
-            rest = text:sub(6)
-        elseif lowered:sub(1, 10) == "workspace." then
-            node = workspace
-            rest = text:sub(11)
-        else
-            return nil
-        end
-        for name in rest:gmatch("[^%.]+") do
-            node = node and node:FindFirstChild(name)
-            if not node then return nil end
-        end
-        return node
-    end
-
-    function H.packObjects(objects)
-        local usable = {}
-        for _, object in ipairs(objects) do
-            if object:IsA("BasePart") or object:FindFirstChildWhichIsA("BasePart", true) then
-                usable[#usable + 1] = object
-            end
-        end
-        if #usable == 0 then return nil end
-
-        for _, object in ipairs(objects) do
-            if not table.find(usable, object) then
-                pcall(object.Destroy, object)
-            end
-        end
-
-        local only = usable[1]
-        if #usable == 1 and (only:IsA("Model") or only:IsA("Tool") or only:IsA("Accessory") or only:IsA("BasePart")) then
-            return only
-        end
-
-        local model = Instance.new("Model")
-        for _, object in ipairs(usable) do
-            object.Parent = model
-        end
-        return model
-    end
-
-    function H.findTexture(objects)
-        for _, object in ipairs(objects) do
-            if object:IsA("Decal") or object:IsA("Texture") then
-                return object.Texture
-            elseif object:IsA("Shirt") then
-                return object.ShirtTemplate
-            elseif object:IsA("Pants") then
-                return object.PantsTemplate
-            elseif object:IsA("ShirtGraphic") then
-                return object.Graphic
-            end
-            local nested = object:FindFirstChildWhichIsA("Decal", true) or object:FindFirstChildWhichIsA("Texture", true)
-            if nested then
-                return nested.Texture
-            end
-        end
-        return nil
-    end
-
-    function H.destroyAll(objects)
-        for _, object in ipairs(objects) do
-            pcall(object.Destroy, object)
-        end
-    end
-
-    function H.resolveSource(target, kind)
-        if type(target) == "string" then
-            local found = H.findByPath(target)
-            if found then
-                target = found
-            end
-        end
-
-        local player, userId = H.resolveTarget(target, kind)
-
-        if typeof(target) == "Instance" and not player then
-            if target:IsA("Decal") or target:IsA("Texture") then
-                return nil, target.Texture, false
-            end
-            if target:IsA("ImageLabel") or target:IsA("ImageButton") then
-                return nil, target.Image, false
-            end
-            return target, nil, false
-        end
-
-        if player and player.Character then
-            return player.Character, nil, false
-        end
-
-        if userId then
-            local modelOk, model = pcall(function()
-                return Svc.players:CreateHumanoidModelFromUserId(userId)
-            end)
-            if modelOk and typeof(model) == "Instance" then
-                return model, nil, true
-            end
-            local thumbOk, thumb = pcall(function()
-                return Svc.players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
-            end)
-            if thumbOk and thumb then
-                return nil, thumb, false
-            end
-            return nil, nil, false
-        end
-
-        if H.isChar(kind) then
-            return nil, nil, false
-        end
-
-        local assetId = H.assetId(target)
-        if not assetId then
-            return nil, nil, false
-        end
-
-        local objectsOk, objects = pcall(function()
-            return game:GetObjects("rbxassetid://" .. assetId)
-        end)
-        if objectsOk and type(objects) == "table" and #objects > 0 then
-            local packed = H.packObjects(objects)
-            if packed then
-                return packed, nil, true
-            end
-            local texture = H.findTexture(objects)
-            H.destroyAll(objects)
-            if texture and texture ~= "" then
-                return nil, texture, false
-            end
-        end
-
-        local meshOk, meshPart = pcall(function()
-            return Svc.insert:CreateMeshPartAsync("rbxassetid://" .. assetId, Enum.CollisionFidelity.Box, Enum.RenderFidelity.Precise)
-        end)
-        if meshOk and typeof(meshPart) == "Instance" then
-            return meshPart, nil, true
-        end
-
-        if kind == "model" then
-            return nil, H.thumbUrl(assetId, "Asset"), false
-        end
-        return nil, "rbxassetid://" .. assetId, false
-    end
-
-    function H.resolveImage(config)
-        local target = config.target
-
-        if config.type == "thumbnail" then
-            local id = H.assetId(target)
-            if not id then return nil, nil end
-            return H.thumbUrl(id, config.thumbType), id
-        end
-
-        if type(target) == "string" then
-            local found = H.findByPath(target)
-            if found then
-                target = found
-            end
-        end
-
-        if typeof(target) == "Instance" then
-            if target:IsA("Decal") or target:IsA("Texture") then
-                return target.Texture, nil
-            end
-            if target:IsA("ImageLabel") or target:IsA("ImageButton") then
-                return target.Image, nil
-            end
-            return nil, nil
-        end
-
-        local text = H.textOf(target)
-        if text:match("^rbxthumb://") or text:match("^rbxasset://") then
-            return text, H.assetId(text)
-        end
-
-        local id = H.assetId(text)
-        if not id then
-            return H.normalizeImage(text), nil
-        end
-
-        local key = "img:" .. id
-        local cached = S.images[key]
-        if cached then
-            return cached, id
-        end
-
-        local resolved = "rbxassetid://" .. id
-        local objectsOk, objects = pcall(function()
-            return game:GetObjects("rbxassetid://" .. id)
-        end)
-        if objectsOk and type(objects) == "table" and #objects > 0 then
-            local texture = H.findTexture(objects)
-            H.destroyAll(objects)
-            if texture and texture ~= "" then
-                resolved = texture
-            end
-        end
-
-        S.images[key] = resolved
-        return resolved, id
-    end
-
-    function H.showImage(image, token, assetId, tint)
-        if not image or image == "" then return end
-        if S.destroyed or S.holoToken ~= token then return end
-
-        U.fallback.ImageColor3 = tint and Color3.new(1, 1, 1):Lerp(tint, 0.5) or Color3.new(1, 1, 1)
-        U.fallback.ImageTransparency = 1
-        U.fallback.Image = image
-        U.fallback.Visible = true
-        H.refreshLoading()
-
-        local started = os.clock()
-        while not U.fallback.IsLoaded and os.clock() - started < K.PRELOAD do
-            if S.destroyed or S.holoToken ~= token then return end
-            task.wait(0.1)
-        end
-        if S.destroyed or S.holoToken ~= token then return end
-
-        if not U.fallback.IsLoaded and assetId then
-            local alternative = H.thumbUrl(assetId, "Asset")
-            if alternative ~= image then
-                U.fallback.Image = alternative
-                started = os.clock()
-                while not U.fallback.IsLoaded and os.clock() - started < K.IMAGE_ALT do
-                    if S.destroyed or S.holoToken ~= token then return end
-                    task.wait(0.1)
-                end
-                if S.destroyed or S.holoToken ~= token then return end
-            end
-        end
-
-        H.tween(U.fallback, TI.FADE, { ImageTransparency = K.IMAGE_ALPHA })
-    end
-
-    function H.signature(source)
-        local parts = {}
-        if not source:FindFirstChildOfClass("Humanoid") then
-            parts[#parts + 1] = "V" .. tostring(S.version)
-        end
-        for _, child in ipairs(source:GetChildren()) do
-            if child:IsA("Accessory") then
-                parts[#parts + 1] = "A" .. child.Name
-            elseif child:IsA("Shirt") then
-                parts[#parts + 1] = "S" .. child.ShirtTemplate
-            elseif child:IsA("Pants") then
-                parts[#parts + 1] = "P" .. child.PantsTemplate
-            elseif child:IsA("ShirtGraphic") then
-                parts[#parts + 1] = "G" .. child.Graphic
-            elseif child:IsA("BodyColors") then
-                parts[#parts + 1] = "C" .. tostring(child.HeadColor3) .. tostring(child.TorsoColor3) .. tostring(child.LeftArmColor3) .. tostring(child.RightArmColor3) .. tostring(child.LeftLegColor3) .. tostring(child.RightLegColor3)
-            elseif child:IsA("BasePart") and child.Name == "Head" then
-                local face = child:FindFirstChildOfClass("Decal")
-                parts[#parts + 1] = "H" .. (face and face.Texture or "")
-            end
-        end
-        table.sort(parts)
-        return table.concat(parts, "|")
-    end
-
-    function H.liveSource(config)
-        local player = H.resolveTarget(config.target, config.type)
-        if player then
-            return player.Character
-        end
-        if config.live and typeof(config.target) == "Instance" then
-            return config.target.Parent and config.target or nil
-        end
-        return nil
-    end
-
-    function H.poll()
-        if S.busy ~= nil then return end
-        local config = data.hologram
-        if not config then return end
-        local source = H.liveSource(config)
-        if not source then return end
-        local signature = H.signature(source)
-        if signature == S.signature then return end
-
-        local token = S.holoToken
-        H.setBusy(token)
-        local ok, holder, size, isCharacter = pcall(H.buildHolder, source, config.tint, token, false)
-        if S.busy == token then
-            H.setBusy(nil)
-        end
-        if not ok or not holder then return end
-        if S.destroyed or S.holoToken ~= token then
-            holder:Destroy()
-            return
-        end
-        H.clearHologram()
-        S.signature = signature
-        H.mountHolder(holder, size, isCharacter)
-    end
-
-    function H.clearWatch()
-        for _, conn in ipairs(S.watch) do
-            conn:Disconnect()
-        end
-        table.clear(S.watch)
-    end
-
-    function H.scheduleReload()
-        if S.reloadPending or S.destroyed then return end
-        S.reloadPending = true
-        task.delay(0.6, function()
-            S.reloadPending = false
-            if not S.destroyed then
-                pcall(H.poll)
-            end
-        end)
-    end
-
-    function H.bumpVersion()
-        S.version = S.version + 1
-    end
-
-    function H.watchTarget(config)
-        H.clearWatch()
-        if not config or config.target == nil then return end
-        local player = H.resolveTarget(config.target, config.type)
-        if player then
-            S.watch[#S.watch + 1] = player.CharacterAdded:Connect(H.scheduleReload)
-            S.watch[#S.watch + 1] = player.CharacterAppearanceLoaded:Connect(H.scheduleReload)
-            return
-        end
-        if config.live == true and typeof(config.target) == "Instance" then
-            S.watch[#S.watch + 1] = config.target.DescendantAdded:Connect(H.bumpVersion)
-            S.watch[#S.watch + 1] = config.target.DescendantRemoving:Connect(H.bumpVersion)
-        end
-    end
-
-    function H.load()
-        S.holoToken = S.holoToken + 1
-        local token = S.holoToken
-        local config = data.hologram
-
-        H.watchTarget(config)
-        H.clearHologram()
-
-        if not config or config.target == nil then
-            H.setBusy(nil)
-            return
-        end
-
-        if H.isImage(config.type) or config.type == "thumbnail" then
-            H.setBusy(token)
-            task.spawn(function()
-                local ok, image, assetId = pcall(H.resolveImage, config)
-                if ok and image and not S.destroyed and S.holoToken == token then
-                    H.showImage(image, token, assetId, config.tint)
-                end
-                if S.busy == token then
-                    H.setBusy(nil)
-                end
-            end)
-            return
-        end
-
-        local knownImage = S.images[config.target]
-        if knownImage then
-            H.setBusy(nil)
-            U.fallback.ImageColor3 = config.tint and Color3.new(1, 1, 1):Lerp(config.tint, 0.5) or Color3.new(1, 1, 1)
-            U.fallback.ImageTransparency = K.IMAGE_ALPHA
-            U.fallback.Image = knownImage
-            U.fallback.Visible = true
-            H.refreshLoading()
-            return
-        end
-
-        H.setBusy(token)
-
-        task.spawn(function()
-            local mounted = false
-            local fallback = nil
-
-            for attempt = 1, K.ATTEMPTS do
-                if S.destroyed or S.holoToken ~= token then break end
-
-                local resolvedOk, source, image, temporary = pcall(H.resolveSource, config.target, config.type)
-                if not resolvedOk then
-                    source, image, temporary = nil, nil, false
-                end
-
-                if S.destroyed or S.holoToken ~= token then
-                    if temporary and source then
-                        pcall(source.Destroy, source)
-                    end
-                    break
-                end
-
-                if source then
-                    local signature = nil
-                    if not temporary and H.liveSource(config) == source then
-                        signature = H.signature(source)
-                    end
-
-                    local ok, holder, size, isCharacter = pcall(H.buildHolder, source, config.tint, token, temporary)
-
-                    if not (ok and holder) and temporary then
-                        pcall(source.Destroy, source)
-                    end
-
-                    if S.destroyed or S.holoToken ~= token then
-                        if ok and holder then
-                            holder:Destroy()
-                        end
-                        break
-                    end
-
-                    if ok and holder then
-                        H.mountHolder(holder, size, isCharacter)
-                        S.signature = signature
-                        mounted = true
-                        break
-                    end
-                elseif image then
-                    fallback = image
-                    local key = config.target
-                    if type(key) == "number" or type(key) == "string" then
-                        S.images[key] = image
-                    end
-                    break
-                end
-
-                if attempt < K.ATTEMPTS then
-                    task.wait(K.RETRY * attempt)
-                end
-            end
-
-            if not mounted and not S.destroyed and S.holoToken == token then
-                local assetId = H.assetId(config.target)
-                if not fallback and assetId and not H.isChar(config.type) then
-                    fallback = H.thumbUrl(assetId, "Asset")
-                end
-                if fallback then
-                    H.showImage(fallback, token, assetId, config.tint)
-                end
-            end
-
-            if S.busy == token then
-                H.setBusy(nil)
-            end
-        end)
-    end
-
-    function H.startLoop()
-        S.loopToken = S.loopToken + 1
-        local token = S.loopToken
-        task.spawn(function()
-            while not S.destroyed and S.loopToken == token do
-                task.wait(K.UPDATE)
-                if S.destroyed or S.loopToken ~= token then return end
-                if data.hologram then
-                    pcall(H.poll)
-                end
-            end
-        end)
-    end
-
-    function H.ensureHologram()
-        if not data.hologram then
-            data.hologram = H.hologram({})
-        end
-        return data.hologram
-    end
-
-    function H.idle()
-        return S.model == nil and not U.fallback.Visible and S.busy == nil
-    end
-
-    H.connect(U.drag.InputBegan, function(input)
-        local kind = input.UserInputType
-        if kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch then
-            S.dragging = true
-            S.dragInput = input
-            S.velocity = 0
-        end
-    end)
-
-    H.connect(Svc.input.InputChanged, function(input)
-        if not S.dragging or not S.model then return end
-        local kind = input.UserInputType
-        if kind == Enum.UserInputType.MouseMovement or (kind == Enum.UserInputType.Touch and input == S.dragInput) then
-            local delta = input.Delta
-            S.angle = (S.angle + delta.X * K.DRAG) % 360
-            S.tilt = math.clamp(S.tilt + delta.Y * 0.3, K.TILT_MIN, K.TILT_MAX)
-            S.velocity = math.clamp(S.velocity * 0.6 + (delta.X * K.DRAG * 60) * 0.4, -720, 720)
-        end
-    end)
-
-    H.connect(Svc.input.InputEnded, function(input)
-        if not S.dragging then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input == S.dragInput then
-            S.dragging = false
-            S.dragInput = nil
-            S.lastDrag = os.clock()
-        end
-    end)
-
-    H.connect(Svc.run.RenderStepped, function(dt)
-        if S.destroyed then return end
-        if not S.model then return end
-
-        if S.dragging then
-            S.velocity = S.velocity * (1 - math.min(dt * 10, 1))
-        else
-            S.velocity = S.velocity * (1 - math.min(dt * 3, 1))
-            S.tilt = S.tilt * (1 - math.min(dt * 3, 1))
-            local step = S.velocity
-            local config = data.hologram
-            if config and config.rotate and os.clock() - S.lastDrag >= K.RESUME then
-                step = step + config.speed
-            end
-            S.angle = (S.angle + step * dt) % 360
-        end
-
-        H.applyOrbit()
-    end)
-
-    H.connect(U.viewport:GetPropertyChangedSignal("AbsoluteSize"), function()
-        if S.model then
-            H.fitCamera()
-        end
-    end)
-
-    H.setThumbnail(data.thumbnail)
-    H.applyCorners()
-    H.rebuildStatus()
-    H.load()
-    H.startLoop()
+    H.applyTheme()
     H.applyDisabled()
-    H.layout()
+    H.rebuildRows()
 
-    function data:SetTitle(newTitle)
+    -- // API
+
+    function data:SetTitle(value)
         if S.destroyed then return end
-        newTitle = tostring(newTitle or "")
-        if newTitle == data.title then return end
-        data.title = newTitle
-        U.title.Text = H.text(newTitle)
-        U.title.Visible = newTitle ~= ""
-        U.container.Name = (newTitle ~= "" and newTitle or "Paragraph") .. "_Paragraph"
+        value = tostring(value or "")
+        if value == data.title then return end
+        data.title = value
+        U.title.Text = value
+        U.container.Name = (value ~= "" and value or "Paragraph") .. "_Paragraph"
         H.layout()
     end
 
-    function data:SetDescription(newDesc)
+    function data:SetDescription(value)
         if S.destroyed then return end
-        newDesc = tostring(newDesc or "")
-        if newDesc == data.description then return end
-        data.description = newDesc
-        U.desc.Text = H.text(newDesc)
-        U.desc.Visible = newDesc ~= ""
+        value = tostring(value or "")
+        if value == data.description then return end
+        data.description = value
+        U.desc.Text = value
         H.layout()
     end
 
-    function data:SetTag(newTag)
+    function data:SetTag(value)
         if S.destroyed then return end
-        newTag = tostring(newTag or "")
-        if newTag == data.tag then return end
-        data.tag = newTag
-        U.tag.Text = H.text(newTag)
-        U.tagPill.Visible = newTag ~= ""
+        value = tostring(value or "")
+        if value == data.tag then return end
+        data.tag = value
+        U.tag.Text = value
         H.layout()
     end
 
-    function data:SetThumbnail(value)
+    function data:GetTitle()
+        return data.title
+    end
+
+    function data:GetDescription()
+        return data.description
+    end
+
+    function data:SetTitleColor(color)
         if S.destroyed then return end
-        H.setThumbnail(value)
+        S.titleColor = color
+        H.applyTheme()
+    end
+
+    function data:SetDescriptionColor(color)
+        if S.destroyed then return end
+        S.descColor = color
+        H.applyTheme()
+    end
+
+    function data:SetTheme(value)
+        if S.destroyed then return end
+        H.setTheme(value)
+        H.applyTheme()
+        H.rebuildRows()
+    end
+
+    function data:GetTheme()
+        return S.themeName
+    end
+
+    function data:GetThemes()
+        local names = {}
+        for name in pairs(THEMES) do
+            names[#names + 1] = name
+        end
+        table.sort(names)
+        return names
+    end
+
+    function data:SetAccent(color)
+        if S.destroyed then return end
+        S.accent = color
+        H.setTheme(S.themeSource)
+        H.applyTheme()
+        H.rebuildRows()
+    end
+
+    function data:SetInfo(list)
+        if S.destroyed then return end
+        S.items = H.entries(list)
+        H.rebuildRows()
+    end
+
+    function data:AddInfo(raw, position)
+        if S.destroyed then return nil end
+        local entry = H.entry(raw)
+        if not entry then return nil end
+
+        if type(position) == "number" and position >= 1 and position <= #S.items then
+            table.insert(S.items, position, entry)
+            H.rebuildRows()
+            return position
+        end
+
+        S.items[#S.items + 1] = entry
+        local index = #S.items
+        S.rows[index] = H.createRow(entry, index)
+        H.layout()
+        return index
+    end
+
+    function data:UpdateInfo(index, fields)
+        if S.destroyed then return end
+        local entry = S.items[index]
+        if not entry then return end
+
+        local mainKeys = { "value", "Value", "text", "Text", "info", "Info" }
+        local merged = copyTable(entry.raw)
+
+        local update = fields
+        if type(update) ~= "table" then
+            update = { value = fields }
+        end
+
+        local touchesMain = false
+        for _, key in ipairs(mainKeys) do
+            if update[key] ~= nil then
+                touchesMain = true
+                break
+            end
+        end
+        if touchesMain then
+            for _, key in ipairs(mainKeys) do
+                merged[key] = nil
+            end
+        end
+        for key, value in pairs(update) do
+            merged[key] = value
+        end
+
+        local newEntry = H.entry(merged)
+        if not newEntry then return end
+        S.items[index] = newEntry
+        H.rebuildRow(index)
+    end
+
+    function data:SetInfoColor(index, color)
+        if S.destroyed then return end
+        local entry = S.items[index]
+        if not entry then return end
+        entry.color = color
+        entry.raw.color = color
+        entry.raw.Color = nil
+        local row = S.rows[index]
+        if row and row.recolor then
+            row.recolor(H.entryColor(entry, index))
+        end
+    end
+
+    function data:SetColors(colors, default)
+        if S.destroyed then return end
+        S.colors = {}
+        if type(colors) == "table" then
+            for key, value in pairs(colors) do
+                if type(key) == "number" then
+                    S.colors[key] = value
+                end
+            end
+        end
+        if default ~= nil then
+            S.defaultColor = default
+        end
+        H.recolorAll()
+    end
+
+    function data:SetDefaultColor(color)
+        if S.destroyed then return end
+        S.defaultColor = color
+        H.recolorAll()
+    end
+
+    function data:SetAllColors(color)
+        if S.destroyed then return end
+        S.colors = {}
+        S.defaultColor = color
+        for _, entry in ipairs(S.items) do
+            entry.color = nil
+            entry.raw.color = nil
+            entry.raw.Color = nil
+        end
+        H.recolorAll()
+    end
+
+    function data:RemoveInfo(index)
+        if S.destroyed then return end
+        if not S.items[index] then return end
+        table.remove(S.items, index)
+        H.rebuildRows()
+    end
+
+    function data:ClearInfo()
+        if S.destroyed then return end
+        S.items = {}
+        H.rebuildRows()
+    end
+
+    function data:GetInfo()
+        local result = {}
+        for index, entry in ipairs(S.items) do
+            result[index] = copyTable(entry.raw)
+        end
+        return result
     end
 
     function data:SetDisabled(value)
@@ -1931,180 +1533,10 @@ Elements.Register("Paragraph", function(section, options)
         U.container.Visible = value ~= false
     end
 
-    function data:SetSize(value)
-        if S.destroyed then return end
-        local number = tonumber(value)
-        if not number then return end
-        K.CARD_H = math.clamp(number, 90, 420)
-        H.layout()
-        if S.model then
-            H.fitCamera()
-        end
-    end
-
-    function data:GetTitle()
-        return data.title
-    end
-
-    function data:GetDescription()
-        return data.description
-    end
-
-    function data:SetHologram(config)
-        if S.destroyed then return end
-        local previous = data.hologram
-        local updated = H.hologram(config)
-        data.hologram = updated
-        H.applyCorners()
-        local unchanged = previous ~= nil
-            and updated ~= nil
-            and previous.target == updated.target
-            and previous.type == updated.type
-            and previous.thumbType == updated.thumbType
-            and previous.tint == updated.tint
-            and previous.live == updated.live
-            and previous.nonce == updated.nonce
-            and not H.idle()
-        if not unchanged then
-            H.load()
-        end
-        H.layout()
-    end
-
-    function data:SetTarget(target, kind, thumbType)
-        if S.destroyed then return end
-        local config = H.ensureHologram()
-        local previousTarget = config.target
-        local previousKind = config.type
-        local previousThumb = config.thumbType
-        config.target = target
-        if kind ~= nil then
-            config.type = H.kind(kind)
-        end
-        if thumbType ~= nil then
-            config.thumbType = H.thumbType(thumbType)
-        end
-        if previousTarget ~= target or previousKind ~= config.type or previousThumb ~= config.thumbType or H.idle() then
-            H.load()
-        end
-        H.layout()
-    end
-
-    function data:SetCorners(corners)
-        if S.destroyed then return end
-        local config = H.ensureHologram()
-        config.corners = H.copy(corners)
-        H.applyCorners()
-        H.layout()
-    end
-
-    function data:SetCorner(name, text)
-        if S.destroyed then return end
-        local config = H.ensureHologram()
-        config.corners[name] = text
-        H.applyCorners()
-        H.layout()
-    end
-
-    function data:SetRotate(value)
-        if S.destroyed then return end
-        H.ensureHologram().rotate = value == true
-    end
-
-    function data:SetTint(color)
-        if S.destroyed then return end
-        local config = H.ensureHologram()
-        local tint = typeof(color) == "Color3" and color or nil
-        if config.tint == tint then return end
-        config.tint = tint
-        H.load()
-        H.layout()
-    end
-
     function data:Refresh()
-        if S.destroyed or not data.hologram then return end
-        H.clearHologram()
-        S.images = {}
-        H.load()
-    end
-
-    function data:IsLoading()
-        return S.busy ~= nil
-    end
-
-    function data:HasHologramLoaded()
-        return S.model ~= nil or U.fallback.Visible
-    end
-
-    function data:SetStatus(list)
         if S.destroyed then return end
-        local newList = H.statusList(list)
-        local same = #newList == #S.status
-        if same then
-            for index, stat in ipairs(newList) do
-                if stat.name ~= S.status[index].name then
-                    same = false
-                    break
-                end
-            end
-        end
-        S.status = newList
-        if same then
-            for index = 1, #S.status do
-                H.refreshStat(index)
-            end
-        else
-            H.rebuildStatus()
-        end
-    end
-
-    function data:GetStatus()
-        local result = {}
-        for index, stat in ipairs(S.status) do
-            result[index] = { name = stat.name, value = stat.value, max = stat.max }
-        end
-        return result
-    end
-
-    function data:SetStatusTitle(newTitle)
-        if S.destroyed then return end
-        newTitle = tostring(newTitle or "")
-        if newTitle == S.statusTitle then return end
-        S.statusTitle = newTitle
-        U.statusHeader.Text = newTitle
-    end
-
-    function data:SetStat(name, value, max)
-        if S.destroyed then return end
-        name = tostring(name)
-        for index, stat in ipairs(S.status) do
-            if stat.name == name then
-                stat.value = value
-                if max ~= nil then
-                    stat.max = tonumber(max)
-                end
-                H.refreshStat(index)
-                return
-            end
-        end
-        S.status[#S.status + 1] = { name = name, value = value, max = tonumber(max) }
-        local newIndex = #S.status
-        S.rows[newIndex] = H.createStatRow(S.status[newIndex], newIndex)
-        H.updateCount()
-        H.updateGrid()
-        H.layout()
-    end
-
-    function data:RemoveStat(name)
-        if S.destroyed then return end
-        name = tostring(name)
-        for index, stat in ipairs(S.status) do
-            if stat.name == name then
-                table.remove(S.status, index)
-                H.rebuildStatus()
-                return
-            end
-        end
+        S.textures = {}
+        H.rebuildRows()
     end
 
     function data:Update(fields)
@@ -2112,28 +1544,27 @@ Elements.Register("Paragraph", function(section, options)
         if fields.title ~= nil then data:SetTitle(fields.title) end
         if fields.description ~= nil then data:SetDescription(fields.description) end
         if fields.tag ~= nil then data:SetTag(fields.tag) end
-        if fields.thumbnail ~= nil then data:SetThumbnail(fields.thumbnail) end
         if fields.disabled ~= nil then data:SetDisabled(fields.disabled) end
         if fields.visible ~= nil then data:SetVisible(fields.visible) end
-        if fields.size ~= nil then data:SetSize(fields.size) end
-        if fields.statusTitle ~= nil then data:SetStatusTitle(fields.statusTitle) end
-        if fields.status ~= nil then data:SetStatus(fields.status) end
-        if fields.hologram ~= nil then data:SetHologram(fields.hologram) end
+        if fields.accent ~= nil then S.accent = fields.accent end
+        if fields.theme ~= nil then
+            data:SetTheme(fields.theme)
+        elseif fields.accent ~= nil then
+            data:SetAccent(fields.accent)
+        end
+        if fields.colors ~= nil or fields.defaultColor ~= nil then
+            data:SetColors(fields.colors or S.colors, fields.defaultColor)
+        end
+        if fields.info ~= nil then data:SetInfo(fields.info) end
     end
 
     function data:Destroy()
         if S.destroyed then return end
         S.destroyed = true
-        S.busy = nil
-        H.stopThumbLive()
-        S.loopToken = S.loopToken + 1
-        S.holoToken = S.holoToken + 1
-        H.clearWatch()
-        for _, conn in ipairs(S.connections) do
-            conn:Disconnect()
+        for _, connection in ipairs(S.connections) do
+            connection:Disconnect()
         end
         table.clear(S.connections)
-        H.clearHologram()
         U.container:Destroy()
     end
 
