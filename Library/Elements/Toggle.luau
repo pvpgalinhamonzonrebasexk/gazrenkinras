@@ -1,5 +1,5 @@
 -- // Services
-local userInputService = UserInputService or game:GetService("UserInputService")
+local userInputService = game:GetService("UserInputService")
 local tweenService = game:GetService("TweenService")
 local runService = game:GetService("RunService")
 local guiService = game:GetService("GuiService")
@@ -553,6 +553,7 @@ local HUD_PILL_W = 52
 local HUD_MARGIN = 12
 local HUD_PAD = 6
 local HUD_GAP = 4
+local HUD_SETTINGS_H = HUD_TOP_H + 1 + HUD_PAD + (HUD_ROW_H * 3) + (HUD_GAP * 2) + HUD_PAD
 
 local keybindHud
 
@@ -575,20 +576,34 @@ local function createKeybindHud()
 
     local fontBold, fontRegular = getFonts()
 
+    local settings = env.EcoHubHudSettings
+
+    if type(settings) ~= "table" then
+        settings = {
+            neverShow = false,
+            draggable = true,
+        }
+
+        env.EcoHubHudSettings = settings
+    end
+
     local hud = {
         closed = false,
         entries = {},
         order = 0,
-        draggable = true,
+        draggable = settings.draggable ~= false,
     }
 
     local connections = {}
     local userMoved = false
+    local settingsOpen = false
     local curX, curY = HUD_MARGIN, HUD_MARGIN
     local frameH = 0
     local dragging = false
     local dragInput
     local dragConnection
+    local setDragToggle
+    local setNeverToggle
 
     local function stopDrag()
         dragging = false
@@ -612,37 +627,56 @@ local function createKeybindHud()
 
     local frame = Instance.new("Frame")
     frame.Name = "Hud"
-    frame.AnchorPoint = Vector2.new(0, 0)
     frame.Position = UDim2.new(0, HUD_MARGIN, 0, HUD_MARGIN)
     frame.Size = UDim2.new(0, HUD_WIDTH, 0, 0)
-    frame.BackgroundTransparency = 1
+    frame.BackgroundColor3 = Default.Background
+    frame.BackgroundTransparency = 0.08
     frame.BorderSizePixel = 0
     frame.Visible = false
     frame.Parent = gui
 
-    -- Topbar
+    local frameCorner = Instance.new("UICorner")
+    frameCorner.CornerRadius = UDim.new(0, 8)
+    frameCorner.Parent = frame
+
+    local frameStroke = Instance.new("UIStroke")
+    frameStroke.Color = Default.Border
+    frameStroke.Thickness = 1
+    frameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    frameStroke.Parent = frame
+
+    local listView = Instance.new("Frame")
+    listView.Name = "List"
+    listView.Size = UDim2.new(1, 0, 1, 0)
+    listView.BackgroundTransparency = 1
+    listView.Parent = frame
+
+    local settingsView = Instance.new("Frame")
+    settingsView.Name = "Settings"
+    settingsView.Size = UDim2.new(1, 0, 1, 0)
+    settingsView.BackgroundTransparency = 1
+    settingsView.Visible = false
+    settingsView.Parent = frame
+
     local dragHandle = Instance.new("TextButton")
     dragHandle.Name = "DragHandle"
-    dragHandle.Position = UDim2.new(0, 0, 0, 0)
-    dragHandle.Size = UDim2.new(1, -30, 0, HUD_TOP_H)
+    dragHandle.Size = UDim2.new(1, -56, 0, HUD_TOP_H)
     dragHandle.BackgroundTransparency = 1
     dragHandle.Text = ""
     dragHandle.AutoButtonColor = false
     dragHandle.Selectable = false
-    dragHandle.ZIndex = 1
     dragHandle.Parent = frame
 
     local titleLabel = Instance.new("TextLabel")
     titleLabel.Name = "Title"
     titleLabel.Position = UDim2.new(0, HUD_PAD, 0, 5)
-    titleLabel.Size = UDim2.new(1, -(HUD_PAD + 30), 0, 18)
+    titleLabel.Size = UDim2.new(1, -(HUD_PAD + 56), 0, 18)
     titleLabel.BackgroundTransparency = 1
     titleLabel.Text = "Key Bind"
     titleLabel.TextColor3 = Default.Active
     titleLabel.TextSize = 14
     titleLabel.Font = fontBold
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    titleLabel.TextYAlignment = Enum.TextYAlignment.Center
     titleLabel.TextTruncate = Enum.TextTruncate.AtEnd
     titleLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
     titleLabel.TextStrokeTransparency = 0.55
@@ -652,19 +686,34 @@ local function createKeybindHud()
     local subtitleLabel = Instance.new("TextLabel")
     subtitleLabel.Name = "Subtitle"
     subtitleLabel.Position = UDim2.new(0, HUD_PAD, 0, 22)
-    subtitleLabel.Size = UDim2.new(1, -(HUD_PAD + 30), 0, 14)
+    subtitleLabel.Size = UDim2.new(1, -(HUD_PAD + 56), 0, 14)
     subtitleLabel.BackgroundTransparency = 1
     subtitleLabel.Text = "by rip_sheldoohz"
     subtitleLabel.TextColor3 = Default.Inactive
     subtitleLabel.TextSize = 11
     subtitleLabel.Font = fontRegular
     subtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    subtitleLabel.TextYAlignment = Enum.TextYAlignment.Center
     subtitleLabel.TextTruncate = Enum.TextTruncate.AtEnd
     subtitleLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
     subtitleLabel.TextStrokeTransparency = 0.55
     subtitleLabel.ZIndex = 2
     subtitleLabel.Parent = frame
+
+    local backBtn = Instance.new("TextButton")
+    backBtn.Name = "Back"
+    backBtn.Position = UDim2.new(0, HUD_PAD, 0, 21)
+    backBtn.Size = UDim2.new(0, 64, 0, 15)
+    backBtn.BackgroundTransparency = 1
+    backBtn.Text = "< Voltar"
+    backBtn.TextColor3 = Default.Inactive
+    backBtn.TextSize = 12
+    backBtn.Font = fontBold
+    backBtn.TextXAlignment = Enum.TextXAlignment.Left
+    backBtn.AutoButtonColor = false
+    backBtn.Selectable = false
+    backBtn.Visible = false
+    backBtn.ZIndex = 3
+    backBtn.Parent = frame
 
     local closeBtn = Instance.new("TextButton")
     closeBtn.Name = "Close"
@@ -699,6 +748,69 @@ local function createKeybindHud()
         closeLines[#closeLines + 1] = line
     end
 
+    local settingsBtn = Instance.new("TextButton")
+    settingsBtn.Name = "SettingsButton"
+    settingsBtn.Size = UDim2.new(0, 22, 0, 22)
+    settingsBtn.AnchorPoint = Vector2.new(1, 0)
+    settingsBtn.Position = UDim2.new(1, -30, 0, math.floor((HUD_TOP_H - 22) / 2))
+    settingsBtn.BackgroundTransparency = 1
+    settingsBtn.Text = ""
+    settingsBtn.AutoButtonColor = false
+    settingsBtn.Selectable = false
+    settingsBtn.ZIndex = 2
+    settingsBtn.Parent = frame
+
+    local gearParts = {}
+
+    for _, rotation in ipairs({ 0, 45, 90, 135 }) do
+        local tooth = Instance.new("Frame")
+        tooth.Name = "Tooth"
+        tooth.Size = UDim2.new(0, 3, 0, 15)
+        tooth.AnchorPoint = Vector2.new(0.5, 0.5)
+        tooth.Position = UDim2.new(0.5, 0, 0.5, 0)
+        tooth.Rotation = rotation
+        tooth.BackgroundColor3 = Default.Inactive
+        tooth.BorderSizePixel = 0
+        tooth.ZIndex = 3
+        tooth.Parent = settingsBtn
+
+        local toothCorner = Instance.new("UICorner")
+        toothCorner.CornerRadius = UDim.new(0, 1)
+        toothCorner.Parent = tooth
+
+        gearParts[#gearParts + 1] = tooth
+    end
+
+    local gearDisc = Instance.new("Frame")
+    gearDisc.Name = "Disc"
+    gearDisc.Size = UDim2.new(0, 11, 0, 11)
+    gearDisc.AnchorPoint = Vector2.new(0.5, 0.5)
+    gearDisc.Position = UDim2.new(0.5, 0, 0.5, 0)
+    gearDisc.BackgroundColor3 = Default.Inactive
+    gearDisc.BorderSizePixel = 0
+    gearDisc.ZIndex = 4
+    gearDisc.Parent = settingsBtn
+
+    local gearDiscCorner = Instance.new("UICorner")
+    gearDiscCorner.CornerRadius = UDim.new(1, 0)
+    gearDiscCorner.Parent = gearDisc
+
+    gearParts[#gearParts + 1] = gearDisc
+
+    local gearHole = Instance.new("Frame")
+    gearHole.Name = "Hole"
+    gearHole.Size = UDim2.new(0, 5, 0, 5)
+    gearHole.AnchorPoint = Vector2.new(0.5, 0.5)
+    gearHole.Position = UDim2.new(0.5, 0, 0.5, 0)
+    gearHole.BackgroundColor3 = Default.Background
+    gearHole.BorderSizePixel = 0
+    gearHole.ZIndex = 5
+    gearHole.Parent = settingsBtn
+
+    local gearHoleCorner = Instance.new("UICorner")
+    gearHoleCorner.CornerRadius = UDim.new(1, 0)
+    gearHoleCorner.Parent = gearHole
+
     local divider = Instance.new("Frame")
     divider.Name = "Divider"
     divider.Position = UDim2.new(0, HUD_PAD, 0, HUD_TOP_H)
@@ -708,7 +820,6 @@ local function createKeybindHud()
     divider.BorderSizePixel = 0
     divider.Parent = frame
 
-    -- Layout
     local function getScreen()
         local size = gui.AbsoluteSize
 
@@ -770,24 +881,172 @@ local function createKeybindHud()
             y = y + HUD_ROW_H + HUD_GAP
         end
 
+        local listH = 0
+
         if #list > 0 then
-            frameH = y - HUD_GAP + HUD_PAD
-        else
-            frameH = 0
+            listH = y - HUD_GAP + HUD_PAD
         end
+
+        frameH = settingsOpen and HUD_SETTINGS_H or listH
 
         frame.Size = UDim2.new(0, HUD_WIDTH, 0, frameH)
         settle()
-        frame.Visible = #list > 0 and not hud.closed
 
-        if not frame.Visible then
+        local show = not hud.closed and not settings.neverShow and (settingsOpen or #list > 0)
+
+        frame.Visible = show
+
+        if not show then
             stopDrag()
         end
     end
 
+    local function setView(open)
+        settingsOpen = open == true
+
+        titleLabel.Text = settingsOpen and "Configurações" or "Key Bind"
+        subtitleLabel.Visible = not settingsOpen
+        backBtn.Visible = settingsOpen
+        settingsBtn.Visible = not settingsOpen
+        listView.Visible = not settingsOpen
+        settingsView.Visible = settingsOpen
+
+        layout()
+    end
+
     connections[#connections + 1] = gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(settle)
 
-    -- Drag
+    local function createToggle(text, index, initial, onChange)
+        local row = Instance.new("TextButton")
+        row.Name = "Toggle"
+        row.Position = UDim2.new(0, 0, 0, HUD_TOP_H + 1 + HUD_PAD + (index - 1) * (HUD_ROW_H + HUD_GAP))
+        row.Size = UDim2.new(1, 0, 0, HUD_ROW_H)
+        row.BackgroundTransparency = 1
+        row.Text = ""
+        row.AutoButtonColor = false
+        row.Selectable = false
+        row.Parent = settingsView
+
+        local label = Instance.new("TextLabel")
+        label.Name = "Label"
+        label.Position = UDim2.new(0, HUD_PAD, 0, 0)
+        label.Size = UDim2.new(1, -(HUD_PAD + 46), 1, 0)
+        label.BackgroundTransparency = 1
+        label.Text = text
+        label.TextColor3 = Default.Active
+        label.TextSize = 12
+        label.Font = fontBold
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.TextTruncate = Enum.TextTruncate.AtEnd
+        label.Parent = row
+
+        local track = Instance.new("Frame")
+        track.Name = "Track"
+        track.Size = UDim2.new(0, 32, 0, 18)
+        track.AnchorPoint = Vector2.new(1, 0.5)
+        track.Position = UDim2.new(1, -HUD_PAD, 0.5, 0)
+        track.BorderSizePixel = 0
+        track.Parent = row
+
+        local trackCorner = Instance.new("UICorner")
+        trackCorner.CornerRadius = UDim.new(1, 0)
+        trackCorner.Parent = track
+
+        local knob = Instance.new("Frame")
+        knob.Name = "Knob"
+        knob.Size = UDim2.new(0, 12, 0, 12)
+        knob.AnchorPoint = Vector2.new(0, 0.5)
+        knob.BorderSizePixel = 0
+        knob.Parent = track
+
+        local knobCorner = Instance.new("UICorner")
+        knobCorner.CornerRadius = UDim.new(1, 0)
+        knobCorner.Parent = knob
+
+        local state = initial == true
+
+        local function render(animate)
+            play(track, {
+                BackgroundColor3 = state and Default.Active or Default.Border,
+            }, animate)
+
+            play(knob, {
+                BackgroundColor3 = state and Default.Background or Default.Active,
+                Position = state and UDim2.new(1, -15, 0.5, 0) or UDim2.new(0, 3, 0.5, 0),
+            }, animate)
+        end
+
+        render(false)
+
+        connections[#connections + 1] = row.Activated:Connect(function()
+            state = not state
+            render(true)
+            onChange(state)
+        end)
+
+        return function(value)
+            value = value == true
+
+            if state == value then
+                return
+            end
+
+            state = value
+            render(false)
+        end
+    end
+
+    setNeverToggle = createToggle("Não mostrar mais", 1, settings.neverShow, function(value)
+        settings.neverShow = value
+        layout()
+
+        if value then
+            notify("Painel de Key Bind oculto.", 3)
+        end
+    end)
+
+    setDragToggle = createToggle("Permitir arrastar", 2, hud.draggable, function(value)
+        hud:SetDraggable(value)
+    end)
+
+    local resetBtn = Instance.new("TextButton")
+    resetBtn.Name = "ResetPosition"
+    resetBtn.Position = UDim2.new(0, HUD_PAD, 0, HUD_TOP_H + 1 + HUD_PAD + 2 * (HUD_ROW_H + HUD_GAP))
+    resetBtn.Size = UDim2.new(1, -(HUD_PAD * 2), 0, HUD_ROW_H)
+    resetBtn.BackgroundColor3 = Default.Palette
+    resetBtn.BorderSizePixel = 0
+    resetBtn.Text = "Resetar posição"
+    resetBtn.TextColor3 = Default.Inactive
+    resetBtn.TextSize = 12
+    resetBtn.Font = fontBold
+    resetBtn.AutoButtonColor = false
+    resetBtn.Selectable = false
+    resetBtn.Parent = settingsView
+
+    local resetCorner = Instance.new("UICorner")
+    resetCorner.CornerRadius = UDim.new(0, 5)
+    resetCorner.Parent = resetBtn
+
+    local resetStroke = Instance.new("UIStroke")
+    resetStroke.Color = Default.Border
+    resetStroke.Thickness = 1
+    resetStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    resetStroke.Parent = resetBtn
+
+    connections[#connections + 1] = resetBtn.MouseEnter:Connect(function()
+        resetStroke.Color = Default.BorderHover
+        resetBtn.TextColor3 = Default.Active
+    end)
+
+    connections[#connections + 1] = resetBtn.MouseLeave:Connect(function()
+        resetStroke.Color = Default.Border
+        resetBtn.TextColor3 = Default.Inactive
+    end)
+
+    connections[#connections + 1] = resetBtn.Activated:Connect(function()
+        hud:ResetPosition()
+    end)
+
     local function pointerPosition(input)
         if input and input.UserInputType == Enum.UserInputType.Touch then
             return Vector2.new(input.Position.X, input.Position.Y) + guiService:GetGuiInset()
@@ -848,7 +1107,6 @@ local function createKeybindHud()
         end
     end)
 
-    -- Close
     connections[#connections + 1] = closeBtn.MouseEnter:Connect(function()
         for _, line in ipairs(closeLines) do
             line.BackgroundColor3 = Default.Active
@@ -864,7 +1122,36 @@ local function createKeybindHud()
     connections[#connections + 1] = closeBtn.Activated:Connect(function()
         stopDrag()
         hud.closed = true
-        layout()
+        setView(false)
+    end)
+
+    connections[#connections + 1] = settingsBtn.MouseEnter:Connect(function()
+        for _, part in ipairs(gearParts) do
+            part.BackgroundColor3 = Default.Active
+        end
+    end)
+
+    connections[#connections + 1] = settingsBtn.MouseLeave:Connect(function()
+        for _, part in ipairs(gearParts) do
+            part.BackgroundColor3 = Default.Inactive
+        end
+    end)
+
+    connections[#connections + 1] = settingsBtn.Activated:Connect(function()
+        stopDrag()
+        setView(true)
+    end)
+
+    connections[#connections + 1] = backBtn.MouseEnter:Connect(function()
+        backBtn.TextColor3 = Default.Active
+    end)
+
+    connections[#connections + 1] = backBtn.MouseLeave:Connect(function()
+        backBtn.TextColor3 = Default.Inactive
+    end)
+
+    connections[#connections + 1] = backBtn.Activated:Connect(function()
+        setView(false)
     end)
 
     function hud:Add()
@@ -880,9 +1167,8 @@ local function createKeybindHud()
         row.Name = "Row"
         row.Size = UDim2.new(1, 0, 0, HUD_ROW_H)
         row.BackgroundTransparency = 1
-        row.BorderSizePixel = 0
         row.Visible = false
-        row.Parent = frame
+        row.Parent = listView
 
         entry.row = row
 
@@ -896,7 +1182,6 @@ local function createKeybindHud()
         nameLabel.TextSize = 13
         nameLabel.Font = fontBold
         nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-        nameLabel.TextYAlignment = Enum.TextYAlignment.Center
         nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
         nameLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
         nameLabel.TextStrokeTransparency = 0.55
@@ -915,8 +1200,6 @@ local function createKeybindHud()
         keyLabel.TextColor3 = Default.Active
         keyLabel.TextSize = 11
         keyLabel.Font = fontBold
-        keyLabel.TextXAlignment = Enum.TextXAlignment.Center
-        keyLabel.TextYAlignment = Enum.TextYAlignment.Center
         keyLabel.TextTruncate = Enum.TextTruncate.AtEnd
         keyLabel.Parent = row
 
@@ -974,10 +1257,25 @@ local function createKeybindHud()
 
     function hud:SetDraggable(value)
         hud.draggable = value ~= false
+        settings.draggable = hud.draggable
+
+        if setDragToggle then
+            setDragToggle(hud.draggable)
+        end
 
         if not hud.draggable then
             stopDrag()
         end
+    end
+
+    function hud:SetNeverShow(value)
+        settings.neverShow = value == true
+
+        if setNeverToggle then
+            setNeverToggle(settings.neverShow)
+        end
+
+        layout()
     end
 
     function hud:ResetPosition()
@@ -987,16 +1285,6 @@ local function createKeybindHud()
 
     function hud:Show()
         hud.closed = false
-        layout()
-    end
-
-    function hud:Hide()
-        hud.closed = true
-        layout()
-    end
-
-    function hud:Toggle()
-        hud.closed = not hud.closed
         layout()
     end
 
@@ -1056,7 +1344,6 @@ Elements.Register("Checkbox", function(section, options)
     local SWITCH_H = 20
     local KNOB = 14
     local KNOB_PAD = 3
-    local SIDE_PAD = 0
     local PILL_W = 40
     local PILL_H = 20
     local BASE_H = 30
@@ -1137,7 +1424,7 @@ Elements.Register("Checkbox", function(section, options)
         hudEntry:Update(buildTitle(), data.keybind and getKeyName(data.keybind) or nil, data.state)
     end
 
-    local rightReserve = SWITCH_W + SIDE_PAD + 10
+    local rightReserve = SWITCH_W + 10
 
     if hasKeybind then
         rightReserve = rightReserve + PILL_W + 8
@@ -1156,7 +1443,6 @@ Elements.Register("Checkbox", function(section, options)
     rowButton.Text = ""
     rowButton.AutoButtonColor = false
     rowButton.Selectable = false
-    rowButton.ZIndex = 1
     rowButton.Parent = container
 
     local textFrame = Instance.new("Frame")
@@ -1167,7 +1453,6 @@ Elements.Register("Checkbox", function(section, options)
     textFrame.Parent = container
 
     local textLayout = Instance.new("UIListLayout")
-    textLayout.FillDirection = Enum.FillDirection.Vertical
     textLayout.SortOrder = Enum.SortOrder.LayoutOrder
     textLayout.Padding = UDim.new(0, 1)
     textLayout.VerticalAlignment = Enum.VerticalAlignment.Center
@@ -1182,7 +1467,6 @@ Elements.Register("Checkbox", function(section, options)
     label.TextSize = TITLE_SIZE
     label.Font = fontBold
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.TextYAlignment = Enum.TextYAlignment.Center
     label.TextTruncate = Enum.TextTruncate.AtEnd
     label.LayoutOrder = 0
     label.ZIndex = 2
@@ -1220,7 +1504,7 @@ Elements.Register("Checkbox", function(section, options)
     local track = Instance.new("Frame")
     track.Name = "Switch"
     track.Size = UDim2.new(0, SWITCH_W, 0, SWITCH_H)
-    track.Position = UDim2.new(1, -SIDE_PAD, 0.5, 0)
+    track.Position = UDim2.new(1, 0, 0.5, 0)
     track.AnchorPoint = Vector2.new(1, 0.5)
     track.BackgroundColor3 = default and Colors.Active or Colors.Border
     track.BorderSizePixel = 0
@@ -1254,7 +1538,7 @@ Elements.Register("Checkbox", function(section, options)
         keyBtn.Name = "KeyBind"
         keyBtn.Size = UDim2.new(0, PILL_W, 0, PILL_H)
         keyBtn.AnchorPoint = Vector2.new(1, 0.5)
-        keyBtn.Position = UDim2.new(1, -(SWITCH_W + SIDE_PAD + 8), 0.5, 0)
+        keyBtn.Position = UDim2.new(1, -(SWITCH_W + 8), 0.5, 0)
         keyBtn.BackgroundColor3 = Colors.Palette
         keyBtn.BorderSizePixel = 0
         keyBtn.Text = ""
@@ -1282,9 +1566,6 @@ Elements.Register("Checkbox", function(section, options)
         keyLabel.TextColor3 = Colors.Inactive
         keyLabel.TextSize = KEY_SIZE
         keyLabel.Font = fontBold
-        keyLabel.TextXAlignment = Enum.TextXAlignment.Center
-        keyLabel.TextYAlignment = Enum.TextYAlignment.Center
-        keyLabel.TextWrapped = false
         keyLabel.TextTruncate = Enum.TextTruncate.AtEnd
         keyLabel.ZIndex = 4
         keyLabel.Parent = keyBtn
