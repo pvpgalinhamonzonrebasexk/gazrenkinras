@@ -17,6 +17,7 @@ Documentação da library de UI do Ecohub: janela, tabs, sections, elements, the
    - [Dropdown](#44-dropdown)
    - [ColorPicker](#45-colorpicker)
    - [Paragraph](#46-paragraph)
+   - [Hologram](#47-hologram)
 5. [Themes](#5-themes)
 6. [Saves](#6-saves)
 7. [Settings do painel e Notificações](#7-settings-do-painel-e-notificações)
@@ -222,6 +223,7 @@ Window.Config.SectionLayout = "Default"
 | ColorPicker | cor | só a cor, a transparência não é salva |
 | Button | não | |
 | Paragraph | não | |
+| Hologram | não | |
 
 O callback é chamado quando o valor salvo é restaurado e é diferente do valor atual.
 
@@ -1128,6 +1130,296 @@ end)
 
 ---
 
+### 4.7 Hologram
+
+Preview de ESP em forma de holograma: um feixe de luz reto para cima, uma base projetora e um boneco **R6 inteiro** flutuando em cima dela. Sobre o boneco aparece o ESP (box, barra de vida, nome, distância, tool, items, flags, skeleton, tracer e chams).
+
+Não é só visual: o holograma tem **API de atualização em tempo real**. Ele pode seguir um jogador de verdade ou receber os dados por código, e cada parte do ESP liga e desliga na hora. Não tem auto save.
+
+É um preview desenhado dentro do painel. Ele mostra como o ESP ficaria, mas não desenha nada no mundo do jogo.
+
+Funciona em PC e celular.
+
+#### 4.7.1 Criar
+
+```lua
+-- // Tab
+local HoloTab = Window:CreateTab({
+    tab = "Hologram",
+    section = "Librarys",
+    icon = "scan",
+})
+
+local HoloSection = HoloTab:CreateSection("Hologram")
+
+-- // Simples (já segue o seu player)
+local holo = HoloSection:CreateHologram({
+    title = "ESP Preview",
+})
+
+-- // Altura e tamanho do boneco
+local holoGrande = HoloSection:CreateHologram({
+    title = "ESP Grande",
+    height = 360,
+    scale = 30,
+})
+
+-- // Só preview, sem seguir ninguém
+local holoPreview = HoloSection:CreateHologram({
+    title = "Preview",
+    bind = false,
+    data = {
+        Name = "Enemy",
+        Health = 65,
+        MaxHealth = 100,
+        Tool = "AK-47",
+        Items = { "AK-47", "Medkit" },
+        Flags = { "Visible", "Moving" },
+        Distance = 120,
+    },
+})
+
+-- // Com settings, cores e callback
+local holoCompleto = HoloSection:CreateHologram({
+    title = "ESP Completo",
+    animated = true,
+    settings = {
+        Box = true,
+        BoxStyle = "Corner",
+        Skeleton = true,
+        Tracer = true,
+        TracerOrigin = "Bottom",
+    },
+    colors = {
+        Box = Color3.fromRGB(255, 80, 80),
+        Hologram = Color3.fromRGB(255, 120, 120),
+    },
+    callback = function(settings, key, value)
+        print("Mudou:", key, value)
+    end,
+})
+```
+
+| Opção | Tipo | Padrão | Descrição |
+|-------|------|--------|-----------|
+| `title` | string | `"Hologram"` | Título no topo do card (também `Name`) |
+| `height` | number | `290` | Altura do card, de `230` a `420` |
+| `scale` | number | automático | Tamanho do boneco, de `10` a `40`. Sem valor, é calculado pela altura |
+| `animated` | boolean | `true` | Boneco flutuando e linha de scan descendo |
+| `bind` | Player, function, boolean | seu player | O que o holograma segue. `false` deixa só como preview. Veja 4.7.3 |
+| `settings` | table | veja 4.7.2 | Partes do ESP ligadas ou desligadas |
+| `colors` | table | veja 4.7.2 | Cores do ESP e do holograma |
+| `data` | table | demo | Dados iniciais (veja 4.7.4) |
+| `callback` | function(settings, key, value) | nenhum | Chamado quando um setting muda (também `Callback`) |
+
+O `callback` recebe uma **cópia** de todos os settings, a chave que mudou e o novo valor. Ele não é chamado ao criar.
+
+O card mostra no topo direito **LIVE** (verde) quando está seguindo alguém e **PREVIEW** quando não está.
+
+#### 4.7.2 Settings e cores
+
+**Settings** (`holo:Set(chave, valor)`)
+
+| Chave | Tipo | Padrão | O que mostra |
+|-------|------|--------|--------------|
+| `Box` | boolean | `true` | Caixa em volta do boneco |
+| `BoxStyle` | string | `"Full"` | `"Full"` (caixa inteira) ou `"Corner"` (só os cantos) |
+| `BoxFill` | boolean | `false` | Preenchimento da caixa |
+| `Name` | boolean | `true` | Nome em cima da caixa |
+| `Health` | boolean | `true` | Barra de vida à esquerda |
+| `HealthText` | boolean | `true` | Número da vida ao lado da barra |
+| `Armor` | boolean | `false` | Barra de armor à direita (só aparece se o `MaxArmor` for maior que 0) |
+| `Distance` | boolean | `true` | Distância embaixo da caixa |
+| `Tool` | boolean | `true` | Tool na mão do boneco e o nome dela embaixo da caixa |
+| `Items` | boolean | `true` | Lista de items à esquerda (até 5). A tool equipada fica destacada |
+| `Flags` | boolean | `true` | Lista de flags à direita (até 6) |
+| `Skeleton` | boolean | `false` | Linhas do esqueleto |
+| `HeadDot` | boolean | `false` | Ponto na cabeça |
+| `Tracer` | boolean | `false` | Linha até os pés do boneco |
+| `TracerOrigin` | string | `"Bottom"` | De onde a linha sai: `"Bottom"`, `"Center"` ou `"Top"` |
+| `Chams` | boolean | `false` | Boneco preenchido com a cor de chams |
+
+Chave ou valor inválido mostra uma notificação e nada muda.
+
+**Cores** (`holo:SetColor(chave, cor)`)
+
+| Chave | Padrão | Muda |
+|-------|--------|------|
+| `Hologram` | `RGB(110, 190, 255)` | Feixe, base, scan e corpo do holograma |
+| `Box` | branco | Caixa |
+| `BoxFill` | branco | Preenchimento da caixa |
+| `Name` | branco | Nome |
+| `Distance` | `RGB(200, 200, 200)` | Distância |
+| `Tool` | `RGB(255, 210, 90)` | Tool na mão, nome da tool e tool equipada na lista |
+| `Items` | `RGB(190, 190, 190)` | Lista de items |
+| `Flags` | branco | Flags |
+| `Skeleton` | branco | Esqueleto |
+| `HeadDot` | `RGB(255, 80, 80)` | Ponto na cabeça |
+| `Tracer` | branco | Linha do tracer |
+| `Chams` | `RGB(170, 90, 255)` | Preenchimento dos chams |
+| `ChamsOutline` | branco | Contorno dos chams |
+| `HealthHigh` | `RGB(80, 255, 120)` | Barra de vida cheia |
+| `HealthLow` | `RGB(255, 70, 70)` | Barra de vida quase vazia (a cor passa de uma para a outra) |
+| `Armor` | `RGB(80, 160, 255)` | Barra de armor |
+
+O card (fundo, borda e título) acompanha o tema do painel. As cores do ESP são só dessas chaves.
+
+#### 4.7.3 Seguir um jogador ou uma função (Bind)
+
+Com `bind` livre (padrão), o holograma segue o **seu player** e atualiza a cada 0,1 segundo.
+
+```lua
+-- // Seguir um jogador
+holo:Bind(game.Players.LocalPlayer)
+holo:Bind(game.Players:FindFirstChild("Fulano"))
+
+-- // Seguir uma função (retorna uma tabela igual a Update)
+holo:Bind(function()
+    local humanoid = boss:FindFirstChildOfClass("Humanoid")
+
+    return {
+        Name = "Boss",
+        Health = humanoid.Health,
+        MaxHealth = humanoid.MaxHealth,
+        Flags = { "Boss" },
+    }
+end)
+
+-- // Parar de seguir
+holo:Unbind()
+```
+
+O que é lido de um **jogador**:
+
+| Dado | De onde vem |
+|------|-------------|
+| `Name` | `DisplayName` (ou o nome, se estiver vazio) |
+| `Health` e `MaxHealth` | Humanoid do personagem |
+| `Tool` | Tool equipada no personagem |
+| `Items` | Tool equipada e as tools da mochila |
+| `Flags` | `Dead`, `Sitting`, `Air` (no ar) ou `Moving` |
+| `Armor` e `MaxArmor` | Attributes `Armor` e `MaxArmor` do personagem. Sem o attribute, a barra de armor fica escondida |
+| `Distance` | Distância até o seu personagem, para jogadores que não são você |
+
+- Seguindo o **seu próprio player**, a distância seria sempre 0. Por isso `Distance` fica no valor manual (padrão `25`). Troque com `holo:SetDistance(valor)`.
+- Se o jogador seguido sair do jogo, o holograma para de seguir e mostra uma notificação.
+- Se a função der erro, aparece uma notificação (uma vez) e um `warn` com o erro. O holograma continua tentando.
+- `Bind` retorna `true` se deu certo e `false` se o valor não for um Player nem uma função.
+
+#### 4.7.4 Dados
+
+`holo:Update(tabela)` muda vários dados de uma vez. Só o que mudou é redesenhado, e as barras animam.
+
+```lua
+holo:Update({
+    Name = "Enemy",
+    Health = 70,
+    MaxHealth = 100,
+    Armor = 40,
+    MaxArmor = 100,
+    Distance = 80,
+    Tool = "AK-47",
+    Items = { "AK-47", "Medkit", "Grenade" },
+    Flags = { "Visible", "Moving" },
+})
+```
+
+| Chave | Tipo | Descrição |
+|-------|------|-----------|
+| `Name` | string | Nome mostrado |
+| `Health`, `MaxHealth` | number | Vida atual e máxima |
+| `Armor`, `MaxArmor` | number | Armor atual e máxima. Com `MaxArmor` em 0 a barra some |
+| `Distance` | number | Distância em metros (aparece como `80m`) |
+| `Tool` | string | Tool equipada. Vazio esconde a tool e o nome dela |
+| `Items` | table | Lista de nomes, até 5 |
+| `Flags` | table | Lista de textos, até 6 |
+
+Chaves que não existem, ou com tipo errado, são ignoradas.
+
+#### 4.7.5 Exemplo: ESP controlado por elements
+
+```lua
+-- // Hologram
+local holo = HoloSection:CreateHologram({
+    title = "ESP Preview",
+    height = 300,
+})
+
+-- // Controles
+local EspSection = HoloTab:CreateSection("ESP")
+
+EspSection:CreateToggle({
+    title = "Box",
+    default = true,
+    callback = function(state)
+        holo:Set("Box", state)
+    end,
+})
+
+EspSection:CreateDropdown({
+    title = "Box Style",
+    values = { "Full", "Corner" },
+    default = "Full",
+    callback = function(value)
+        holo:Set("BoxStyle", value)
+    end,
+})
+
+EspSection:CreateToggle({
+    title = "Skeleton",
+    default = false,
+    callback = function(state)
+        holo:Set("Skeleton", state)
+    end,
+})
+
+EspSection:CreateColorPicker({
+    title = "Box Color",
+    default = Color3.fromRGB(255, 255, 255),
+    callback = function(color)
+        holo:SetColor("Box", color)
+    end,
+})
+```
+
+#### 4.7.6 Métodos
+
+| Método | Descrição |
+|--------|-----------|
+| `Bind(fonte)` | Segue um Player ou uma função. `Bind(nil)` ou `Bind(false)` para de seguir. Retorna `true` ou `false` |
+| `Unbind()` | Para de seguir |
+| `GetBound()` | Retorna o que está sendo seguido (`nil` se nada) |
+| `Update(tabela)` | Muda vários dados de uma vez (4.7.4) |
+| `SetName(texto)` | Muda o nome |
+| `SetHealth(valor, max)` | Muda a vida. `max` é opcional |
+| `SetArmor(valor, max)` | Muda a armor. `max` é opcional |
+| `SetDistance(valor)` | Muda a distância |
+| `SetTool(texto)` | Muda a tool |
+| `SetItems(lista)` | Muda a lista de items |
+| `SetFlags(lista)` | Muda a lista de flags |
+| `GetData()` | Retorna uma cópia dos dados mostrados |
+| `Set(chave, valor)` | Muda um setting (4.7.2). Chama o `callback` se mudou |
+| `SetSettings(tabela)` | Muda vários settings de uma vez. Chama o `callback` para cada um que mudou |
+| `Get(chave)` | Retorna o valor de um setting |
+| `GetSettings()` | Retorna uma cópia de todos os settings |
+| `SetColor(chave, cor)` | Muda uma cor |
+| `SetColors(tabela)` | Muda várias cores de uma vez |
+| `GetColor(chave)` | Retorna uma cor |
+| `SetAnimated(estado)` | Liga ou desliga a flutuação e o scan |
+| `SetTitle(texto)` | Troca o título do card |
+| `Destroy()` | Remove o element e desconecta tudo |
+
+#### 4.7.7 Comportamento
+
+- O boneco segue as proporções do R6: cabeça, torso, dois braços e duas pernas.
+- O holograma só gasta processamento quando precisa: o loop dele fica ligado enquanto `animated` for `true` ou enquanto estiver seguindo alguém. Com `animated = false` e sem `Bind`, ele não roda loop nenhum.
+- Trocar a tool ou o nome ao vivo (pelo `Bind` ou por `Update`) atualiza o card sozinho. A lista de items destaca a tool equipada.
+- O `Tracer` sai do ponto de `TracerOrigin` e termina nos pés do boneco.
+- O tamanho do boneco é fixo na criação (`height` e `scale`). Para mudar, destrua e crie de novo.
+- Quando a section ou a janela é destruída, o holograma desconecta tudo sozinho.
+
+---
+
 ## 5. Themes
 
 O tema muda só a **interface do painel**: fundo da janela, cor das sections (onde ficam os elements), pesquisa, configurações, bordas e destaques. Os textos (nome da section, nome da tab, título, nomes dos elements que não usam a cor de destaque) continuam normais.
@@ -1871,6 +2163,18 @@ local card = Section:CreateParagraph({
 card:UpdateInfo(1, 2)
 card:SetDescription("Novo")
 card:SetTag("OK")
+
+local holo = Section:CreateHologram({
+    title = "X",
+    height = 290,
+    bind = false,
+    callback = function(settings, key, value)
+    end,
+})
+
+holo:Update({ Name = "X", Health = 80, MaxHealth = 100, Tool = "Sword" })
+holo:Set("Box", true)
+holo:Bind(game.Players.LocalPlayer)
 ```
 
 ```lua
@@ -1880,6 +2184,9 @@ slider:Set(50)             slider:Get()
 dropdown:Set("A")          dropdown:Get()
 picker:Set(Color3.new())   picker:Get()
 button:Fire()              button:SetLoading(true)
+holo:Set("Box", true)      holo:Get("Box")
+holo:SetColor("Box", color)  holo:Update({ Health = 50 })
+holo:Bind(player)          holo:Unbind()
 ```
 
 ```lua
