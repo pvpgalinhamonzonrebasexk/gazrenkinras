@@ -95,10 +95,14 @@ local SPIN_SPEED_DEFAULT = 30
 local DRAG_YAW = 0.6
 local DRAG_PITCH = 0.4
 local MAX_PARTS_DEFAULT = 2500
-local CLONE_CHUNK = 120
+local CLONE_BUDGET = 0.006
 local PENDING_BUDGET = 60
 local PLAYER_WAIT = 10
 local APPEARANCE_WAIT = 5
+local IMAGE_TIMEOUT = 8
+local THUMB_SIZE_DEFAULT = 420
+local THUMB_SIZE_SMALL = 150
+local THUMB_DEFAULT = "Asset"
 local HOLO_COLOR = Color3.fromRGB(110, 190, 255)
 local MATERIAL_COLOR = Color3.fromRGB(200, 200, 200)
 local MATERIAL_RADIUS = 2
@@ -109,6 +113,24 @@ local LIVE_RATES = { Player = 30, Model = 20, Map = 4 }
 local LIVE_RATE_FALLBACK = 10
 local CHANNEL_DEFAULT = "ColorMap"
 local CHANNELS = { ColorMap = true, NormalMap = true, MetalnessMap = true, RoughnessMap = true }
+local TARGET_KEYS = {
+    "target",
+    "Target",
+    "item",
+    "Item",
+    "map",
+    "Map",
+    "source",
+    "Source",
+    "thumbnail",
+    "Thumbnail",
+    "image",
+    "Image",
+    "icon",
+    "Icon",
+    "id",
+    "Id",
+}
 local TYPE_ALIASES = {
     auto = "Auto",
     player = "Player",
@@ -123,11 +145,40 @@ local TYPE_ALIASES = {
     tool = "Model",
     object = "Model",
     accessory = "Model",
+    hologram = "Model",
     texture = "Texture",
     image = "Texture",
     decal = "Texture",
     material = "Texture",
+    thumbnail = "Thumbnail",
+    thumbnaild = "Thumbnail",
+    thumb = "Thumbnail",
+    icon = "Thumbnail",
+    avatar = "Thumbnail",
+    headshot = "Thumbnail",
 }
+local THUMB_LOOKUP = {}
+for _, name in ipairs({
+    "Asset",
+    "Avatar",
+    "AvatarHeadShot",
+    "AvatarBust",
+    "GamePass",
+    "BadgeIcon",
+    "GameIcon",
+    "BundleThumbnail",
+    "Outfit",
+    "GroupIcon",
+}) do
+    THUMB_LOOKUP[name:lower()] = name
+end
+THUMB_LOOKUP.item = "Asset"
+THUMB_LOOKUP.headshot = "AvatarHeadShot"
+THUMB_LOOKUP.bust = "AvatarBust"
+THUMB_LOOKUP.bundle = "BundleThumbnail"
+THUMB_LOOKUP.badge = "BadgeIcon"
+THUMB_LOOKUP.game = "GameIcon"
+THUMB_LOOKUP.group = "GroupIcon"
 local STRIP_CLASSES = {
     "LuaSourceContainer",
     "Sound",
@@ -160,11 +211,51 @@ local function create(class, props, parent)
     instance.Parent = parent
     return instance
 end
+local function pick(source, lower, upper)
+    local value = source[lower]
+    if value == nil then
+        value = source[upper]
+    end
+    return value
+end
+local function pickFunction(source, lower, upper)
+    local value = pick(source, lower, upper)
+    if type(value) == "function" then
+        return value
+    end
+    return nil
+end
+local function findTarget(data)
+    for _, key in ipairs(TARGET_KEYS) do
+        local value = data[key]
+        if value ~= nil then
+            return value
+        end
+    end
+    return nil
+end
+local function unpackEntry(value)
+    if type(value) ~= "table" then
+        return value
+    end
+    local inner = pick(value, "target", "Target")
+    if inner == nil then
+        return value
+    end
+    return inner, pick(value, "title", "Title"), pick(value, "description", "Description"), pick(value, "type", "Type")
+end
 local function normalizeType(value)
     if value == nil then
         return "Auto"
     end
     return TYPE_ALIASES[tostring(value):lower()]
+end
+local function normalizeThumbSize(value)
+    local number = tonumber(value) or THUMB_SIZE_DEFAULT
+    if number <= 200 then
+        return THUMB_SIZE_SMALL
+    end
+    return THUMB_SIZE_DEFAULT
 end
 local function isDisplayPart(instance)
     return instance:IsA("BasePart") and not instance:IsA("Terrain")
@@ -261,6 +352,19 @@ local function normalizeAsset(value)
     end
     return value
 end
+local function extractId(value)
+    if type(value) == "number" then
+        return math.floor(value)
+    end
+    if type(value) == "string" then
+        local digits = value:match("^%d+$") or value:match("rbxassetid://(%d+)") or value:match("[?&][iI]d=(%d+)")
+        return digits and tonumber(digits) or nil
+    end
+    return nil
+end
+local function thumbUrl(kind, id, size)
+    return ("rbxthumb://type=%s&id=%d&w=%d&h=%d"):format(kind, math.floor(id), size, size)
+end
 local function textureProperty(instance, channel)
     if instance:IsA("ImageLabel") or instance:IsA("ImageButton") then
         return "Image"
@@ -326,14 +430,20 @@ local function resolveTarget(target)
     return nil
 end
 local function detectType(target)
+    if type(target) == "table" then
+        return "Thumbnail"
+    end
     if typeof(target) == "EnumItem" then
         return target.EnumType == Enum.Material and "Texture" or "Auto"
     end
     if type(target) == "number" then
-        return "Texture"
+        return "Thumbnail"
     end
     if type(target) == "string" then
         if isAssetString(target) then
+            if extractId(target) then
+                return "Thumbnail"
+            end
             return "Texture"
         end
         local named = players:FindFirstChild(target)
@@ -363,6 +473,86 @@ local function detectType(target)
     end
     return "Model"
 end
+local function resolveThumbnail(target, kind, size, channel)
+    if type(target) == "function" then
+        local ok, result = pcall(target)
+        if not ok then
+            return nil, "target function failed."
+        end
+        target = result
+    end
+    if type(target) == "table" then
+        local rawId = pick(target, "id", "Id")
+        local userId = pick(target, "userId", "UserId")
+        local id = extractId(rawId ~= nil and rawId or userId)
+        if not id then
+            return nil, "invalid thumbnail data."
+        end
+        local custom = THUMB_LOOKUP[tostring(pick(target, "kind", "Kind") or pick(target, "thumbType", "ThumbType") or ""):lower()]
+        local fallback = (userId ~= nil and rawId == nil) and "AvatarHeadShot" or THUMB_DEFAULT
+        local customSize = pick(target, "size", "Size")
+        return {
+            Image = thumbUrl(custom or kind or fallback, id, customSize and normalizeThumbSize(customSize) or size),
+            Name = tostring(id),
+        }
+    end
+    if type(target) == "string" and not isAssetString(target) then
+        local named = players:FindFirstChild(target)
+        if named and named:IsA("Player") then
+            target = named
+        end
+    end
+    if type(target) == "number" or (type(target) == "string" and isAssetString(target)) then
+        local id = extractId(target)
+        if id then
+            return { Image = thumbUrl(kind or THUMB_DEFAULT, id, size), Name = tostring(id) }
+        end
+        return { Image = normalizeAsset(target), Name = tostring(target) }
+    end
+    local instance = typeof(target) == "Instance" and target or resolveTarget(target)
+    if not instance then
+        return nil, "target not found."
+    end
+    local owner = instance
+    if instance:IsA("Model") then
+        owner = players:GetPlayerFromCharacter(instance) or instance
+    end
+    if owner:IsA("Player") then
+        return {
+            Image = thumbUrl(kind or "AvatarHeadShot", owner.UserId, size),
+            Name = owner.Name,
+            Instance = owner,
+        }
+    end
+    if instance:IsA("IntValue") or instance:IsA("NumberValue") or instance:IsA("StringValue") then
+        local valueId = extractId(instance.Value)
+        if valueId then
+            return {
+                Image = thumbUrl(kind or THUMB_DEFAULT, valueId, size),
+                Name = instance.Name,
+                Instance = instance,
+            }
+        end
+    end
+    if instance:IsA("Tool") and instance.TextureId ~= "" then
+        return {
+            Image = instance.TextureId,
+            Name = instance.Name,
+            Instance = instance,
+            Property = "TextureId",
+        }
+    end
+    if isTextureInstance(instance) then
+        local property = textureProperty(instance, channel)
+        return {
+            Image = instance[property],
+            Name = instance.Name,
+            Instance = instance,
+            Property = property,
+        }
+    end
+    return { Fallback = instance }
+end
 
 -- // Hologram
 local function buildHologram(section, options)
@@ -378,12 +568,15 @@ local function buildHologram(section, options)
     local originals = {}
     local pending = {}
     local destroyed = false
-    local title = tostring(options.title or options.Title or "Hologram")
+    local title = tostring(pick(options, "title", "Title") or "Hologram")
     local description = tostring(options.description or options.desc or options.Description or "")
-    local placeholder = tostring(options.placeholder or PLACEHOLDER_DEFAULT)
+    local placeholder = tostring(pick(options, "placeholder", "Placeholder") or PLACEHOLDER_DEFAULT)
     local showType = options.showType ~= false
     local height = math.clamp(tonumber(options.height or options.Height) or HEIGHT_DEFAULT, HEIGHT_MIN, HEIGHT_MAX)
-    local callback = type(options.callback) == "function" and options.callback or (type(options.Callback) == "function" and options.Callback or nil)
+    local callback = pickFunction(options, "callback", "Callback") or pickFunction(options, "onLoaded", "OnLoaded")
+    local onFail = pickFunction(options, "onFail", "OnFail") or pickFunction(options, "onError", "OnError")
+    local onClear = pickFunction(options, "onClear", "OnClear")
+    local onTypeChange = pickFunction(options, "onTypeChange", "OnTypeChange")
     local maxParts = math.max(math.floor(tonumber(options.maxParts) or MAX_PARTS_DEFAULT), 1)
     local skipInvisible = options.skipInvisible ~= false
     local excludePlayers = options.excludePlayers ~= false
@@ -399,6 +592,8 @@ local function buildHologram(section, options)
     local tint = options.tint == true
     local holoColor = typeof(options.color) == "Color3" and options.color or HOLO_COLOR
     local channel = CHANNELS[options.channel or options.textureChannel] and (options.channel or options.textureChannel) or CHANNEL_DEFAULT
+    local thumbKind
+    local thumbSize = normalizeThumbSize(pick(options, "thumbSize", "ThumbSize"))
     local currentType = "Auto"
     local activeType
     local viewMode = "Model"
@@ -415,7 +610,9 @@ local function buildHologram(section, options)
     local loadedInstance
     local loadedName = ""
     local lastTarget
+    local lastKind
     local textureConnection
+    local imageConnection
     local list = {}
     local index = 0
     local followedPlayer
@@ -423,6 +620,7 @@ local function buildHologram(section, options)
     local playerToken = 0
     local unwatchTheme
 
+    -- // Callback
     local function report(message, duration)
         local text = ("Hologram '%s': %s"):format(title, message)
         if reported[text] then
@@ -432,14 +630,30 @@ local function buildHologram(section, options)
         warn(text)
         notify(text, duration or 5)
     end
+    local function fire(handler, ...)
+        if type(handler) ~= "function" then
+            return
+        end
+        local ok, err = pcall(handler, ...)
+        if not ok then
+            report(("callback: %s"):format(tostring(err)))
+        end
+    end
 
-    local requestedType = options.Type or options.type
+    local requestedType = pick(options, "type", "Type")
     if requestedType ~= nil then
         local normalized = normalizeType(requestedType)
         if normalized then
             currentType = normalized
         else
             report(("invalid type '%s'."):format(tostring(requestedType)))
+        end
+    end
+    local requestedThumb = pick(options, "thumbType", "ThumbType")
+    if requestedThumb ~= nil then
+        thumbKind = THUMB_LOOKUP[tostring(requestedThumb):lower()]
+        if not thumbKind then
+            report(("invalid thumbnail type '%s'."):format(tostring(requestedThumb)))
         end
     end
 
@@ -528,6 +742,27 @@ local function buildHologram(section, options)
             text = text .. " · " .. loadedName
         end
         typeLabel.Text = text
+    end
+    local function setInfo(newTitle, newDescription)
+        local changed = false
+        if newTitle ~= nil then
+            newTitle = tostring(newTitle)
+            if newTitle ~= title then
+                title = newTitle
+                root.Name = title .. "_Hologram"
+                changed = true
+            end
+        end
+        if newDescription ~= nil then
+            newDescription = tostring(newDescription)
+            if newDescription ~= description then
+                description = newDescription
+                changed = true
+            end
+        end
+        if changed then
+            layoutFooter()
+        end
     end
     layoutFooter()
     updateTypeLabel()
@@ -718,6 +953,10 @@ local function buildHologram(section, options)
             textureConnection:Disconnect()
             textureConnection = nil
         end
+        if imageConnection then
+            imageConnection:Disconnect()
+            imageConnection = nil
+        end
         textureView.Image = ""
         links = {}
         reverse = {}
@@ -731,10 +970,14 @@ local function buildHologram(section, options)
         updateTypeLabel()
     end
     local function fail(message)
+        loadId = loadId + 1
         loading = false
+        clearLoaded()
+        showMode("Model")
         setStatus(EMPTY_TEXT)
         if message then
             report(message)
+            fire(onFail, message)
         end
         return false
     end
@@ -753,7 +996,8 @@ local function buildHologram(section, options)
             local newOriginals = {}
             local count = 0
             local truncated = false
-            for position, part in ipairs(parts) do
+            local sliceStart = os.clock()
+            for _, part in ipairs(parts) do
                 if destroyed or id ~= loadId then
                     model:Destroy()
                     return
@@ -769,8 +1013,9 @@ local function buildHologram(section, options)
                         clone.Parent = model
                     end
                 end
-                if position % CLONE_CHUNK == 0 then
+                if os.clock() - sliceStart >= CLONE_BUDGET then
                     task.wait()
+                    sliceStart = os.clock()
                 end
             end
             if destroyed or id ~= loadId then
@@ -781,6 +1026,7 @@ local function buildHologram(section, options)
             if count == 0 then
                 model:Destroy()
                 setStatus(EMPTY_TEXT)
+                fire(onFail, "nothing to display.")
                 return
             end
             local boxCFrame, boxSize = model:GetBoundingBox()
@@ -836,12 +1082,7 @@ local function buildHologram(section, options)
             if truncated then
                 report(("'%s' has too many parts, showing %d."):format(instance.Name, count))
             end
-            if callback then
-                local ok, err = pcall(callback, instance, model)
-                if not ok then
-                    report(("callback: %s"):format(tostring(err)))
-                end
-            end
+            fire(callback, instance, model, api, kind)
         end)
         return true
     end
@@ -874,6 +1115,67 @@ local function buildHologram(section, options)
         setStatus(nil)
         updateTypeLabel()
         updateCamera()
+        fire(callback, material, model, api, "Texture")
+        return true
+    end
+
+    -- // Thumbnail
+    local function trackImage(token)
+        if imageConnection then
+            imageConnection:Disconnect()
+            imageConnection = nil
+        end
+        if textureView.Image == "" then
+            setStatus(EMPTY_TEXT)
+            return
+        end
+        if textureView.IsLoaded then
+            setStatus(nil)
+            return
+        end
+        setStatus(LOADING_TEXT)
+        imageConnection = textureView:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+            if destroyed or token ~= loadId then
+                return
+            end
+            if textureView.IsLoaded then
+                setStatus(nil)
+                if imageConnection then
+                    imageConnection:Disconnect()
+                    imageConnection = nil
+                end
+            end
+        end)
+        task.delay(IMAGE_TIMEOUT, function()
+            if destroyed or token ~= loadId or textureView.IsLoaded then
+                return
+            end
+            setStatus(EMPTY_TEXT)
+        end)
+    end
+    local function showImage(image, name, instance, property, kind, source)
+        loadId = loadId + 1
+        local id = loadId
+        clearLoaded()
+        showMode("Texture")
+        loading = false
+        textureView.Image = image
+        loadedInstance = instance
+        loadedName = name
+        activeType = kind
+        if instance and property then
+            textureConnection = instance:GetPropertyChangedSignal(property):Connect(function()
+                if destroyed or id ~= loadId then
+                    return
+                end
+                textureView.Image = instance[property]
+                trackImage(id)
+            end)
+        end
+        trackImage(id)
+        updateTypeLabel()
+        updateCamera()
+        fire(callback, source, textureView, api, kind)
         return true
     end
     local function loadTexture(target)
@@ -902,34 +1204,20 @@ local function buildHologram(section, options)
         if not image then
             return fail("texture not found.")
         end
-        loadId = loadId + 1
-        clearLoaded()
-        showMode("Texture")
-        loading = false
-        textureView.Image = image
-        setStatus(image == "" and EMPTY_TEXT or nil)
-        loadedInstance = instance
-        loadedName = instance and instance.Name or image
-        activeType = "Texture"
-        if instance then
-            textureConnection = instance:GetPropertyChangedSignal(property):Connect(function()
-                if destroyed then
-                    return
-                end
-                local value = instance[property]
-                textureView.Image = value
-                setStatus(value == "" and EMPTY_TEXT or nil)
-            end)
+        return showImage(image, instance and instance.Name or image, instance, property, "Texture", instance or image)
+    end
+    local function loadThumbnail(target)
+        if typeof(target) == "EnumItem" and target.EnumType == Enum.Material then
+            return loadMaterial(target)
         end
-        updateTypeLabel()
-        updateCamera()
-        if callback then
-            local ok, err = pcall(callback, instance or image, textureView)
-            if not ok then
-                report(("callback: %s"):format(tostring(err)))
-            end
+        local result, message = resolveThumbnail(target, thumbKind, thumbSize, channel)
+        if not result then
+            return fail(message or "thumbnail not found.")
         end
-        return true
+        if result.Fallback then
+            return loadInstance(result.Fallback, "Model")
+        end
+        return showImage(result.Image, result.Name, result.Instance, result.Property, "Thumbnail", result.Instance or result.Image)
     end
 
     -- // Player
@@ -990,6 +1278,7 @@ local function buildHologram(section, options)
         local token = playerToken
         followedPlayer = player
         lastTarget = player
+        lastKind = "Player"
         index = 0
         list = {}
         loadId = loadId + 1
@@ -1017,16 +1306,31 @@ local function buildHologram(section, options)
         return true
     end
     local function loadAuto(target, typeName)
-        local kind = normalizeType(typeName) or currentType
+        local inner, entryTitle, entryDescription, entryType = unpackEntry(target)
+        target = inner
+        setInfo(entryTitle, entryDescription)
+        local requested = typeName
+        if requested == nil then
+            requested = entryType
+        end
+        local kind = currentType
+        if requested ~= nil then
+            kind = normalizeType(requested) or currentType
+        end
         if kind == "Auto" then
             kind = detectType(target)
         end
         lastTarget = target
+        lastKind = requested
         if kind == "Player" then
             return loadPlayer(target, followOption)
         end
+        unbindPlayer()
         if kind == "Texture" then
             return loadTexture(target)
+        end
+        if kind == "Thumbnail" then
+            return loadThumbnail(target)
         end
         local instance = resolveTarget(target)
         if not instance then
@@ -1041,16 +1345,126 @@ local function buildHologram(section, options)
         index = ((position - 1) % #list) + 1
         return loadAuto(list[index])
     end
+    local function reloadCurrent()
+        if index > 0 and list[index] ~= nil then
+            return loadAuto(list[index])
+        end
+        if lastTarget ~= nil then
+            return loadAuto(lastTarget, lastKind)
+        end
+        if currentType == "Player" then
+            return loadPlayer(nil, followOption)
+        end
+        return true
+    end
+    local function setTypeValue(value)
+        local normalized = normalizeType(value)
+        if not normalized then
+            report(("invalid type '%s'."):format(tostring(value)))
+            return false, false
+        end
+        local previous = currentType
+        currentType = normalized
+        updateTypeLabel()
+        if previous ~= normalized then
+            fire(onTypeChange, normalized, previous)
+        end
+        return true, previous ~= normalized
+    end
+    local function loadFromData(data)
+        local items = data.list or data.List or data.items or data.Items
+        if type(items) == "table" then
+            return api:LoadList(items, pick(data, "start", "Start"))
+        end
+        local playerValue = pick(data, "player", "Player")
+        if playerValue ~= nil and playerValue ~= false then
+            return api:LoadPlayer(playerValue, followOption)
+        end
+        local target = findTarget(data)
+        if target ~= nil then
+            return api:Load(target)
+        end
+        return nil
+    end
 
     -- // Load API
-    function api:Load(target, typeName)
+    function api:Load(target, typeName, info, extra)
         if destroyed then
             return false
         end
-        unbindPlayer()
+        if type(info) == "table" then
+            setInfo(pick(info, "title", "Title"), pick(info, "description", "Description"))
+        elseif info ~= nil or extra ~= nil then
+            setInfo(info, extra)
+        end
         index = 0
         list = {}
         return loadAuto(target, typeName)
+    end
+    function api:Update(data)
+        if destroyed or type(data) ~= "table" then
+            return false
+        end
+        setInfo(pick(data, "title", "Title"), pick(data, "description", "Description"))
+        local value = pick(data, "placeholder", "Placeholder")
+        if value ~= nil then
+            api:SetPlaceholder(value)
+        end
+        value = pick(data, "thumbSize", "ThumbSize")
+        if value ~= nil then
+            thumbSize = normalizeThumbSize(value)
+        end
+        value = pick(data, "thumbType", "ThumbType")
+        if value ~= nil then
+            thumbKind = THUMB_LOOKUP[tostring(value):lower()] or thumbKind
+        end
+        value = pick(data, "channel", "Channel")
+        if value ~= nil and CHANNELS[value] then
+            channel = value
+        end
+        value = pick(data, "color", "Color")
+        if value ~= nil then
+            api:SetColor(value)
+        end
+        value = pick(data, "tint", "Tint")
+        if value ~= nil then
+            api:SetTint(value)
+        end
+        value = pick(data, "spin", "Spin")
+        if value ~= nil then
+            api:SetSpin(value)
+        end
+        value = pick(data, "spinSpeed", "SpinSpeed")
+        if value ~= nil then
+            api:SetSpinSpeed(value)
+        end
+        value = pick(data, "zoom", "Zoom")
+        if value ~= nil then
+            api:SetZoom(value)
+        end
+        value = pick(data, "height", "Height")
+        if value ~= nil then
+            api:SetHeight(value)
+        end
+        value = pick(data, "visible", "Visible")
+        if value ~= nil then
+            api:SetVisible(value)
+        end
+        local changed = false
+        value = pick(data, "type", "Type")
+        if value ~= nil then
+            local _, typeChanged = setTypeValue(value)
+            changed = typeChanged
+        end
+        local result = loadFromData(data)
+        if result ~= nil then
+            return result
+        end
+        if changed then
+            lastKind = nil
+            return reloadCurrent()
+        end
+        return true
     end
     function api:LoadPlayer(player, follow)
         if destroyed then
@@ -1095,10 +1509,7 @@ local function buildHologram(section, options)
         if followedPlayer then
             return loadPlayer(followedPlayer, followConnection ~= nil)
         end
-        if lastTarget == nil then
-            return false
-        end
-        return loadAuto(lastTarget)
+        return reloadCurrent()
     end
     function api:Clear()
         if destroyed then
@@ -1109,10 +1520,12 @@ local function buildHologram(section, options)
         index = 0
         list = {}
         lastTarget = nil
+        lastKind = nil
         unbindPlayer()
         clearLoaded()
         showMode("Model")
         setStatus(placeholder)
+        fire(onClear)
     end
     function api:Sync()
         if destroyed then
@@ -1148,24 +1561,12 @@ local function buildHologram(section, options)
 
     -- // Type API
     function api:SetType(value)
-        local normalized = normalizeType(value)
-        if not normalized then
-            report(("invalid type '%s'."):format(tostring(value)))
+        local valid = setTypeValue(value)
+        if not valid or destroyed then
             return false
         end
-        currentType = normalized
-        updateTypeLabel()
-        if destroyed then
-            return false
-        end
-        if lastTarget ~= nil then
-            unbindPlayer()
-            return loadAuto(lastTarget)
-        end
-        if currentType == "Player" then
-            return loadPlayer(nil, followOption)
-        end
-        return true
+        lastKind = nil
+        return reloadCurrent()
     end
     function api:GetType()
         return currentType
@@ -1179,10 +1580,39 @@ local function buildHologram(section, options)
             return false
         end
         channel = value
-        if activeType == "Texture" and lastTarget ~= nil then
-            return loadAuto(lastTarget)
+        if activeType == "Texture" or activeType == "Thumbnail" then
+            return reloadCurrent()
         end
         return true
+    end
+    function api:SetThumbType(value)
+        if value == nil then
+            thumbKind = nil
+        else
+            local resolved = THUMB_LOOKUP[tostring(value):lower()]
+            if not resolved then
+                report(("invalid thumbnail type '%s'."):format(tostring(value)))
+                return false
+            end
+            thumbKind = resolved
+        end
+        if activeType == "Thumbnail" then
+            return reloadCurrent()
+        end
+        return true
+    end
+    function api:GetThumbType()
+        return thumbKind
+    end
+    function api:SetThumbSize(value)
+        thumbSize = normalizeThumbSize(value)
+        if activeType == "Thumbnail" then
+            return reloadCurrent()
+        end
+        return true
+    end
+    function api:GetThumbSize()
+        return thumbSize
     end
 
     -- // Live API
@@ -1242,20 +1672,35 @@ local function buildHologram(section, options)
     end
     function api:SetPlaceholder(value)
         placeholder = tostring(value or PLACEHOLDER_DEFAULT)
-        if not holder and not loading and viewMode == "Model" then
+        if not holder and not loading and viewMode == "Model" and activeType == nil then
             setStatus(placeholder)
         end
     end
 
     -- // Control API
     function api:SetTitle(value)
-        title = tostring(value or "")
-        root.Name = title .. "_Hologram"
-        layoutFooter()
+        if destroyed then
+            return
+        end
+        setInfo(tostring(value or ""), nil)
     end
     function api:SetDescription(value)
-        description = tostring(value or "")
-        layoutFooter()
+        if destroyed then
+            return
+        end
+        setInfo(nil, tostring(value or ""))
+    end
+    function api:SetInfo(newTitle, newDescription)
+        if destroyed then
+            return
+        end
+        setInfo(newTitle, newDescription)
+    end
+    function api:GetTitle()
+        return title
+    end
+    function api:GetDescription()
+        return description
     end
     function api:SetShowType(value)
         showType = value == true
@@ -1277,6 +1722,9 @@ local function buildHologram(section, options)
         height = math.clamp(tonumber(value) or height, HEIGHT_MIN, HEIGHT_MAX)
         root.Size = UDim2.new(1, 0, 0, height)
     end
+    function api:IsDestroyed()
+        return destroyed
+    end
     function api:Destroy()
         if destroyed then
             return
@@ -1288,6 +1736,10 @@ local function buildHologram(section, options)
         if textureConnection then
             textureConnection:Disconnect()
             textureConnection = nil
+        end
+        if imageConnection then
+            imageConnection:Disconnect()
+            imageConnection = nil
         end
         if unwatchTheme then
             unwatchTheme()
@@ -1304,8 +1756,93 @@ local function buildHologram(section, options)
         pending = {}
         root:Destroy()
     end
+
+    -- // Callback API
+    function api:SetCallback(handler)
+        callback = type(handler) == "function" and handler or nil
+    end
+    function api:SetOnFail(handler)
+        onFail = type(handler) == "function" and handler or nil
+    end
+    function api:SetOnClear(handler)
+        onClear = type(handler) == "function" and handler or nil
+    end
+    function api:SetOnTypeChange(handler)
+        onTypeChange = type(handler) == "function" and handler or nil
+    end
     api.Frame = root
     api.Instance = root
+
+    -- // Properties
+    local getters = {
+        Title = function()
+            return title
+        end,
+        Description = function()
+            return description
+        end,
+        Type = function()
+            return currentType
+        end,
+        Visible = function()
+            return root.Visible
+        end,
+        Height = function()
+            return height
+        end,
+        Spin = function()
+            return spin
+        end,
+        Zoom = function()
+            return zoom
+        end,
+        Tint = function()
+            return tint
+        end,
+    }
+    local setters = {
+        Title = function(value)
+            api:SetTitle(value)
+        end,
+        Description = function(value)
+            api:SetDescription(value)
+        end,
+        Type = function(value)
+            api:SetType(value)
+        end,
+        Visible = function(value)
+            api:SetVisible(value)
+        end,
+        Height = function(value)
+            api:SetHeight(value)
+        end,
+        Spin = function(value)
+            api:SetSpin(value)
+        end,
+        Zoom = function(value)
+            api:SetZoom(value)
+        end,
+        Tint = function(value)
+            api:SetTint(value)
+        end,
+    }
+    setmetatable(api, {
+        __index = function(_, key)
+            local getter = getters[key]
+            if getter then
+                return getter()
+            end
+            return nil
+        end,
+        __newindex = function(self, key, value)
+            local setter = setters[key]
+            if setter then
+                setter(value)
+                return
+            end
+            rawset(self, key, value)
+        end,
+    })
 
     -- // Input
     connections[#connections + 1] = stage.InputBegan:Connect(function(input)
@@ -1378,18 +1915,8 @@ local function buildHologram(section, options)
         descLabel.TextColor3 = Colors.Dim
         statusLabel.TextColor3 = Colors.Dim
     end)
-    local source = options.list or options.items
-    local initial = options.target
-    if initial == nil then
-        initial = options.item or options.map or options.source
-    end
-    if type(source) == "table" then
-        api:LoadList(source, options.start)
-    elseif initial ~= nil then
-        api:Load(initial)
-    elseif options.player ~= nil and options.player ~= false then
-        loadPlayer(options.player, followOption)
-    elseif currentType == "Player" then
+    local initialResult = loadFromData(options)
+    if initialResult == nil and currentType == "Player" then
         loadPlayer(nil, followOption)
     end
     return api
