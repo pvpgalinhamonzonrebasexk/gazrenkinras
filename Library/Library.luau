@@ -110,7 +110,11 @@ local Config = {
     ScrollWidth = 6,
     RestoreFires = true,
     ThemePrefetch = true,
-    ThemePrefetchLimit = 24
+    ThemePrefetchLimit = 24,
+    SectionLayout = "Default",
+    ColumnGap = 8,
+    ColumnMinWidth = 170,
+    ElementGap = 2
 }
 
 local ElementIcons = {
@@ -2010,12 +2014,27 @@ local Theme = {
     GradientBottom = Color3.fromRGB(25, 25, 25)
 }
 
+local ThemeFrameKeys = {
+    Accent = true,
+    Field = true,
+    Border = true,
+    BorderHover = true,
+    Palette = true,
+    Background = true,
+    Divider = true,
+    GradientTop = true,
+    GradientBottom = true
+}
+
 local DefaultTheme = {}
 local ThemeKeys = {}
 
 for Key, Color in pairs(Theme) do
     DefaultTheme[Key] = Color
-    table.insert(ThemeKeys, Key)
+
+    if ThemeFrameKeys[Key] then
+        table.insert(ThemeKeys, Key)
+    end
 end
 
 table.sort(ThemeKeys)
@@ -2071,7 +2090,13 @@ local function BuildPalette(Colors)
     Colors = Colors or DefaultTheme
 
     local Palette = {}
-    local Used = {}
+    local Used = { [Pack(Color3.fromRGB(0, 0, 0))] = true }
+
+    for Key, Color in pairs(DefaultTheme) do
+        if not ThemeFrameKeys[Key] then
+            Used[Pack(Color)] = true
+        end
+    end
 
     for _, Key in ipairs(ThemeKeys) do
         local Color = Colors[Key] or DefaultTheme[Key]
@@ -4274,30 +4299,31 @@ function Util.ScrollArea(scroll)
     return bar
 end
 
+function Util.Card(Parent, LayoutOrder)
+    local Card = Util.Create("Frame", {
+        Name = "Holder",
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BorderSizePixel = 0,
+        LayoutOrder = LayoutOrder or 1
+    }, Parent)
+    Card:SetAttribute("NoTheme", true)
+    Util.Corner(Card, 8)
+    Util.Create("UIGradient", {
+        Color = ColorSequence.new(Theme.GradientTop, Theme.GradientBottom),
+        Rotation = 90
+    }, Card)
+    Util.Create("UIStroke", { Name = "Border", Color = Theme.Border, Thickness = 1 }, Card)
+    Util.Padding(Card, 4, 4, 0, 0)
+    Util.List(Card, Config.ElementGap)
+
+    return Card
+end
+
 local Windows = {}
 Windows.__index = Windows
 Windows.Font = Enum.Font.Gotham
-
-local function ClampPosition(Position, Pad)
-    local Camera = workspace.CurrentCamera
-    local View = Camera and Camera.ViewportSize or Vector2.new(1920, 1080)
-    local X = math.clamp(Position.X.Scale * View.X + Position.X.Offset, 0, math.max(View.X - Pad.X, 0))
-    local Y = math.clamp(Position.Y.Scale * View.Y + Position.Y.Offset, 0, math.max(View.Y - Pad.Y, 0))
-
-    return UDim2.fromOffset(X, Y)
-end
-
-local function ToUDim2(Value)
-    if type(Value) == "table" and type(Value[1]) == "number" and type(Value[2]) == "number" and type(Value[3]) == "number" and type(Value[4]) == "number" then
-        return UDim2.new(Value[1], Value[2], Value[3], Value[4])
-    end
-
-    return nil
-end
-
-local function FromUDim2(Position)
-    return { Position.X.Scale, Position.X.Offset, Position.Y.Scale, Position.Y.Offset }
-end
 
 local function ResolveSize(Value)
     if typeof(Value) ~= "UDim2" then
@@ -4308,6 +4334,14 @@ local function ResolveSize(Value)
     local Height = Value.Y.Scale == 0 and math.max(Value.Y.Offset, 260) or Value.Y.Offset
 
     return UDim2.new(Value.X.Scale, Width, Value.Y.Scale, Height)
+end
+
+local function ResolveLayout(Value)
+    if string.lower(tostring(Value or Config.SectionLayout)) == "compact" then
+        return "Compact"
+    end
+
+    return "Default"
 end
 
 function Windows.new(Options)
@@ -4382,7 +4416,6 @@ function Windows.new(Options)
         self:_BindToggleDrag()
         self:_BuildThemeSettings()
         self:_BuildSaveSettings()
-        self:_RestorePositions()
         self:_BindAutoSave()
         self:_BindLocale()
     end)
@@ -4448,6 +4481,9 @@ function Windows:_BuildPanelApi()
 end
 
 function Windows:_LoadSaved()
+    self.Saves:SetSetting("WindowPosition", nil)
+    self.Saves:SetSetting("TogglePosition", nil)
+
     local KeyName = self.Saves:GetSetting("ToggleKey")
 
     if not self.KeyLocked and type(KeyName) == "string" then
@@ -4469,25 +4505,6 @@ function Windows:_LoadSaved()
         end
 
         self.ThemeName = Name
-    end
-end
-
-function Windows:_SavePosition(Key, Position)
-    if self.Saves then
-        self.Saves:SetSetting(Key, FromUDim2(Position))
-    end
-end
-
-function Windows:_RestorePositions()
-    local WindowPosition = ToUDim2(self.Saves:GetSetting("WindowPosition"))
-    local TogglePosition = ToUDim2(self.Saves:GetSetting("TogglePosition"))
-
-    if WindowPosition then
-        self.Window.Position = ClampPosition(WindowPosition, Vector2.zero)
-    end
-
-    if TogglePosition then
-        self.ToggleButton.Position = ClampPosition(TogglePosition, Vector2.new(48, 48))
     end
 end
 
@@ -5446,24 +5463,20 @@ function Windows:_CreateRegistered(Section, Name, Options)
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         LayoutOrder = Section.Count,
         Visible = false
     }, Section.Holder or Section.Frame)
     Container:SetAttribute("NoTheme", true)
-    Util.Corner(Container, 8)
 
     if Order then
         Container.LayoutOrder = Order
     end
 
     local Constraint = Util.Create("UISizeConstraint", { MinSize = Vector2.new(0, 38) }, Container)
-    Util.Create("UIGradient", {
-        Color = ColorSequence.new(Theme.GradientTop, Theme.GradientBottom),
-        Rotation = 90
-    }, Container)
 
-    local Border = Util.Create("UIStroke", { Name = "Border", Color = Theme.Border, Thickness = 1 }, Container)
+    local Border = Util.Create("UIStroke", { Name = "Border", Color = Theme.Border, Thickness = 1, Enabled = false }, Container)
     local Flash = Util.Create("UIStroke", { Name = "Flash", Color = Theme.Active, Thickness = 1.5, Transparency = 1 }, Container)
     local Inset = Util.Create("UIPadding", { Name = "Inset" }, Container)
 
@@ -5480,12 +5493,10 @@ function Windows:_CreateRegistered(Section, Name, Options)
     if not IsTouch then
         Container.MouseEnter:Connect(function()
             Util.Tween(Deco, Config.TweenInfo, { BackgroundTransparency = 0.94 })
-            Util.Tween(Border, Config.TweenInfo, { Color = Theme.BorderHover })
         end)
 
         Container.MouseLeave:Connect(function()
             Util.Tween(Deco, Config.TweenInfo, { BackgroundTransparency = 1 })
-            Util.Tween(Border, Config.TweenInfo, { Color = Theme.Border })
         end)
     end
 
@@ -5514,12 +5525,12 @@ function Windows:_CreateRegistered(Section, Name, Options)
     }
 
     local function ApplyFrame(Frameless)
-        local Pad = Frameless and 0 or 5
-        local Side = Frameless and 0 or 12
+        local Pad = Frameless and 3 or 5
+        local Side = Frameless and 8 or 12
 
-        Container.BackgroundTransparency = Frameless and 1 or 0
+        Container.BackgroundTransparency = 1
         Constraint.MinSize = Vector2.new(0, Frameless and 0 or 38)
-        Border.Enabled = not Frameless
+        Border.Enabled = false
         Inset.PaddingTop = UDim.new(0, Pad)
         Inset.PaddingBottom = UDim.new(0, Pad)
         Inset.PaddingLeft = UDim.new(0, Side)
@@ -5762,7 +5773,7 @@ function Windows:CreateSettingsSection(Name)
         LayoutOrder = #self.SettingsSections
     }, self.SettingsPalette.List)
     Util.List(Section.Frame, 4)
-    Section.Holder = Section.Frame
+    Section.Holder = Util.Card(Section.Frame, 1)
 
     local Heading = Util.Create("TextLabel", {
         Name = "Heading",
@@ -6045,7 +6056,7 @@ function Windows:_CreateTabSection(Tab, Name)
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
         LayoutOrder = #Tab.Sections + 1
-    }, Tab.Scroll)
+    }, Tab.Left)
     Util.List(Section.Frame, 6)
 
     local Header = Util.Create("Frame", {
@@ -6075,14 +6086,7 @@ function Windows:_CreateTabSection(Tab, Name)
     }, Header)
     Locale.Bind(Section.TitleLabel, "Text", Locale.Upper)
 
-    Section.Holder = Util.Create("Frame", {
-        Name = "Holder",
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-        LayoutOrder = 1
-    }, Section.Frame)
-    Util.List(Section.Holder, 6)
+    Section.Holder = Util.Card(Section.Frame, 1)
 
     self:_AttachSectionApi(Section)
     return Section
@@ -6303,6 +6307,36 @@ function Windows:_CreateTabUI(Section, Tab)
     }, Page)
     Util.Padding(Scroll, 4, 12, 12, 12)
     Util.List(Scroll, 14)
+
+    local Columns = Util.Create("Frame", {
+        Name = "Columns",
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        LayoutOrder = 1
+    }, Scroll)
+    Util.List(Columns, Config.ColumnGap, {
+        FillDirection = Enum.FillDirection.Horizontal,
+        VerticalAlignment = Enum.VerticalAlignment.Top
+    })
+
+    local function CreateColumn(ColumnName, Order)
+        local Column = Util.Create("Frame", {
+            Name = ColumnName,
+            Size = UDim2.new(0.5, -Config.ColumnGap / 2, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            LayoutOrder = Order
+        }, Columns)
+        Util.List(Column, 14)
+        return Column
+    end
+
+    local Left = CreateColumn("Left", 1)
+    local Right = CreateColumn("Right", 2)
+
     Util.ScrollArea(Scroll)
 
     Tab.Button = Button
@@ -6313,6 +6347,9 @@ function Windows:_CreateTabUI(Section, Tab)
     Tab.IconScale = IconScale
     Tab.Page = Page
     Tab.Scroll = Scroll
+    Tab.Columns = Columns
+    Tab.Left = Left
+    Tab.Right = Right
 
     function Tab:Style()
         local Active = Window.ActiveTab == self
@@ -6348,6 +6385,36 @@ function Windows:_CreateTabUI(Section, Tab)
         self:Style()
     end
 
+    function Tab:Arrange()
+        local Compact = self.Layout == "Compact"
+
+        if not Compact then
+            local Width = self.Scroll.AbsoluteSize.X
+
+            if Width > 0 and (Width - 24 - Config.ColumnGap) / 2 < Config.ColumnMinWidth then
+                Compact = true
+            end
+        end
+
+        self.Right.Visible = not Compact
+        self.Left.Size = Compact and UDim2.new(1, 0, 0, 0) or UDim2.new(0.5, -Config.ColumnGap / 2, 0, 0)
+
+        for Index, Item in ipairs(self.Sections) do
+            local Target = (Compact or Index % 2 == 1) and self.Left or self.Right
+
+            Item.Frame.LayoutOrder = Index
+
+            if Item.Frame.Parent ~= Target then
+                Item.Frame.Parent = Target
+            end
+        end
+    end
+
+    function Tab:SetLayout(Value)
+        self.Layout = ResolveLayout(Value)
+        self:Arrange()
+    end
+
     function Tab:CreateSection(SectionName)
         SectionName = tostring(SectionName or "Section")
 
@@ -6359,10 +6426,15 @@ function Windows:_CreateTabUI(Section, Tab)
 
         local NewSection = Window:_CreateTabSection(self, SectionName)
         table.insert(self.Sections, NewSection)
+        self:Arrange()
         return NewSection
     end
 
     Tab.AddSection = Tab.CreateSection
+
+    Scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+        Tab:Arrange()
+    end)
 
     local Pressed = false
 
@@ -6414,7 +6486,7 @@ function Windows:_CreateTabUI(Section, Tab)
     end)
 end
 
-function Windows:AddTab(SectionName, TabName, IconName, OnSelect)
+function Windows:AddTab(SectionName, TabName, IconName, OnSelect, Layout)
     local Window = self
 
     SectionName = tostring(SectionName or "Main")
@@ -6442,6 +6514,7 @@ function Windows:AddTab(SectionName, TabName, IconName, OnSelect)
         Sections = {},
         Elements = {},
         OnSelect = OnSelect,
+        Layout = ResolveLayout(Layout),
         Scroll = nil
     }
 
@@ -6514,7 +6587,7 @@ function Windows:CreateTab(Options)
     local TabName = tostring(Options.tab or Options.Tab or Options.Name or Options.Title or "Tab")
     local SectionName = tostring(Options.section or Options.Section or "Main")
 
-    return self:AddTab(SectionName, TabName, Options.icon or Options.Icon, Options.OnSelect)
+    return self:AddTab(SectionName, TabName, Options.icon or Options.Icon, Options.OnSelect, Options.layout or Options.Layout)
 end
 
 function Windows:GetTab(Key)
@@ -6658,8 +6731,6 @@ function Windows:_BindToggleDrag()
 
         if not Moved then
             self:Toggle()
-        else
-            self:_SavePosition("TogglePosition", self.ToggleButton.Position)
         end
 
         Moved = false
@@ -6699,10 +6770,6 @@ function Windows:_BindDrag()
 
     table.insert(self.Connections, UserInputService.InputEnded:Connect(function(Input)
         if Util.IsPress(Input) then
-            if Dragging and self.Window.Position ~= StartPosition then
-                self:_SavePosition("WindowPosition", self.Window.Position)
-            end
-
             Dragging = false
         end
     end))
