@@ -114,7 +114,14 @@ local Config = {
     SectionLayout = "Default",
     ColumnGap = 8,
     ColumnMinWidth = 170,
-    ElementGap = 2
+    ElementGap = 2,
+    AutoFit = true,
+    FitTween = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    FitDelay = 0.2,
+    FitHeight = 0.85,
+    FitWidth = 80,
+    FitStart = 8,
+    FitFull = 24
 }
 
 local ElementIcons = {
@@ -4712,6 +4719,7 @@ function Windows:_BuildElements()
     self.Elements.Panel = self
     self.Elements.OnChanged = function()
         self:RefreshSearch()
+        self:_QueueFit()
     end
 
     env.EcoHubPanel = self
@@ -6006,6 +6014,7 @@ function Windows:_AttachSectionApi(Section)
     function Section:CreateElement(ElementName, Options)
         local Handle = Window:_CreateRegistered(Section, ElementName, Options)
         Window:RefreshSearch()
+        Window:_QueueFit()
         return Handle
     end
 
@@ -6386,7 +6395,7 @@ function Windows:_CreateTabUI(Section, Tab)
     end
 
     function Tab:Arrange()
-        local Compact = self.Layout == "Compact"
+        local Compact = self.Layout == "Compact" or #self.Sections <= 1
 
         if not Compact then
             local Width = self.Scroll.AbsoluteSize.X
@@ -6434,6 +6443,12 @@ function Windows:_CreateTabUI(Section, Tab)
 
     Scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
         Tab:Arrange()
+    end)
+
+    Columns:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+        if Window.ActiveTab == Tab then
+            Window:_QueueFit()
+        end
     end)
 
     local Pressed = false
@@ -6634,6 +6649,7 @@ function Windows:SelectTab(Tab)
     end
 
     self:_SetBreadcrumb({ Tab.Section.Name, Tab.Name })
+    self:_QueueFit()
 
     if type(Tab.OnSelect) == "function" then
         pcall(Tab.OnSelect, Tab)
@@ -6787,6 +6803,71 @@ function Windows:_BindToggle()
     end))
 end
 
+function Windows:_FitTarget()
+    local Tab = self.ActiveTab
+    local Base = self.Size
+    local Camera = workspace.CurrentCamera
+    local View = Camera and Camera.ViewportSize or Vector2.new(1920, 1080)
+    local Width = Base.X.Offset
+    local Height = Base.Y.Offset
+
+    if Tab and Tab.Columns then
+        if Base.X.Scale == 0 then
+            local Count = 0
+
+            for _, Element in ipairs(Tab.Elements) do
+                if Element.Built and not Element.Destroyed then
+                    Count = Count + 1
+                end
+            end
+
+            local Range = math.max(Config.FitFull - Config.FitStart, 1)
+            local Alpha = math.clamp((Count - Config.FitStart) / Range, 0, 1)
+
+            Width = math.min(Base.X.Offset + Config.FitWidth * Alpha, math.max(Base.X.Offset, View.X * 0.95))
+        end
+
+        if Base.Y.Scale == 0 then
+            local Needed = Tab.Columns.AbsoluteSize.Y + 16 + 40
+
+            Height = math.clamp(Needed, Base.Y.Offset, math.max(Base.Y.Offset, View.Y * Config.FitHeight))
+        end
+    end
+
+    return UDim2.new(Base.X.Scale, math.floor(Width + 0.5), Base.Y.Scale, math.floor(Height + 0.5))
+end
+
+function Windows:_Fit()
+    if self.Destroyed or not self.Window or not Config.AutoFit then
+        return
+    end
+
+    local Target = self:_FitTarget()
+    local Current = self.Window.Size
+
+    if math.abs(Current.X.Offset - Target.X.Offset) <= 2 and math.abs(Current.Y.Offset - Target.Y.Offset) <= 2 then
+        return
+    end
+
+    Util.Tween(self.Window, Config.FitTween, { Size = Target })
+end
+
+function Windows:_QueueFit()
+    if self.Destroyed or not Config.AutoFit then
+        return
+    end
+
+    self.FitToken = (self.FitToken or 0) + 1
+
+    local Token = self.FitToken
+
+    task.delay(Config.FitDelay, function()
+        if not self.Destroyed and self.FitToken == Token then
+            self:_Fit()
+        end
+    end)
+end
+
 function Windows:SetVisible(State)
     State = State and true or false
 
@@ -6841,7 +6922,9 @@ function Windows:Configure(Options, KeepLayout)
     end
 
     if not KeepLayout and typeof(Options.Size) == "UDim2" then
-        self.Window.Size = ResolveSize(Options.Size)
+        self.Size = ResolveSize(Options.Size)
+        self.Window.Size = self.Size
+        self:_QueueFit()
     end
 
     if typeof(Options.MinimizeKey) == "EnumItem" then
