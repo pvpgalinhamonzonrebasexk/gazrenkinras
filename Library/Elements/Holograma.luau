@@ -1,9 +1,7 @@
--- // Hologram
 -- // Services
 local runService = game:GetService("RunService")
-local players = game:GetService("Players")
 
--- // Theme System
+-- // Themes
 local Default = {
     Active = Color3.fromRGB(240, 240, 240),
     Dim = Color3.fromRGB(115, 115, 115),
@@ -83,30 +81,15 @@ local DESC_H = 14
 local FOOTER_PAD = 8
 local SIDE_PAD = 10
 local VIEW_FOV = 40
-local SPIN_SPEED = 45
-local SWAY_RANGE = 0.9
-local SWAY_SPEED = 0.8
+local VIEW_X = 9
+local VIEW_Y = 5.6
+local VIEW_CENTER = Vector3.new(-0.3, 0, 0)
+local LAYING = CFrame.Angles(0, 0, math.rad(-90))
 local BOX_PAD = 4
 local CORNER_RATIO = 0.25
 local LINE_THICKNESS = 1
 local HEALTH_RATIO = 0.75
-local HOLOGRAM_TRANSPARENCY = 0.5
-local ASSET_PREFIX = "rbxassetid://"
-local SELF_ALIASES = { self = true, me = true, eu = true, localplayer = true }
 local TRACER_ORIGINS = { Bottom = 1, Center = 0.5, Top = 0 }
-local TEXTURE_TARGETS = {
-    Head = true,
-    Torso = true,
-    LeftArm = true,
-    RightArm = true,
-    LeftLeg = true,
-    RightLeg = true,
-    Face = true,
-}
-local EXTENTS = {
-    Standing = { X = 6.4, Y = 8, Center = Vector3.new(0, -0.3, 0) },
-    Lying = { X = 9, Y = 5.6, Center = Vector3.new(-0.3, 0, 0) },
-}
 local SETTINGS_SCHEMA = {
     Box = "boolean",
     BoxStyle = { Full = true, Corner = true },
@@ -133,23 +116,6 @@ local COLOR_DEFAULTS = {
     Health = Color3.fromRGB(80, 220, 120),
     Hologram = Color3.fromRGB(110, 190, 255),
 }
-local BODY_COLORS = {
-    Head = "HeadColor3",
-    Torso = "TorsoColor3",
-    LeftArm = "LeftArmColor3",
-    RightArm = "RightArmColor3",
-    LeftLeg = "LeftLegColor3",
-    RightLeg = "RightLegColor3",
-}
-local ALL_FACES = {
-    Enum.NormalId.Front,
-    Enum.NormalId.Back,
-    Enum.NormalId.Left,
-    Enum.NormalId.Right,
-    Enum.NormalId.Top,
-    Enum.NormalId.Bottom,
-}
-local FACE_ONLY = { Enum.NormalId.Front }
 local R6_PARTS = {
     { name = "Head", size = Vector3.new(2, 1, 1), offset = Vector3.new(0, 1.5, 0), head = true },
     { name = "Torso", size = Vector3.new(2, 2, 1), offset = Vector3.new(0, 0, 0) },
@@ -218,18 +184,6 @@ local function isValid(spec, value)
     end
     return type(value) == spec
 end
-local function normalizeAsset(value)
-    if type(value) == "number" then
-        return ASSET_PREFIX .. tostring(math.floor(value))
-    end
-    if type(value) == "string" and value ~= "" then
-        if value:match("^%d+$") then
-            return ASSET_PREFIX .. value
-        end
-        return value
-    end
-    return nil
-end
 local function placeRect(frame, x, y, width, height)
     frame.Position = UDim2.fromOffset(math.floor(x), math.floor(y))
     frame.Size = UDim2.fromOffset(math.max(math.floor(width), 1), math.max(math.floor(height), 1))
@@ -244,66 +198,31 @@ local function drawLine(line, from, to, thickness)
     line.Visible = true
 end
 
--- // Player Resolver
-local function resolveUserId(user)
-    if typeof(user) == "Instance" and user:IsA("Player") then
-        return user.UserId
-    end
-    if type(user) == "string" and SELF_ALIASES[user:lower()] then
-        local me = players.LocalPlayer
-        return me and me.UserId or nil
-    end
-    local id = tonumber(user)
-    if id then
-        return id
-    end
-    if type(user) == "string" then
-        local ok, result = pcall(function()
-            return players:GetUserIdFromNameAsync(user)
-        end)
-        if ok then
-            return result
-        end
-    end
-    return nil
-end
-
--- // Hologram Element
+-- // Register
 Elements.Register("Hologram", function(section, options)
     options = type(options) == "table" and options or {}
     local Colors, watchTheme = createColors(section.Panel or Panel)
 
-    -- // Internal State
+    -- // State
     local api = {}
     local connections = {}
     local reported = {}
     local destroyed = false
-    local animated = options.animated == true
-    local lying = options.lying ~= false
     local title = tostring(options.title or "Hologram")
     local description = tostring(options.description or options.desc or "")
     local height = math.clamp(tonumber(options.height) or HEIGHT_DEFAULT, HEIGHT_MIN, HEIGHT_MAX)
     local callback = type(options.callback) == "function" and options.callback or nil
     local settings = copyTable(SETTINGS_DEFAULTS)
     local espColors = copyTable(COLOR_DEFAULTS)
-    local textures = {}
     local parts = {}
     local tanHalf = math.tan(math.rad(VIEW_FOV) / 2)
     local aspect = 1
     local viewSize = Vector2.new(0, 0)
     local footerH = 0
-    local yaw = 0
-    local clock = 0
-    local loopConnection
+    local layout
     local unwatchTheme
-    local root
 
-    -- // Local Helpers
-    local function connect(signal, fn)
-        local conn = signal:Connect(fn)
-        connections[#connections + 1] = conn
-        return conn
-    end
+    -- // Reporter
     local function report(message, duration)
         local text = ("Hologram '%s': %s"):format(title, message)
         if reported[text] then
@@ -313,22 +232,9 @@ Elements.Register("Hologram", function(section, options)
         warn(text)
         notify(text, duration or 5)
     end
-    local function isShown()
-        local object = root
-        while object do
-            if object:IsA("GuiObject") and not object.Visible then
-                return false
-            end
-            if object:IsA("LayerCollector") then
-                return object.Enabled
-            end
-            object = object.Parent
-        end
-        return false
-    end
 
-    -- // Base Interface
-    root = create("Frame", {
+    -- // Interface
+    local root = create("Frame", {
         Name = title .. "_Hologram",
         Size = UDim2.new(1, 0, 0, height),
         BackgroundColor3 = Colors.Palette,
@@ -390,7 +296,7 @@ Elements.Register("Hologram", function(section, options)
     end
     layoutFooter()
 
-    -- // 3D Viewport
+    -- // Viewport
     local viewer = create("ViewportFrame", {
         Name = "Viewer",
         Size = UDim2.new(1, 0, 1, 0),
@@ -404,18 +310,6 @@ Elements.Register("Hologram", function(section, options)
     local camera = create("Camera", { FieldOfView = VIEW_FOV }, viewer)
     viewer.CurrentCamera = camera
     local worldModel = create("WorldModel", {}, viewer)
-    local rig = create("Model", { Name = "R6" }, worldModel)
-    local origin = create("Part", {
-        Name = "Origin",
-        Size = Vector3.new(0.2, 0.2, 0.2),
-        Transparency = 1,
-        Anchored = true,
-        CanCollide = false,
-        CanQuery = false,
-        CanTouch = false,
-        CFrame = CFrame.new(),
-    }, rig)
-    rig.PrimaryPart = origin
     for _, def in ipairs(R6_PARTS) do
         local part = create("Part", {
             Name = def.name,
@@ -426,66 +320,21 @@ Elements.Register("Hologram", function(section, options)
             CanTouch = false,
             CastShadow = false,
             Material = Enum.Material.SmoothPlastic,
-            Transparency = HOLOGRAM_TRANSPARENCY,
+            Color = espColors.Hologram,
             TopSurface = Enum.SurfaceType.Smooth,
             BottomSurface = Enum.SurfaceType.Smooth,
-            CFrame = CFrame.new(def.offset),
-        }, rig)
+            CFrame = LAYING * CFrame.new(def.offset),
+        }, worldModel)
         if def.head then
             create("SpecialMesh", {
                 MeshType = Enum.MeshType.Head,
                 Scale = Vector3.new(1.25, 1.25, 1.25),
             }, part)
         end
-        parts[def.name] = { part = part, decals = {} }
-    end
-    local function updateCamera()
-        local size = viewer.AbsoluteSize
-        if size.X <= 0 or size.Y <= 0 then
-            return
-        end
-        local extents = lying and EXTENTS.Lying or EXTENTS.Standing
-        aspect = size.X / size.Y
-        local distance = math.max(extents.Y / (2 * tanHalf), extents.X / (2 * tanHalf * aspect))
-        camera.CFrame = CFrame.lookAt(extents.Center + Vector3.new(0, 0, -distance), extents.Center)
-    end
-    local function applyPose()
-        local base = lying and CFrame.Angles(0, 0, math.rad(-90)) or CFrame.new()
-        local sway = animated and math.sin(clock * SWAY_SPEED) * SWAY_RANGE or 0
-        rig:PivotTo(CFrame.new(sway, 0, 0) * base * CFrame.Angles(0, math.rad(yaw), 0))
+        parts[def.name] = part
     end
 
-    -- // Part Render
-    local function renderParts()
-        for _, entry in pairs(parts) do
-            entry.part.Color = entry.skin or espColors.Hologram
-        end
-    end
-    local function renderTexture(name)
-        local entry = name == "Face" and parts.Head or parts[name]
-        local old = entry.decals[name]
-        if old then
-            for _, decal in ipairs(old) do
-                decal:Destroy()
-            end
-            entry.decals[name] = nil
-        end
-        local id = textures[name]
-        if not id then
-            return
-        end
-        local list = {}
-        for _, face in ipairs(name == "Face" and FACE_ONLY or ALL_FACES) do
-            list[#list + 1] = create("Decal", {
-                Texture = id,
-                Face = face,
-                Transparency = HOLOGRAM_TRANSPARENCY,
-            }, entry.part)
-        end
-        entry.decals[name] = list
-    end
-
-    -- // ESP Overlay Objects
+    -- // Overlay Objects
     local overlay = create("Frame", {
         Name = "Overlay",
         Size = UDim2.new(1, 0, 1, 0),
@@ -536,7 +385,7 @@ Elements.Register("Hologram", function(section, options)
         BorderSizePixel = 0,
     }, healthBack)
 
-    -- // ESP Render
+    -- // Projection
     local function projectPoint(point)
         local rel = camera.CFrame:PointToObjectSpace(point)
         local depth = -rel.Z
@@ -548,11 +397,11 @@ Elements.Register("Hologram", function(section, options)
             (0.5 - rel.Y / depth / tanHalf * 0.5) * viewSize.Y
         )
     end
-    local function getBounds()
+    local function computeLayout()
         local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
-        for _, entry in pairs(parts) do
-            local frame = entry.part.CFrame
-            local half = entry.part.Size / 2
+        for _, part in pairs(parts) do
+            local frame = part.CFrame
+            local half = part.Size / 2
             for sx = -1, 1, 2 do
                 for sy = -1, 1, 2 do
                     for sz = -1, 1, 2 do
@@ -568,15 +417,33 @@ Elements.Register("Hologram", function(section, options)
             end
         end
         if minX == math.huge then
-            return nil
+            layout = nil
+            return
         end
-        return minX, minY, maxX, maxY
+        local points = {}
+        for name, joint in pairs(JOINTS) do
+            points[name] = projectPoint(LAYING:PointToWorldSpace(joint))
+        end
+        layout = {
+            minX = minX - BOX_PAD,
+            minY = minY - BOX_PAD,
+            maxX = maxX + BOX_PAD,
+            maxY = maxY + BOX_PAD,
+            points = points,
+            center = projectPoint(Vector3.zero),
+        }
+    end
+
+    -- // Render
+    local function renderParts()
+        for _, part in pairs(parts) do
+            part.Color = espColors.Hologram
+        end
     end
     local function renderOverlay()
         if destroyed then
             return
         end
-        viewSize = viewer.AbsoluteSize
         for _, line in ipairs(boxLines) do
             line.Visible = false
         end
@@ -586,101 +453,78 @@ Elements.Register("Hologram", function(section, options)
         tracerLine.Visible = false
         nameLabel.Visible = false
         healthBack.Visible = false
-        if viewSize.X <= 0 or viewSize.Y <= 0 then
+        if not layout then
             return
         end
-        if settings.Box or settings.Name or settings.Health then
-            local minX, minY, maxX, maxY = getBounds()
-            if minX then
-                minX = minX - BOX_PAD
-                minY = minY - BOX_PAD
-                maxX = maxX + BOX_PAD
-                maxY = maxY + BOX_PAD
-                local boxW = maxX - minX
-                local boxH = maxY - minY
-                if settings.Box then
-                    local segments
-                    if settings.BoxStyle == "Corner" then
-                        local lenX = math.max(boxW * CORNER_RATIO, 3)
-                        local lenY = math.max(boxH * CORNER_RATIO, 3)
-                        segments = {
-                            { minX, minY, lenX, 1 },
-                            { minX, minY, 1, lenY },
-                            { maxX - lenX, minY, lenX, 1 },
-                            { maxX - 1, minY, 1, lenY },
-                            { minX, maxY - 1, lenX, 1 },
-                            { minX, maxY - lenY, 1, lenY },
-                            { maxX - lenX, maxY - 1, lenX, 1 },
-                            { maxX - 1, maxY - lenY, 1, lenY },
-                        }
-                    else
-                        segments = {
-                            { minX, minY, boxW, 1 },
-                            { minX, maxY - 1, boxW, 1 },
-                            { minX, minY, 1, boxH },
-                            { maxX - 1, minY, 1, boxH },
-                        }
-                    end
-                    for index, segment in ipairs(segments) do
-                        boxLines[index].BackgroundColor3 = espColors.Box
-                        placeRect(boxLines[index], segment[1], segment[2], segment[3], segment[4])
-                    end
-                end
-                if settings.Name then
-                    nameLabel.TextColor3 = espColors.Name
-                    nameLabel.Position = UDim2.fromOffset(math.floor((minX + maxX) / 2 - 50), math.floor(minY - 14))
-                    nameLabel.Visible = true
-                end
-                if settings.Health then
-                    healthFill.BackgroundColor3 = espColors.Health
-                    placeRect(healthBack, minX - 6, minY, 3, boxH)
-                end
+        local minX, minY, maxX, maxY = layout.minX, layout.minY, layout.maxX, layout.maxY
+        local boxW = maxX - minX
+        local boxH = maxY - minY
+        if settings.Box then
+            local segments
+            if settings.BoxStyle == "Corner" then
+                local lenX = math.max(boxW * CORNER_RATIO, 3)
+                local lenY = math.max(boxH * CORNER_RATIO, 3)
+                segments = {
+                    { minX, minY, lenX, 1 },
+                    { minX, minY, 1, lenY },
+                    { maxX - lenX, minY, lenX, 1 },
+                    { maxX - 1, minY, 1, lenY },
+                    { minX, maxY - 1, lenX, 1 },
+                    { minX, maxY - lenY, 1, lenY },
+                    { maxX - lenX, maxY - 1, lenX, 1 },
+                    { maxX - 1, maxY - lenY, 1, lenY },
+                }
+            else
+                segments = {
+                    { minX, minY, boxW, 1 },
+                    { minX, maxY - 1, boxW, 1 },
+                    { minX, minY, 1, boxH },
+                    { maxX - 1, minY, 1, boxH },
+                }
+            end
+            for index, segment in ipairs(segments) do
+                boxLines[index].BackgroundColor3 = espColors.Box
+                placeRect(boxLines[index], segment[1], segment[2], segment[3], segment[4])
             end
         end
+        if settings.Name then
+            nameLabel.TextColor3 = espColors.Name
+            nameLabel.Position = UDim2.fromOffset(math.floor((minX + maxX) / 2 - 50), math.floor(minY - 14))
+            nameLabel.Visible = true
+        end
+        if settings.Health then
+            healthFill.BackgroundColor3 = espColors.Health
+            placeRect(healthBack, minX - 6, minY, 3, boxH)
+        end
         if settings.Skeleton then
-            local frame = origin.CFrame
-            local points = {}
-            for name, joint in pairs(JOINTS) do
-                points[name] = projectPoint(frame:PointToWorldSpace(joint))
-            end
             for index, bone in ipairs(BONES) do
-                local from = points[bone[1]]
-                local to = points[bone[2]]
+                local from = layout.points[bone[1]]
+                local to = layout.points[bone[2]]
                 if from and to then
                     boneLines[index].BackgroundColor3 = espColors.Skeleton
                     drawLine(boneLines[index], from, to, LINE_THICKNESS)
                 end
             end
         end
-        if settings.Tracer then
-            local target = projectPoint(origin.CFrame.Position)
-            if target then
-                tracerLine.BackgroundColor3 = espColors.Tracer
-                drawLine(tracerLine, Vector2.new(viewSize.X / 2, viewSize.Y * TRACER_ORIGINS[settings.TracerOrigin]), target, LINE_THICKNESS)
-            end
+        if settings.Tracer and layout.center then
+            tracerLine.BackgroundColor3 = espColors.Tracer
+            drawLine(tracerLine, Vector2.new(viewSize.X / 2, viewSize.Y * TRACER_ORIGINS[settings.TracerOrigin]), layout.center, LINE_THICKNESS)
         end
     end
-
-    -- // Animation System
-    local function refreshLoop()
-        local needed = animated and not destroyed
-        if needed and not loopConnection then
-            loopConnection = runService.Heartbeat:Connect(function(dt)
-                if destroyed or not isShown() then
-                    return
-                end
-                clock = clock + dt
-                yaw = (yaw + SPIN_SPEED * dt) % 360
-                applyPose()
-                renderOverlay()
-            end)
-        elseif not needed and loopConnection then
-            loopConnection:Disconnect()
-            loopConnection = nil
+    local function refresh()
+        local size = viewer.AbsoluteSize
+        if size.X <= 0 or size.Y <= 0 then
+            return
         end
+        viewSize = size
+        aspect = size.X / size.Y
+        local distance = math.max(VIEW_Y / (2 * tanHalf), VIEW_X / (2 * tanHalf * aspect))
+        camera.CFrame = CFrame.lookAt(VIEW_CENTER + Vector3.new(0, 0, -distance), VIEW_CENTER)
+        computeLayout()
+        renderOverlay()
     end
 
-    -- // Settings System
+    -- // Settings
     local function setSetting(key, value, silent)
         local spec = SETTINGS_SCHEMA[key]
         if not spec then
@@ -714,24 +558,6 @@ Elements.Register("Hologram", function(section, options)
         end
         espColors[key] = value
         return true
-    end
-
-    -- // Character System
-    local function applyAppearance(appearance)
-        local bodyColors = appearance:FindFirstChildOfClass("BodyColors")
-        if bodyColors then
-            for name, property in pairs(BODY_COLORS) do
-                parts[name].skin = bodyColors[property]
-            end
-        end
-        local head = appearance:FindFirstChild("Head")
-        local face = head and head:FindFirstChildWhichIsA("Decal") or nil
-        if face then
-            textures.Face = face.Texture
-            renderTexture("Face")
-        end
-        appearance:Destroy()
-        renderParts()
     end
 
     -- // Settings API
@@ -770,9 +596,7 @@ Elements.Register("Hologram", function(section, options)
         if destroyed or not setColor(key, value) then
             return false
         end
-        if key == "Hologram" then
-            renderParts()
-        end
+        renderParts()
         renderOverlay()
         return true
     end
@@ -796,97 +620,6 @@ Elements.Register("Hologram", function(section, options)
         return espColors[key]
     end
 
-    -- // Texture API
-    function api:SetTexture(name, id)
-        if destroyed then
-            return false
-        end
-        if not TEXTURE_TARGETS[name] then
-            report(("invalid texture target '%s'."):format(tostring(name)))
-            return false
-        end
-        textures[name] = id and normalizeAsset(id) or nil
-        renderTexture(name)
-        return true
-    end
-    function api:SetTextures(map)
-        if destroyed or type(map) ~= "table" then
-            return false
-        end
-        for name, id in pairs(map) do
-            api:SetTexture(name, id)
-        end
-        return true
-    end
-    function api:GetTexture(name)
-        return textures[name]
-    end
-
-    -- // Character API
-    function api:LoadCharacter(who, onDone)
-        if destroyed then
-            return false
-        end
-        if typeof(who) == "Instance" and not who:IsA("Player") then
-            local ok, clone = pcall(function()
-                return who:Clone()
-            end)
-            if not ok or typeof(clone) ~= "Instance" then
-                report("could not clone the character model.")
-                return false
-            end
-            local applied, err = pcall(applyAppearance, clone)
-            if onDone then
-                pcall(onDone, applied, err)
-            end
-            return applied
-        end
-        task.spawn(function()
-            local userId = resolveUserId(who)
-            if not userId then
-                report(("user '%s' not found."):format(tostring(who)))
-                if onDone then
-                    pcall(onDone, false, "user not found")
-                end
-                return
-            end
-            local ok, appearance = pcall(function()
-                return players:GetCharacterAppearanceAsync(userId)
-            end)
-            if not ok or typeof(appearance) ~= "Instance" then
-                report(("could not load appearance of '%s'."):format(tostring(who)))
-                if onDone then
-                    pcall(onDone, false, tostring(appearance))
-                end
-                return
-            end
-            if destroyed then
-                appearance:Destroy()
-                return
-            end
-            local applied, err = pcall(applyAppearance, appearance)
-            if onDone then
-                pcall(onDone, applied, err)
-            end
-        end)
-        return true
-    end
-    function api:LoadOwnCharacter(onDone)
-        return api:LoadCharacter("Self", onDone)
-    end
-    function api:ClearCharacter()
-        if destroyed then
-            return false
-        end
-        for _, entry in pairs(parts) do
-            entry.skin = nil
-        end
-        textures.Face = nil
-        renderTexture("Face")
-        renderParts()
-        return true
-    end
-
     -- // Control API
     function api:SetTitle(value)
         title = tostring(value or "")
@@ -896,32 +629,6 @@ Elements.Register("Hologram", function(section, options)
     function api:SetDescription(value)
         description = tostring(value or "")
         layoutFooter()
-    end
-    function api:SetHeader(newTitle, newDescription)
-        if newTitle ~= nil then
-            title = tostring(newTitle)
-            root.Name = title .. "_Hologram"
-        end
-        if newDescription ~= nil then
-            description = tostring(newDescription)
-        end
-        layoutFooter()
-    end
-    function api:SetAnimated(value)
-        animated = value == true
-        if not animated then
-            yaw = 0
-            clock = 0
-            applyPose()
-            renderOverlay()
-        end
-        refreshLoop()
-    end
-    function api:SetLying(value)
-        lying = value ~= false
-        updateCamera()
-        applyPose()
-        renderOverlay()
     end
     function api:SetVisible(value)
         if destroyed then
@@ -941,10 +648,6 @@ Elements.Register("Hologram", function(section, options)
             return
         end
         destroyed = true
-        if loopConnection then
-            loopConnection:Disconnect()
-            loopConnection = nil
-        end
         if unwatchTheme then
             unwatchTheme()
             unwatchTheme = nil
@@ -954,15 +657,11 @@ Elements.Register("Hologram", function(section, options)
         end
         table.clear(connections)
         table.clear(parts)
-        table.clear(textures)
         root:Destroy()
     end
 
     -- // Initialization
-    connect(viewer:GetPropertyChangedSignal("AbsoluteSize"), function()
-        updateCamera()
-        renderOverlay()
-    end)
+    connections[#connections + 1] = viewer:GetPropertyChangedSignal("AbsoluteSize"):Connect(refresh)
     if type(options.settings) == "table" then
         for key, value in pairs(options.settings) do
             setSetting(key, value, true)
@@ -973,19 +672,8 @@ Elements.Register("Hologram", function(section, options)
             setColor(key, value)
         end
     end
-    if type(options.textures) == "table" then
-        for name, id in pairs(options.textures) do
-            api:SetTexture(name, id)
-        end
-    end
-    if options.character ~= nil then
-        api:LoadCharacter(options.character)
-    end
     renderParts()
-    updateCamera()
-    applyPose()
-    renderOverlay()
-    refreshLoop()
+    refresh()
     unwatchTheme = watchTheme(function()
         if destroyed then
             return
