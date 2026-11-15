@@ -1,10 +1,8 @@
--- // Services
 local runService = game:GetService("RunService")
 local userInputService = game:GetService("UserInputService")
 local players = game:GetService("Players")
 local marketplaceService = game:GetService("MarketplaceService")
 
--- // Themes
 local Default = {
     Active = Color3.fromRGB(240, 240, 240),
     Dim = Color3.fromRGB(115, 115, 115),
@@ -74,17 +72,19 @@ local function createColors(panel)
     return colors, watch
 end
 
--- // Constants
 local NOTIFY_TITLE = "System"
-local HEIGHT_DEFAULT = 220
-local HEIGHT_MIN = 110
+local HEIGHT_DEFAULT = 190
+local HEIGHT_MIN = 90
 local HEIGHT_MAX = 500
 local TITLE_H = 16
 local DESC_H = 14
-local FOOTER_PAD = 8
+local FOOTER_TOP = 2
+local FOOTER_BOTTOM = 8
+local FOOTER_GAP = 2
 local SIDE_PAD = 10
+local IMAGE_FILL = 1
 local VIEW_FOV = 40
-local FIT_MARGIN = 1.15
+local FIT_MARGIN = 1.02
 local ZOOM_MIN = 0.25
 local ZOOM_MAX = 3
 local ZOOM_STEP = 0.1
@@ -195,7 +195,6 @@ local STRIP_CLASSES = {
 }
 local infoCache = {}
 
--- // Utilities
 local function getFonts()
     return FONT_BOLD or Enum.Font.SourceSansSemibold, FONT or Enum.Font.SourceSans
 end
@@ -708,7 +707,6 @@ local function requestInfo(kind, id)
     return infoCache[key] or nil
 end
 
--- // Hologram
 local function buildHologram(section, options)
     options = type(options) == "table" and options or {}
     local Colors, watchTheme = createColors(section.Panel or Panel)
@@ -756,7 +754,6 @@ local function buildHologram(section, options)
     local tanHalf = math.tan(math.rad(VIEW_FOV) / 2)
     local aspect = 1
     local radius = 5
-    local footerH = 0
     local loadId = 0
     local loading = false
     local dragging = false
@@ -775,7 +772,6 @@ local function buildHologram(section, options)
     local playerToken = 0
     local unwatchTheme
 
-    -- // Callback
     local function report(message, duration)
         local text = ("Hologram '%s': %s"):format(tostring(manualTitle or autoTitle or "Hologram"), message)
         if reported[text] then
@@ -795,10 +791,10 @@ local function buildHologram(section, options)
         end
     end
 
-    -- // Interface
     local root = create("Frame", {
         Name = tostring(manualTitle or "Hologram") .. "_Hologram",
         Size = UDim2.new(1, 0, 0, height),
+        AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundColor3 = Colors.Palette,
         BorderSizePixel = 0,
         ClipsDescendants = true,
@@ -813,13 +809,37 @@ local function buildHologram(section, options)
     local fontBold, fontRegular = getFonts()
     local stage = create("Frame", {
         Name = "Stage",
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 0, height),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         Active = draggable,
     }, root)
+    local footer = create("Frame", {
+        Name = "Footer",
+        Position = UDim2.new(0, 0, 0, height),
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.None,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Visible = false,
+    }, root)
+    create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Vertical,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, FOOTER_GAP),
+    }, footer)
+    create("UIPadding", {
+        PaddingTop = UDim.new(0, FOOTER_TOP),
+        PaddingBottom = UDim.new(0, FOOTER_BOTTOM),
+        PaddingLeft = UDim.new(0, SIDE_PAD),
+        PaddingRight = UDim.new(0, SIDE_PAD),
+    }, footer)
     local titleLabel = create("TextLabel", {
         Name = "Title",
+        LayoutOrder = 1,
+        Size = UDim2.new(1, 0, 0, TITLE_H),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Text = "",
@@ -828,18 +848,23 @@ local function buildHologram(section, options)
         TextColor3 = Colors.Active,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd,
-    }, root)
+    }, footer)
     local descLabel = create("TextLabel", {
         Name = "Description",
+        LayoutOrder = 2,
+        Size = UDim2.new(1, 0, 0, DESC_H),
+        AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Text = "",
         Font = fontRegular,
         TextSize = 11,
         TextColor3 = Colors.Dim,
+        TextWrapped = true,
         TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd,
-    }, root)
+        TextYAlignment = Enum.TextYAlignment.Top,
+        TextTruncate = Enum.TextTruncate.None,
+    }, footer)
     local function layoutFooter()
         local titleText = entryTitle
         if titleText == nil then
@@ -859,26 +884,24 @@ local function buildHologram(section, options)
         descText = descText ~= nil and tostring(descText) or ""
         local hasTitle = titleText ~= ""
         local hasDesc = descText ~= ""
-        local headerH = hasTitle and TITLE_H or 0
-        footerH = headerH + (hasDesc and DESC_H or 0)
-        if footerH > 0 then
-            footerH = footerH + FOOTER_PAD
-        end
-        local top = -footerH + FOOTER_PAD / 2
         titleLabel.Visible = hasTitle
         titleLabel.Text = titleText
-        titleLabel.Position = UDim2.new(0, SIDE_PAD, 1, top)
-        titleLabel.Size = UDim2.new(1, -SIDE_PAD * 2, 0, TITLE_H)
         descLabel.Visible = hasDesc
         descLabel.Text = descText
-        descLabel.Position = UDim2.new(0, SIDE_PAD, 1, top + headerH)
-        descLabel.Size = UDim2.new(1, -SIDE_PAD * 2, 0, DESC_H)
-        stage.Size = UDim2.new(1, 0, 1, -footerH)
+        if hasTitle or hasDesc then
+            footer.Visible = true
+            footer.AutomaticSize = Enum.AutomaticSize.Y
+        else
+            footer.Visible = false
+            footer.AutomaticSize = Enum.AutomaticSize.None
+            footer.Size = UDim2.new(1, 0, 0, 0)
+        end
+        stage.Size = UDim2.new(1, 0, 0, height)
+        footer.Position = UDim2.new(0, 0, 0, height)
         root.Name = tostring(manualTitle or "Hologram") .. "_Hologram"
     end
     layoutFooter()
 
-    -- // Viewport
     local viewer = create("ViewportFrame", {
         Name = "Viewer",
         Size = UDim2.new(1, 0, 1, 0),
@@ -896,7 +919,7 @@ local function buildHologram(section, options)
         Name = "Texture",
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromScale(0.9, 0.9),
+        Size = UDim2.fromScale(IMAGE_FILL, IMAGE_FILL),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Image = "",
@@ -925,13 +948,12 @@ local function buildHologram(section, options)
         textureView.Visible = mode == "Image"
     end
 
-    -- // Camera
     local function updateCamera()
         if destroyed then
             return
         end
         if displayMode == "Image" then
-            textureView.Size = UDim2.fromScale(0.9 * zoom, 0.9 * zoom)
+            textureView.Size = UDim2.fromScale(IMAGE_FILL * zoom, IMAGE_FILL * zoom)
             return
         end
         local size = viewer.AbsoluteSize
@@ -946,7 +968,6 @@ local function buildHologram(section, options)
         camera.CFrame = CFrame.lookAt(orbit * Vector3.new(0, 0, -distance), Vector3.zero)
     end
 
-    -- // Style
     local function applyTint()
         for part, original in pairs(originals) do
             if part.Parent then
@@ -961,7 +982,6 @@ local function buildHologram(section, options)
         end
     end
 
-    -- // Live
     local function syncLinks()
         if not holder or not getOrigin then
             return
@@ -1053,7 +1073,6 @@ local function buildHologram(section, options)
         end)
     end
 
-    -- // Loader
     local function disconnectImage()
         if imageConnection then
             imageConnection:Disconnect()
@@ -1236,7 +1255,6 @@ local function buildHologram(section, options)
         return true
     end
 
-    -- // Player
     local function unbindPlayer()
         playerToken = playerToken + 1
         followedPlayer = nil
@@ -1315,7 +1333,6 @@ local function buildHologram(section, options)
         return true
     end
 
-    -- // Image
     local function trackImage(token, fallback)
         if imageConnection then
             imageConnection:Disconnect()
@@ -1435,7 +1452,6 @@ local function buildHologram(section, options)
         return showImageSpec(spec, payload, token)
     end
 
-    -- // Target
     local function loadAuto(target)
         local inner, newTitle, newDescription, newView, newStyle = unpackEntry(target)
         entryTitle = newTitle
@@ -1491,7 +1507,6 @@ local function buildHologram(section, options)
         return nil
     end
 
-    -- // Load API
     function api:Load(target, newTitle, newDescription)
         if destroyed then
             return false
@@ -1682,7 +1697,6 @@ local function buildHologram(section, options)
         return loading
     end
 
-    -- // Display API
     function api:SetView(value)
         local resolved = value == nil and "Auto" or normalizeView(value)
         if not resolved then
@@ -1729,7 +1743,6 @@ local function buildHologram(section, options)
         fetchInfo = value == true
     end
 
-    -- // Live API
     function api:SetLive(value)
         live = value == true
     end
@@ -1740,7 +1753,6 @@ local function buildHologram(section, options)
         liveRate = tonumber(value)
     end
 
-    -- // View API
     function api:SetSpin(value)
         spin = value == true
     end
@@ -1791,7 +1803,6 @@ local function buildHologram(section, options)
         end
     end
 
-    -- // Control API
     function api:SetTitle(value)
         if destroyed then
             return
@@ -1835,7 +1846,8 @@ local function buildHologram(section, options)
             return
         end
         height = math.clamp(tonumber(value) or height, HEIGHT_MIN, HEIGHT_MAX)
-        root.Size = UDim2.new(1, 0, 0, height)
+        layoutFooter()
+        task.defer(updateCamera)
     end
     function api:IsDestroyed()
         return destroyed
@@ -1865,7 +1877,6 @@ local function buildHologram(section, options)
         root:Destroy()
     end
 
-    -- // Callback API
     function api:SetCallback(handler)
         callback = type(handler) == "function" and handler or nil
     end
@@ -1878,7 +1889,6 @@ local function buildHologram(section, options)
     api.Frame = root
     api.Instance = root
 
-    -- // Properties
     local getters = {
         Title = function()
             return titleLabel.Text
@@ -1961,7 +1971,6 @@ local function buildHologram(section, options)
         end,
     })
 
-    -- // Input
     connections[#connections + 1] = stage.InputBegan:Connect(function(input)
         if not draggable then
             return
@@ -1995,7 +2004,6 @@ local function buildHologram(section, options)
         end
     end)
 
-    -- // Update
     local liveElapsed = 0
     connections[#connections + 1] = runService.Heartbeat:Connect(function(dt)
         if not root.Visible or not holder or displayMode ~= "Model" then
@@ -2017,7 +2025,6 @@ local function buildHologram(section, options)
     end)
     connections[#connections + 1] = viewer:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateCamera)
 
-    -- // Initialization
     setStatus(placeholder)
     updateCamera()
     task.defer(updateCamera)
@@ -2035,5 +2042,4 @@ local function buildHologram(section, options)
     return api
 end
 
--- // Register
 Elements.Register("Hologram", buildHologram)
