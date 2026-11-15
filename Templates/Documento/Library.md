@@ -1,28 +1,30 @@
 # Librarys
 
-Documentação da library de UI do Ecohub: janela, tabs, sections e todos os elements.
+Documentação da library de UI do Ecohub: janela, tabs, sections, elements, themes, saves, features e idiomas.
 
 ## Índice
 
 1. [Carregar a library](#1-carregar-a-library)
 2. [Criar a janela](#2-criar-a-janela)
 3. [Tabs e Sections](#3-tabs-e-sections)
+   - [Layout das sections](#31-layout-das-sections)
+   - [Tamanho automático da janela](#32-tamanho-automático-da-janela)
 4. [Elements](#4-elements)
+   - [Regras gerais](#40-regras-gerais)
    - [Toggle](#41-toggle)
    - [Button](#42-button)
    - [Slider](#43-slider)
    - [Dropdown](#44-dropdown)
    - [ColorPicker](#45-colorpicker)
    - [Paragraph](#46-paragraph)
-     - [Opções](#461-opções)
-     - [Opções do hologram](#462-opções-do-hologram)
-     - [Entradas do status](#463-entradas-do-status)
-     - [Sem função](#464-sem-função)
-     - [Com função](#465-com-função)
-     - [Métodos](#466-métodos)
-     - [Comportamento](#467-comportamento)
-5. [Exemplo completo: aba Status](#5-exemplo-completo-aba-status)
-6. [Referência rápida](#6-referência-rápida)
+5. [Themes](#5-themes)
+6. [Saves](#6-saves)
+7. [Settings do painel e Notificações](#7-settings-do-painel-e-notificações)
+8. [Features](#8-features)
+9. [Idiomas](#9-idiomas)
+10. [Criar um element próprio](#10-criar-um-element-próprio)
+11. [Exemplo completo: aba Status](#11-exemplo-completo-aba-status)
+12. [Referência rápida](#12-referência-rápida)
 
 ---
 
@@ -34,6 +36,12 @@ local Librarys = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpg
 ```
 
 > Só existe **uma janela** por vez. Executar o script de novo destrói a janela anterior, descarrega as features dela e remove qualquer GUI que tenha sobrado.
+>
+> Se uma feature ainda estiver carregando (até 60 segundos, veja `ReloadGuard` na seção 8), o novo carregamento é ignorado e a library atual é devolvida.
+
+Chamar `Librarys:CreateWindow` quando a janela já existe não cria outra: só atualiza título, subtítulo e tecla e devolve a janela atual.
+
+A library também ativa um anti-AFK automático enquanto a janela existe.
 
 ---
 
@@ -44,19 +52,22 @@ local Librarys = loadstring(game:HttpGet("https://raw.githubusercontent.com/pvpg
 local Window = Librarys:CreateWindow({
     Title = "Eco Hub",
     SubTitle = "by rip_sheldoohz",
-    Size = UDim2.fromOffset(580, 350),
+    Size = UDim2.fromOffset(620, 350),
     MinimizeKey = Enum.KeyCode.RightShift,
 })
 ```
 
 | Opção | Tipo | Padrão | Descrição |
 |-------|------|--------|-----------|
-| `Title` | string | `"UILib"` | Título da janela |
-| `SubTitle` | string | `""` | Subtítulo (também aceita `Subtitle`) |
-| `Size` | UDim2 | `580 x 460` | Tamanho base, limitado ao tamanho da tela |
-| `MinimizeKey` | Enum.KeyCode | `LeftControl` | Tecla que abre e fecha a janela |
+| `Title` | string | `"Ecohub"` | Título da janela |
+| `SubTitle` | string | `"Panel"` | Subtítulo (também aceita `Subtitle`) |
+| `Size` | UDim2 | `620 x 350` | Tamanho base. Em offset o mínimo é `420 x 260` |
+| `MinimizeKey` | Enum.KeyCode | `RightShift` | Tecla que abre e fecha a janela |
 
-No mobile a tecla é ignorada e aparece um botão flutuante arrastável.
+- Sem `MinimizeKey` na criação, vale a tecla que o jogador escolheu antes (ela fica salva). Com `MinimizeKey`, a tecla do script vence.
+- O **quadrado flutuante** aparece sempre (PC e celular). Clicar abre e fecha a janela e dá para arrastar. A posição dele e a da janela **não são salvas**: ao executar de novo o quadrado volta ao lugar padrão e a janela abre centralizada.
+- No topo da janela ficam a **pesquisa** e as **configurações** (engrenagem). `Esc` fecha as duas.
+- O `Size` é a medida mínima da janela: ela pode crescer sozinha para caber o conteúdo (veja [3.2](#32-tamanho-automático-da-janela)).
 
 ### Métodos da janela
 
@@ -66,13 +77,37 @@ No mobile a tecla é ignorada e aparece um botão flutuante arrastável.
 | `Window:GetTab(nomeOuIndice)` | Retorna uma tab |
 | `Window:SelectTab(tab)` | Seleciona uma tab (objeto, nome ou índice) |
 | `Window:SetTitle(texto)` | Troca o título |
-| `Window:SetSubTitle(texto)` | Troca o subtítulo |
-| `Window:SetMinimizeKey(tecla)` | Troca a tecla de minimizar |
+| `Window:SetSubTitle(texto)` | Troca o subtítulo (também `SetSubtitle`) |
+| `Window:SetMinimizeKey(tecla)` | Troca a tecla de minimizar (fica salva). Também `SetToggleKey` |
 | `Window:Toggle()` | Abre ou fecha |
-| `Window:SetMinimized(estado)` | Define aberto ou fechado |
+| `Window:SetVisible(estado)` | Mostra ou esconde |
+| `Window:SetMinimized(estado)` | Define fechado (`true`) ou aberto (`false`) |
 | `Window:IsMinimized()` | Retorna se está fechada |
-| `Window:ClearSearch()` | Limpa a pesquisa |
+| `Window:OpenSearch()` / `Window:CloseSearch()` | Abre e fecha a pesquisa |
+| `Window:ClearSearch()` | Limpa o texto da pesquisa |
+| `Window:OpenSettings()` / `Window:CloseSettings()` | Abre e fecha as configurações |
+| `Window:CreateSettingsSection(nome)` | Cria uma section nas configurações (seção 7) |
+| `Window:SetTheme(nome)` | Troca o tema (seção 5) |
+| `Window:Notify(opts)` | Mostra uma notificação (seção 7) |
+| `Window:SetLanguage(codigo)` | Troca o idioma (seção 9) |
+| `Window:LoadFeature(nome)` | Carrega uma feature (seção 8) |
 | `Window:Destroy()` | Destrói a janela e descarrega as features |
+
+Também ficam disponíveis na janela:
+
+| Campo | Descrição |
+|-------|-----------|
+| `Window.Theme` | Tabela com as cores atuais (os elements leem daqui) |
+| `Window.ThemeName` | Nome do tema atual |
+| `Window.Save` | Salva e lê valores seus (seção 6) |
+| `Window.Config` | Configurações da library, como `AutoFit` e `ColumnMinWidth` |
+| `Window.Elements` | Registro de elements (seção 10) |
+| `Window.FeatureConfig` | Configurações do carregador de features (seção 8) |
+| `Window.Tabs` / `Window.ActiveTab` | Lista de tabs e tab atual |
+| `Window.CreateIcon(parent, nome, tamanho, cor)` | Cria um ícone lucide |
+| `Window.Error(titulo, detalhe)` | Mostra um erro como notificação |
+
+O próprio `Librarys` também repassa `CreateTab`, `GetTab`, `SelectTab`, `LoadFeature` (e as outras funções de feature), `TranslateGame`, `SetLanguage`, `GetLanguage`, `AddTranslations` e `Translate`, usando a janela atual. Se ainda não existir janela, mostra o erro `Window missing`.
 
 ---
 
@@ -90,25 +125,109 @@ local ElementsTab = Window:CreateTab({
 local CheckBoxSection = ElementsTab:CreateSection("Checkbox")
 ```
 
-| Opção da tab | Descrição |
-|--------------|-----------|
-| `tab` | Nome que aparece na barra lateral (também aceita `name`) |
-| `section` | Título do grupo na barra lateral. Tabs com a mesma `section` ficam juntas |
-| `icon` | Nome do ícone lucide, sem o prefixo `lucide-` |
+| Opção da tab | Padrão | Descrição |
+|--------------|--------|-----------|
+| `tab` | `"Tab"` | Nome que aparece na barra lateral (também aceita `name`, `Name`, `Title`) |
+| `section` | `"Main"` | Título do grupo na barra lateral. Tabs com a mesma `section` ficam juntas. Clicar no título do grupo recolhe e abre |
+| `icon` | `"circle"` | Nome do ícone lucide, sem o prefixo `lucide-` |
+| `layout` | `"Default"` | `"Default"` (duas colunas) ou `"Compact"` (uma coluna). Veja 3.1 |
+| `OnSelect` | nenhum | `function(tab)` chamada quando a tab é selecionada |
+
+Criar uma tab que já existe (mesmo grupo e mesmo nome) devolve a tab existente. A primeira tab criada já abre selecionada.
 
 | Método | Descrição |
 |--------|-----------|
-| `Tab:CreateSection(titulo)` | Cria um bloco dentro da página da tab |
+| `Tab:CreateSection(titulo)` | Cria um bloco na página da tab. Se já existir uma section com esse título, devolve ela (também `AddSection`) |
 | `Tab:Select()` | Seleciona a tab |
+| `Tab:SetIcon(nome)` | Troca o ícone |
+| `Tab:SetLayout("Default" ou "Compact")` | Troca o layout das sections |
 | `Section:SetTitle(texto)` | Troca o título da section |
+| `Section:CreateElement(nome, opts)` | Cria um element pelo nome (também `AddElement`) |
+| `Section:CreateToggle(opts)` | Atalho: qualquer `Create...` ou `Add...` vira `CreateElement("...")` |
+
+### 3.1 Layout das sections
+
+Cada section é um **card** (fundo, borda e título) e os elements ficam dentro dele, sem frame próprio.
+
+No layout `Default` as sections se dividem em **duas colunas**, alternando:
+
+| Section | Coluna |
+|---------|--------|
+| 1ª | esquerda |
+| 2ª | direita |
+| 3ª | esquerda |
+| 4ª | direita |
+| ... | ... |
+
+- Com **uma única section** na tab, ela ocupa a largura toda. Ao criar a segunda, as duas se dividem.
+- `layout = "Compact"` (ou `Tab:SetLayout("Compact")`) coloca uma section embaixo da outra, em uma coluna só.
+- Se a janela for estreita demais, a tab vira `Compact` sozinha. O limite é `Window.Config.ColumnMinWidth` (padrão `170` pixels por coluna).
+
+```lua
+-- // Layout
+local TabA = Window:CreateTab({ tab = "Duas colunas", icon = "columns" })
+local TabB = Window:CreateTab({ tab = "Uma coluna", icon = "rows", layout = "Compact" })
+
+TabB:SetLayout("Default")
+```
+
+### 3.2 Tamanho automático da janela
+
+A janela mede o conteúdo da tab aberta e se ajusta com uma animação suave, mesmo com `Size` já definido. O `Size` vira o tamanho mínimo: a janela nunca fica menor que ele.
+
+| Eixo | Regra |
+|------|-------|
+| Altura | Cresce até caber o conteúdo, no máximo `FitHeight` da altura da tela (padrão 85%) |
+| Largura | Com muitos elements ganha um pouco de largura, até `FitWidth` pixels (padrão 80) |
+
+A largura extra começa em `FitStart` elements na tab (padrão 8) e chega no máximo em `FitFull` (padrão 24). Ao trocar para uma tab com pouco conteúdo, a janela volta ao tamanho base. A janela cresce a partir do centro.
+
+Se o `Size` for em escala (`UDim2.fromScale`), o eixo em escala não é ajustado.
+
+```lua
+-- // Ajustes (em Window.Config)
+Window.Config.AutoFit = true
+Window.Config.FitHeight = 0.85
+Window.Config.FitWidth = 80
+Window.Config.FitStart = 8
+Window.Config.FitFull = 24
+Window.Config.ColumnMinWidth = 170
+Window.Config.ColumnGap = 8
+Window.Config.SectionLayout = "Default"
+```
+
+`AutoFit = false` desliga o ajuste automático. `SectionLayout` é o layout padrão das tabs novas.
 
 ---
 
 ## 4. Elements
 
-Todos os elements aceitam `callback` (ou `Callback`). Erros dentro do callback são capturados e aparecem como notificação, sem derrubar o script.
+### 4.0 Regras gerais
 
-Se o element tiver `title`, `name`, `text` ou `label`, ele entra automaticamente na pesquisa da janela.
+- Todos os elements aceitam `callback` (ou `Callback`). Erros dentro do callback são capturados e aparecem como notificação, sem derrubar o script.
+- Todo element entra na **pesquisa** da janela pelo título (`title`, `name`, `text` ou `label`). Sem título, entra pelo nome do tipo.
+- `Section:CreateX(opts)` devolve um **handle**. Se o element ainda estiver carregando, as chamadas de método (`Set`, `SetTitle`...) ficam na fila e rodam assim que ele existir. Depois disso o handle repassa direto para o element. `handle.Destroy()` remove o element.
+- Criar de novo um element do **mesmo tipo e com o mesmo título** na mesma section substitui o anterior, mantendo a posição.
+- Os elements ficam em `Library/Elements` no GitHub e são baixados ao abrir a janela. Se algum não for encontrado, aparece a notificação `Element missing`.
+- Os nomes `Toggle` e `Checkbox` são o mesmo element. `ColorPicker` também pode ser chamado de `ColorPick`.
+- Os elements acompanham o tema sozinhos (seção 5).
+
+**Auto save.** Elements que têm `Get` e `Set` são salvos e restaurados quando o painel reinicia (seção 6):
+
+| Element | Salva | Observação |
+|---------|-------|------------|
+| Toggle | `true` ou `false` | |
+| Slider | número | |
+| Dropdown | opção ou lista | |
+| ColorPicker | cor | só a cor, a transparência não é salva |
+| Button | não | |
+| Paragraph | não | |
+
+O callback é chamado quando o valor salvo é restaurado e é diferente do valor atual.
+
+**Elements usam as cores do tema.** Os nomes dos elements usam a cor `Active` do tema. Em temas coloridos ela é a cor de destaque (veja a seção 5).
+
+---
 
 ### 4.1 Toggle
 
@@ -138,6 +257,17 @@ local toggle2 = BoxSection:CreateToggle({
     default = false,
     callback = function(state)
         print("God Mode:", state)
+    end,
+})
+
+-- // Com emoji
+local toggleEmoji = BoxSection:CreateToggle({
+    title = "Auto Farm",
+    emoji = ":fire:",
+    description = "Farma sozinho :bolt:",
+    default = false,
+    callback = function(state)
+        print("Auto Farm:", state)
     end,
 })
 
@@ -176,10 +306,11 @@ local toggle5 = BoxSection:CreateToggle({
     end,
 })
 
+-- // Com keybind por texto
 local toggle6 = BoxSection:CreateToggle({
     title = "ESP",
     default = false,
-    keybind = Enum.UserInputType.MouseButton2,
+    keybind = "M2",
     callback = function(state)
         print("ESP:", state)
     end,
@@ -187,10 +318,10 @@ local toggle6 = BoxSection:CreateToggle({
 
 -- // Ativado por padrão
 local toggle7 = BoxSection:CreateToggle({
-    title = "Auto Farm",
+    title = "Auto Collect",
     default = true,
     callback = function(state)
-        print("Auto Farm:", state)
+        print("Auto Collect:", state)
     end,
 })
 
@@ -206,13 +337,37 @@ local toggle8 = BoxSection:CreateToggle({
 
 | Opção | Tipo | Descrição |
 |-------|------|-----------|
-| `title` | string | Texto principal |
+| `title` | string | Texto principal (também `Name`) |
 | `description` | string | Texto menor abaixo do título |
+| `emoji` | string | Emoji antes do título. Aceita o emoji direto ou o código `:fire:` |
 | `default` | boolean | Estado inicial |
 | `disabled` | boolean | Bloqueia a interação |
-| `keybind` | KeyCode ou UserInputType | Atalho que alterna o toggle |
+| `keybind` | KeyCode, UserInputType, WheelUp/WheelDown ou string | Atalho que alterna o toggle. Só no PC |
 | `keybindCallback` | function(state) | Chamado só quando o atalho é usado |
-| `callback` | function(state) | Chamado sempre que o estado muda |
+| `callback` | function(state) | Chamado sempre que o estado muda. Com `default = true`, também é chamado ao criar |
+
+**Keybind**
+
+- O botão da tecla só aparece no PC e só quando o toggle foi criado com `keybind`. No celular o toggle funciona normal, sem atalho.
+- Clicar no botão da tecla entra em modo de escuta. Aperte uma tecla, `M1`, `M2`, `M3` ou role o mouse (`WhUp`/`WhDn`) para trocar. `Esc` remove o atalho. Só um toggle escuta por vez.
+- Texto aceito em `keybind`: nome do `Enum.KeyCode` (`"G"`, `"LeftShift"`) ou os apelidos `LShift`, `RShift`, `LCtrl`, `RCtrl`, `LAlt`, `RAlt`, `Enter`, `Esc`, `Del`, `M1`, `M2`, `M3`, `WhUp`, `WhDn`, `Num0` a `Num9`, entre outros.
+- Quando um toggle com atalho está **ligado**, ele aparece no painel **Key Bind** (um card arrastável no canto da tela). Nele dá para fechar, abrir as configurações (`Não mostrar mais`, `Permitir arrastar`, `Resetar posição`) e arrastar pela barra de cima.
+
+**Emojis.** Os códigos `:nome:` funcionam em `title`, `description`, `emoji` e nas notificações do toggle:
+
+`fire`, `star`, `heart`, `check`, `cross`, `warning`, `lock`, `unlock`, `gear`, `bolt`, `eye`, `target`, `sword`, `shield`, `gun`, `skull`, `crown`, `rocket`, `gem`, `fish`, `sparkles`, `bell`, `key`, `globe`, `music`, `moon`, `sun`, `pumpkin`, `ghost`, `candy`, `car`, `run`, `wrench`, `trophy`, `flag`, `wave`, `home`, `clock`, `diamond`
+
+```lua
+-- // Emojis próprios
+local Emoji = getgenv().EcoHubEmoji
+
+Emoji.Add("coin", "🪙")
+print(Emoji.Get("coin"))
+print(Emoji.Parse("Moedas :coin:"))
+print(Emoji.Length("🔥🔥"))
+Emoji.Remove("coin")
+print(Emoji.List())
+```
 
 ```lua
 -- // API Toggle
@@ -220,6 +375,7 @@ toggle1:Set(true)
 toggle1:Set(false)
 toggle1:Toggle()
 toggle1:SetTitle("Wallbang ATIVO")
+toggle1:SetEmoji(":star:")
 toggle2:SetDescription("Agora com dano 2x")
 toggle8:SetDisabled(false)
 toggle8:SetDisabled(true)
@@ -229,9 +385,24 @@ toggle3:ClearKeybind()
 
 local estado = toggle1:Get()
 local bind = toggle3:GetKeybind()
+local emoji = toggle1:GetEmoji()
 
 toggle1:Destroy()
 ```
+
+| Método | Descrição |
+|--------|-----------|
+| `Set(estado)` | Define o estado. Chama o `callback` se mudou |
+| `Get()` | Retorna o estado |
+| `Toggle()` | Alterna |
+| `SetDisabled(estado)` | Bloqueia ou libera |
+| `SetTitle(texto)` | Troca o título |
+| `SetEmoji(emoji)` / `GetEmoji()` | Troca e lê o emoji |
+| `SetDescription(texto)` | Troca a descrição (vazio remove) |
+| `SetKeybind(tecla)` | Troca o atalho |
+| `GetKeybind()` | Retorna o atalho |
+| `ClearKeybind()` | Remove o atalho |
+| `Destroy()` | Remove o element |
 
 ---
 
@@ -264,6 +435,29 @@ local btn2 = ButtonSection:CreateButton({
     end,
 })
 
+-- // Tamanhos
+local btnPequeno = ButtonSection:CreateButton({
+    title = "Pequeno",
+    size = "sm",
+    callback = function()
+    end,
+})
+
+local btnGrande = ButtonSection:CreateButton({
+    title = "Grande",
+    size = "lg",
+    callback = function()
+    end,
+})
+
+-- // Carregando
+local btnLoading = ButtonSection:CreateButton({
+    title = "Baixando",
+    loading = true,
+    callback = function()
+    end,
+})
+
 -- // Desabilitado
 local btn3 = ButtonSection:CreateButton({
     title = "Bloqueado",
@@ -273,20 +467,40 @@ local btn3 = ButtonSection:CreateButton({
 })
 ```
 
-| Opção | Tipo | Descrição |
-|-------|------|-----------|
-| `title` | string | Texto principal |
-| `description` | string | Texto menor |
-| `disabled` | boolean | Bloqueia o clique |
-| `callback` | function() | Chamado ao clicar |
+| Opção | Tipo | Padrão | Descrição |
+|-------|------|--------|-----------|
+| `title` | string | `"Button"` | Texto principal (também `Name`) |
+| `description` | string | nenhum | Texto menor |
+| `size` | string | `"default"` | `"xs"`, `"sm"`, `"default"` ou `"lg"` |
+| `disabled` | boolean | `false` | Bloqueia o clique |
+| `loading` | boolean | `false` | Mostra o círculo girando e bloqueia o clique |
+| `callback` | function() | nenhum | Chamado ao clicar |
+
+O Button desenha o próprio fundo e não é salvo no auto save.
 
 ```lua
 -- // API Button
 btn1:SetTitle("Novo Titulo")
 btn2:SetDescription("Nova descricao")
 btn3:SetDisabled(false)
+btn1:SetSize("xs")
+btn1:SetLoading(true)
+btn1:SetLoading(false)
+print(btn1:IsLoading())
 btn1:Fire()
+btn1:Destroy()
 ```
+
+| Método | Descrição |
+|--------|-----------|
+| `SetTitle(texto)` | Troca o título |
+| `SetDescription(texto)` | Troca a descrição (vazio remove) |
+| `SetDisabled(estado)` | Bloqueia ou libera |
+| `SetLoading(estado)` | Liga ou desliga o carregando |
+| `IsLoading()` | Retorna se está carregando |
+| `SetSize(tamanho)` | Troca o tamanho |
+| `Fire()` | Chama o `callback` (ignora se bloqueado ou carregando) |
+| `Destroy()` | Remove o element |
 
 ---
 
@@ -381,17 +595,19 @@ local sliderCompleto = SliderSection:CreateSlider({
 })
 ```
 
-| Opção | Tipo | Descrição |
-|-------|------|-----------|
-| `title` | string | Texto principal |
-| `description` | string | Texto menor |
-| `min` | number | Valor mínimo |
-| `max` | number | Valor máximo |
-| `default` | number | Valor inicial |
-| `rounding` | number | Casas decimais |
-| `suffix` | string | Texto depois do valor (`%`, `x`, ` sp`) |
-| `disabled` | boolean | Bloqueia a interação |
-| `callback` | function(value) | Chamado quando o valor muda |
+| Opção | Tipo | Padrão | Descrição |
+|-------|------|--------|-----------|
+| `title` | string | `"Slider"` | Texto principal (também `Name`) |
+| `description` | string | nenhum | Texto menor |
+| `min` | number | `0` | Valor mínimo (também `Min`) |
+| `max` | number | `100` | Valor máximo (também `Max`) |
+| `default` | number | `min` | Valor inicial |
+| `rounding` | number | `0` | Casas decimais |
+| `suffix` | string | nenhum | Texto depois do valor (`%`, `x`, ` sp`). Também `ValueName` |
+| `disabled` | boolean | `false` | Bloqueia a interação |
+| `callback` | function(value) | nenhum | Chamado quando o valor muda e uma vez ao criar, com o valor inicial |
+
+O valor aparece em uma caixa à direita do título. **Clique nela e digite** um número para definir o valor direto (aceita `,` ou `.` como decimal).
 
 ```lua
 -- // API Slider
@@ -405,7 +621,20 @@ sliderCompleto:SetDisabled(true)
 sliderCompleto:SetDisabled(false)
 
 local atual = sliderCompleto:Get()
+
+sliderCompleto:Destroy()
 ```
+
+| Método | Descrição |
+|--------|-----------|
+| `Set(valor)` | Define o valor (limitado entre `min` e `max`). Chama o `callback` se mudou |
+| `Get()` | Retorna o valor |
+| `SetMin(valor)` / `SetMax(valor)` | Troca os limites e reajusta o valor. `min` precisa ser menor que `max`, senão aparece um aviso e nada muda |
+| `SetSuffix(texto)` | Troca o sufixo |
+| `SetTitle(texto)` | Troca o título |
+| `SetDescription(texto)` | Troca a descrição (vazio remove) |
+| `SetDisabled(estado)` | Bloqueia ou libera |
+| `Destroy()` | Remove o element |
 
 ---
 
@@ -442,15 +671,26 @@ local dropDesc = DropSection:CreateDropdown({
     end,
 })
 
+-- // Sem seleção inicial
+local dropVazio = DropSection:CreateDropdown({
+    title = "Mapa",
+    values = { "Floresta", "Deserto", "Neve" },
+    placeholder = "Escolha um mapa",
+    allowDeselect = true,
+    callback = function(value)
+        print("Mapa:", value)
+    end,
+})
+
 -- // Multi seleção
 local dropMulti = DropSection:CreateDropdown({
     title = "Efeitos Ativos",
     values = { "Velocidade", "Forca", "Invisibilidade", "Voo" },
     default = { "Velocidade", "Forca" },
     multi = true,
-    callback = function(value)
-        for efeito, ativo in pairs(value) do
-            print(efeito, ativo)
+    callback = function(selecionados)
+        for _, efeito in ipairs(selecionados) do
+            print("Ativo:", efeito)
         end
     end,
 })
@@ -464,30 +704,59 @@ local dropDisabled = DropSection:CreateDropdown({
     callback = function(value)
     end,
 })
-
--- // Completo
-local dropCompleto = DropSection:CreateDropdown({
-    title = "Time",
-    description = "Escolha seu time",
-    values = { "Azul", "Vermelho", "Verde" },
-    default = "Azul",
-    multi = false,
-    disabled = false,
-    callback = function(value)
-        print("Time:", value)
-    end,
-})
 ```
 
-| Opção | Tipo | Descrição |
-|-------|------|-----------|
-| `title` | string | Texto principal |
-| `description` | string | Texto menor |
-| `values` | table | Lista de opções |
-| `default` | string ou table | Opção inicial (table quando `multi = true`) |
-| `multi` | boolean | Permite escolher várias opções |
-| `disabled` | boolean | Bloqueia a interação |
-| `callback` | function(value) | Recebe a opção escolhida. Com `multi`, recebe uma tabela `{ [opção] = boolean }` |
+| Opção | Tipo | Padrão | Descrição |
+|-------|------|--------|-----------|
+| `title` | string | `"Dropdown"` | Texto principal (também `Name`) |
+| `description` | string | nenhum | Texto menor |
+| `values` | table | `{}` | Lista de opções (também `Options`) |
+| `default` | valor ou table | nenhum | Opção inicial (lista quando `multi = true`) |
+| `multi` | boolean | `false` | Permite escolher várias opções |
+| `placeholder` | string | `"Select..."` | Texto quando não há seleção |
+| `allowDeselect` | boolean | `false` | Permite ficar sem seleção (clicar de novo na opção marcada desmarca) |
+| `disabled` | boolean | `false` | Bloqueia a interação |
+| `callback` | function(value) | nenhum | Veja abaixo |
+
+**O que o `callback` recebe**
+
+| Modo | Valor |
+|------|-------|
+| Seleção única | A opção escolhida (ou `nil` quando desmarcada) |
+| `multi = true` | **Lista** com as opções marcadas, na ordem de `values` |
+
+- Em `multi`, sem `allowDeselect` a última opção marcada não pode ser desmarcada. Em seleção única, clicar de novo na opção marcada só fecha a lista.
+- A lista abre com uma **caixa de pesquisa** embaixo (`Enter` escolhe o primeiro resultado) e fecha ao clicar fora.
+- Se já houver seleção ao criar, o `callback` é chamado uma vez.
+
+```lua
+-- // API Dropdown
+dropBasico:Set("Arco")
+dropMulti:Set({ "Voo", "Forca" })
+dropBasico:SetValues({ "Espada", "Arco", "Lanca" })
+dropBasico:SetTitle("Arma principal")
+dropBasico:SetDescription("Escolha a arma")
+dropBasico:SetDisabled(true)
+dropBasico:Open()
+dropBasico:Close()
+
+local escolhido = dropBasico:Get()
+local lista = dropMulti:Get()
+
+dropBasico:Destroy()
+```
+
+| Método | Descrição |
+|--------|-----------|
+| `Set(valor)` | Define a seleção (lista em `multi`). Valor que não existe em `values` mostra aviso. `Set(nil)` limpa |
+| `Get()` | Retorna a seleção (lista em `multi`) |
+| `SetValues(lista)` | Troca as opções. Seleções que não existem mais são removidas |
+| `SetTitle(texto)` | Troca o título |
+| `SetDescription(texto)` | Troca a descrição (vazio remove) |
+| `SetDisabled(estado)` | Bloqueia ou libera |
+| `Open()` / `Close()` | Abre e fecha a lista |
+| `RefreshTheme()` | Reaplica as cores do tema |
+| `Destroy()` | Remove o element |
 
 ---
 
@@ -541,34 +810,58 @@ local cpDisabled = ColorSection:CreateColorPicker({
     callback = function(color, transparency)
     end,
 })
-
--- // Completo
-local cpCompleto = ColorSection:CreateColorPicker({
-    title = "Cor do Time",
-    description = "Escolha a cor do seu time",
-    default = Color3.fromRGB(68, 120, 255),
-    transparency = 0,
-    disabled = false,
-    callback = function(color, transparency)
-        print("Time cor:", color, "alpha:", transparency)
-    end,
-})
 ```
 
-| Opção | Tipo | Descrição |
-|-------|------|-----------|
-| `title` | string | Texto principal |
-| `description` | string | Texto menor |
-| `default` | Color3 | Cor inicial |
-| `transparency` | number | Transparência inicial (0 a 1) |
-| `disabled` | boolean | Bloqueia a interação |
-| `callback` | function(color, transparency) | Chamado quando a cor muda |
+| Opção | Tipo | Padrão | Descrição |
+|-------|------|--------|-----------|
+| `title` | string | `"Color"` | Texto principal (também `Name`) |
+| `description` | string | nenhum | Texto menor |
+| `default` | Color3 | `RGB(68, 120, 255)` | Cor inicial |
+| `transparency` | number | `0` | Transparência inicial (0 a 1) |
+| `disabled` | boolean | `false` | Bloqueia a interação |
+| `callback` | function(color, transparency) | nenhum | Chamado quando a cor muda |
+
+Clicar no campo da cor abre o seletor: quadrado de saturação e brilho, barra de matiz, barra de transparência e uma caixa de **hex** (aceita `RGB` ou `RRGGBB`, com ou sem `#`). Clicar fora fecha. O `callback` não é chamado ao criar e, enquanto você arrasta, é chamado no máximo a cada 0,05 segundo.
+
+```lua
+-- // API ColorPicker
+cpBasico:Set(Color3.fromRGB(255, 0, 0))
+cpBasico:Set(Color3.fromRGB(255, 0, 0), 0.3)
+cpBasico:SetCallback(function(color, transparency)
+    print(color, transparency)
+end)
+cpBasico:SetTitle("Cor")
+cpBasico:SetDescription("Nova descrição")
+cpBasico:SetDisabled(true)
+cpBasico:Open()
+cpBasico:Close()
+
+local cor = cpBasico:Get()
+local hex = cpBasico:GetHex()
+local alpha = cpBasico:GetTransparency()
+
+cpBasico:Destroy()
+```
+
+| Método | Descrição |
+|--------|-----------|
+| `Set(cor, transparencia)` | Define a cor. Sem o segundo valor a transparência vira `0` |
+| `Get()` | Retorna a cor (Color3) |
+| `GetHex()` | Retorna o hex, como `"4478FF"` |
+| `GetTransparency()` | Retorna a transparência |
+| `SetCallback(funcao)` | Troca o callback |
+| `SetTitle(texto)` | Troca o título |
+| `SetDescription(texto)` | Troca a descrição (vazio remove) |
+| `SetDisabled(estado)` | Bloqueia ou libera |
+| `Open()` / `Close()` | Abre e fecha o seletor |
+| `RefreshTheme()` | Reaplica as cores do tema |
+| `Destroy()` | Remove o element |
 
 ---
 
 ### 4.6 Paragraph
 
-Card de informação. Pode ser só texto, texto com avatar, holograma 3D de personagem ou item, e uma página de status (lista de nome e valor). Com holograma e status juntos, o card ganha seta e bolinhas para trocar de página.
+Card de informação. Pode ser só título e texto, ou uma lista de linhas: texto, nome e valor, barras de progresso, títulos de grupo, divisórias, etiquetas, galeria de imagens e imagem grande. Não tem `callback` e não é salvo no auto save.
 
 Funciona em PC e celular.
 
@@ -576,65 +869,83 @@ Funciona em PC e celular.
 
 | Opção | Tipo | Padrão | Descrição |
 |-------|------|--------|-----------|
-| `title` | string | `""` | Título (também aceita `Name`) |
-| `description` | string | `""` | Texto menor (aceita `\n` para quebrar linha) |
-| `thumbnail` | number ou string | nenhum | UserId para mostrar o avatar, ou id/link de imagem |
-| `hologram` | table ou valor | nenhum | Holograma 3D. Se for só um valor, vira o `target` |
-| `status` | table | nenhum | Lista de status (nome e valor) |
-| `statusTitle` | string | `"Status"` | Título da página de status |
-| `disabled` | boolean | `false` | Escurece e bloqueia o card |
-| `richText` | boolean | `true` | Liga o RichText nos textos |
-| `callback` | function(page) | nenhum | Chamado quando a página troca (`"hologram"` ou `"status"`) |
+| `title` | string | `""` | Título (também `Title`, `Name`) |
+| `description` | string | `""` | Texto menor (também `Description`, `content`). Aceita `\n` |
+| `tag` | string | `""` | Etiqueta pequena acima do título, como `"PLAYER"` |
+| `info` | table | nenhum | Lista de linhas (também `Info`, `lines`, `items`) |
+| `status` | table | nenhum | Lista de linhas igual a `info`, adicionada depois dela |
+| `accent` | cor | cor do tema | Cor de destaque do card (títulos de grupo, barras, marcadores) |
+| `titleColor` | cor | cor do tema | Cor do título |
+| `descriptionColor` | cor | cor do tema | Cor da descrição (também `descColor`) |
+| `defaultColor` | cor | cor do tema | Cor padrão das linhas (também `color`) |
+| `colors` | table | nenhum | Cor por posição da linha: `{ [1] = "red", [3] = "#00FF88" }` |
+| `marker` | string | `"none"` | Marcador antes das linhas: `"none"`, `"bar"` ou `"dot"` |
+| `rule` | boolean | `false` | Linha fina entre o cabeçalho e as linhas |
+| `richText` | boolean | `true` | Liga o RichText nas linhas de nome e valor |
+| `disabled` | boolean | `false` | Escurece o card |
 
-#### 4.6.2 Opções do `hologram`
+`bullets = false` força `marker = "none"`.
 
-| Opção | Tipo | Padrão | Descrição |
-|-------|------|--------|-----------|
-| `target` | número, string ou Instance | nenhum | O que aparece no holograma (veja a tabela abaixo) |
-| `type` | string | automático | `"character"` (ou `"player"`) para jogador, `"item"` para item |
-| `background` | number ou string | nenhum | Imagem de fundo (id ou link) |
-| `backgroundTransparency` | number | `0.5` | Transparência do fundo (0 a 1) |
-| `backgroundTile` | boolean | `false` | Repete a imagem em vez de esticar |
-| `corners` | table | nenhum | Textos nos 4 cantos |
-| `rotate` | boolean | `true` | Gira o modelo |
-| `speed` | number | `40` | Velocidade da rotação (graus por segundo) |
-| `tint` | Color3 | nenhum | Cor aplicada no modelo |
+**Cores.** Onde uma cor é aceita, vale:
 
-Cantos aceitos em `corners`: `topLeft`, `topRight`, `bottomLeft`, `bottomRight`.
+| Forma | Exemplo |
+|-------|---------|
+| Nome | `"red"`, `"yellow"`, `"green"`, `"blue"`, `"orange"`, `"purple"`, `"pink"`, `"cyan"`, `"white"`, `"gray"` |
+| Nome em português | `"vermelho"`, `"amarelo"`, `"verde"`, `"azul"`, `"laranja"`, `"roxo"`, `"rosa"`, `"ciano"`, `"branco"`, `"cinza"` |
+| Hex | `"#FF8800"`, `"FF8800"`, `"#F80"` |
+| Color3 ou BrickColor | `Color3.fromRGB(255, 136, 0)` |
+| Tabela | `{ 255, 136, 0 }` ou `{ r = 1, g = 0.5, b = 0 }` |
+| Papel do tema | `"accent"`, `"text"`, `"muted"`, `"desc"`, `"title"`, `"line"` |
 
-| `target` | Resultado |
-|----------|-----------|
-| `player.UserId` (number) | Personagem desse jogador |
-| `"NomeDoJogador"` ou DisplayName | Personagem do jogador que está no servidor |
-| `"LocalPlayer"` | Seu personagem |
-| `Player` (Instance) | Personagem desse jogador |
-| `Model` ou `BasePart` (Instance) | Esse modelo |
-| `123456789` com `type = "item"` | Item do catálogo (acessório, tool, modelo) |
-| `"rbxassetid://123456789"` | Asset por id |
+Os nomes de cor são ajustados sozinhos para temas claros e escuros. Sem cor definida, a linha usa a cor `Active` do tema.
 
-Quando o jogador está no servidor, o holograma acompanha: respawn e troca de roupa atualizam sozinhos. Se ele não estiver, usa o avatar pelo UserId.
+#### 4.6.2 Linhas (`info` e `status`)
 
-#### 4.6.3 Entradas do `status`
-
-Cada entrada é uma table. As duas formas funcionam:
+Cada linha pode ser:
 
 ```lua
 -- // Formas
-{ name = "Health", value = 80, max = 100 }
+"Só um texto"
+{ "Nome", "Valor" }
 { "Health", 80, 100 }
+{ label = "Health", value = 80, max = 100 }
+{ text = "Só um texto" }
 ```
 
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
-| `name` | string | Nome da linha |
-| `value` | qualquer | Valor mostrado à direita |
-| `max` | number | Opcional. Com número em `value`, mostra `80/100` |
+| `label` | string | Nome da linha (também `name`) |
+| `value` | qualquer | Valor (também `text`, `info`) |
+| `max` | number | Com `value` numérico, vira barra de progresso |
+| `color` | cor | Cor da linha |
+| `labelColor` | cor | Cor só do nome |
+| `inline` | boolean | Nome à esquerda e valor à direita, em vez de `Nome: valor` |
+| `bullet` | boolean | `true` liga o marcador nessa linha, `false` desliga |
+| `icon` | imagem | Ícone à esquerda do texto (também `texture`, `image`) |
+| `tint` | cor ou `true` | Pinta a imagem. `true` usa a cor da linha |
+| `size` | number | Tamanho do ícone ou dos quadrados da galeria |
+| `visible` | boolean | `false` esconde a linha |
+| `type` | string | Tipo da linha (tabela abaixo) |
 
-O status mostra só números e texto, sem barra de progresso.
+**Tipos de linha.** Se `type` não for dado, o tipo é escolhido pelo conteúdo.
 
-#### 4.6.4 Sem função
+| Tipo (`type`) | Aliases | Como aparece | Campos |
+|---------------|---------|--------------|--------|
+| texto | | `Nome: valor`, ou só o texto | `label`, `value`, `inline` |
+| `"bar"` | `"progress"` | Nome, `80/100  •  80%` e barra animada | `label`, `value`, `max` (maior que 0) |
+| `"header"` | `"section"`, `"heading"` | Título de grupo na cor de destaque | `text` |
+| `"divider"` | `"line"`, `"separator"` | Linha divisória | nenhum |
+| `"badges"` | `"badge"`, `"chips"`, `"tags"`, `"tag"` | Etiquetas lado a lado | `items`: lista de textos ou `{ text, color }` |
+| `"gallery"` | `"images"`, `"textures"` | Quadrados de imagem | `textures`: lista de imagens ou `{ texture, tint }`, `size` |
+| `"preview"` | | Imagem grande com borda | `texture`, `height`, `fit`, `label`, `value` |
 
-Cards estáticos, sem `callback` e sem precisar guardar a variável.
+Escolha automática: `textures` vira galeria, `items`/`tags`/`badges` viram etiquetas, uma linha só com imagem vira preview, `value` com `max` vira barra. O resto é texto.
+
+`fit` do preview: `"fit"` (padrão), `"crop"` ou `"stretch"`. `height` padrão `140` (`150` no celular).
+
+**Imagens.** Aceita id numérico, `"rbxassetid://id"`, link com o id (`?id=`, `/library/`, `/catalog/`), URL `rbxthumb://` ou uma instância `Decal`, `Texture`, `ImageLabel` ou `ImageButton`.
+
+#### 4.6.3 Exemplos
 
 ```lua
 -- // Só título
@@ -648,18 +959,65 @@ ParaSection:CreateParagraph({
     description = "Linha 1\nLinha 2",
 })
 
--- // Com avatar (UserId)
+-- // Com etiqueta e linhas
 ParaSection:CreateParagraph({
-    title = player.DisplayName .. " (@" .. player.Name .. ")",
-    description = "Online",
-    thumbnail = player.UserId,
+    title = "Servidor",
+    tag = "INFO",
+    description = "Informações do servidor",
+    rule = true,
+    info = {
+        { "Jogadores", #game.Players:GetPlayers() },
+        { "Tipo", "Público" },
+        { "PlaceId", game.PlaceId },
+    },
 })
 
--- // Com imagem
+-- // Nome à esquerda e valor à direita
 ParaSection:CreateParagraph({
-    title = "Logo",
-    description = "Imagem por id",
-    thumbnail = "rbxassetid://123456789",
+    title = "Stats",
+    info = {
+        { label = "Level", value = 120, inline = true },
+        { label = "Rank", value = "Legendary", inline = true, color = "yellow" },
+    },
+})
+
+-- // Barras de progresso
+ParaSection:CreateParagraph({
+    title = "Status",
+    info = {
+        { label = "Health", value = 80, max = 100, color = "green" },
+        { label = "Mana", value = 35, max = 100, color = "blue" },
+    },
+})
+
+-- // Grupos, divisória e etiquetas
+ParaSection:CreateParagraph({
+    title = "Perfil",
+    info = {
+        { type = "header", text = "Conta" },
+        { "Nome", "Player123" },
+        { type = "divider" },
+        { type = "header", text = "Selos" },
+        { type = "badges", items = { "Premium", { text = "VIP", color = "yellow" } } },
+    },
+})
+
+-- // Ícone, galeria e imagem grande
+ParaSection:CreateParagraph({
+    title = "Imagens",
+    info = {
+        { icon = 123456789, label = "Item", value = "Espada" },
+        { type = "gallery", textures = { 123456789, 987654321 }, size = 54 },
+        { type = "preview", texture = "rbxassetid://123456789", height = 120, fit = "crop" },
+    },
+})
+
+-- // Cores por posição e marcador
+ParaSection:CreateParagraph({
+    title = "Lista",
+    marker = "bar",
+    colors = { [1] = "red", [2] = "green" },
+    info = { "Primeira", "Segunda", "Terceira" },
 })
 
 -- // Desativado
@@ -670,167 +1028,51 @@ ParaSection:CreateParagraph({
 })
 ```
 
-```lua
--- // Holograma do jogador
-ParaSection:CreateParagraph({
-    title = "Meu personagem",
-    description = "Live preview",
-    hologram = {
-        target = player.UserId,
-        type = "character",
-        rotate = true,
-        speed = 40,
-    },
-})
+#### 4.6.4 Atualizar o card
 
--- // Holograma com atalho
-ParaSection:CreateParagraph({
-    title = "Meu personagem",
-    hologram = player.UserId,
-})
-
--- // Holograma com fundo e cantos
-ParaSection:CreateParagraph({
-    title = "Player Card",
-    description = "Live preview",
-    hologram = {
-        target = player.UserId,
-        type = "character",
-        background = 123456789,
-        backgroundTransparency = 0.5,
-        backgroundTile = false,
-        rotate = true,
-        speed = 40,
-        tint = Color3.fromRGB(120, 180, 255),
-        corners = {
-            topLeft = player.DisplayName,
-            topRight = "Lv. 120",
-            bottomLeft = "Online",
-            bottomRight = "Premium",
-        },
-    },
-})
-
--- // Holograma de item
-ParaSection:CreateParagraph({
-    title = "Item",
-    hologram = {
-        target = 123456789,
-        type = "item",
-        rotate = true,
-        speed = 30,
-    },
-})
-
--- // Holograma de um modelo do mapa
-ParaSection:CreateParagraph({
-    title = "Estátua",
-    hologram = {
-        target = workspace.Map.Statue,
-    },
-})
-```
+Guarde a variável para mudar o card depois. As posições (`index`) contam a partir de `1`, na ordem de `info` e depois `status`.
 
 ```lua
--- // Só status
-ParaSection:CreateParagraph({
-    title = "Servidor",
-    description = "Informações do servidor",
-    statusTitle = "Status",
-    status = {
-        { name = "Jogadores", value = 1, max = 8 },
-        { name = "Tipo", value = "Público" },
-        { name = "PlaceId", value = game.PlaceId },
-    },
-})
-
--- // Holograma e status (duas páginas)
-ParaSection:CreateParagraph({
-    title = "Player Card",
-    description = "Live preview",
-    hologram = {
-        target = player.UserId,
-        type = "character",
-        corners = {
-            topLeft = player.DisplayName,
-            topRight = "Lv. 120",
-            bottomLeft = "Online",
-            bottomRight = "Premium",
-        },
-    },
-    status = {
-        { name = "Health", value = 80, max = 100 },
-        { name = "Level", value = 120 },
-        { name = "Rank", value = "Legendary" },
-    },
-})
-```
-
-#### 4.6.5 Com função
-
-Guarde a variável para atualizar o card depois, e use `callback` para saber quando a página troca.
-
-```lua
--- // Callback de página
 local card = ParaSection:CreateParagraph({
     title = "Player Card",
-    description = "Live preview",
-    hologram = {
-        target = player.UserId,
-        type = "character",
+    tag = "PLAYER",
+    description = "Live status",
+    info = {
+        { label = "Level", value = 120, inline = true },
+        { label = "Health", value = 80, max = 100 },
     },
-    status = {
-        { name = "Level", value = 120 },
-    },
-    callback = function(page)
-        print("Página:", page)
-    end,
 })
-```
 
-```lua
 -- // Texto
 card:SetTitle("Novo título")
 card:SetDescription("Novo texto")
-card:SetThumbnail(player.UserId)
-card:SetDisabled(true)
+card:SetTag("ONLINE")
 
--- // Holograma
-card:SetTarget(otherPlayer.UserId, "character")
-card:SetTarget(123456789, "item")
-card:SetBackground(123456789, 0.5, false)
-card:SetCorners({
-    topLeft = "Nome",
-    topRight = "Lv. 121",
-    bottomLeft = "Online",
-    bottomRight = "Free",
-})
-card:SetCorner("bottomRight", "Premium")
-card:SetHologram({
-    target = player.UserId,
-    type = "character",
-    rotate = false,
-})
-card:SetHologram(nil)
+-- // Linhas
+card:UpdateInfo(1, 121)
+card:UpdateInfo(2, { value = 50, max = 100 })
+card:UpdateInfo(1, { label = "Lv", color = "yellow" })
+card:SetInfoColor(2, "red")
+local index = card:AddInfo({ label = "Coins", value = 1500 })
+card:AddInfo({ type = "divider" }, 1)
+card:RemoveInfo(index)
+card:SetInfo({ { "Level", 122 } })
+card:ClearInfo()
+print(card:GetInfo())
 
--- // Status
-card:SetStatus({
-    { name = "Health", value = 50, max = 100 },
-    { name = "Level", value = 121 },
-})
-card:SetStat("Level", 122)
-card:SetStat("Health", 40, 100)
-card:SetStat("Coins", 1500)
-print(card:GetStat("Level"))
-card:RemoveStat("Coins")
-card:SetStatusTitle("Atributos")
+-- // Cores
+card:SetAccent("cyan")
+card:SetTitleColor("white")
+card:SetDescriptionColor("gray")
+card:SetDefaultColor("#CCCCCC")
+card:SetColors({ [1] = "red", [2] = "green" }, "gray")
+card:SetAllColors("white")
 
--- // Página
-card:SetPage("status")
-card:SetPage("hologram")
-print(card:GetPage())
-
--- // Destruir
+-- // Geral
+card:Update({ title = "Outro", tag = "OFF", disabled = true, info = { "Texto" } })
+card:SetDisabled(false)
+card:SetVisible(false)
+card:Refresh()
 card:Destroy()
 ```
 
@@ -850,47 +1092,471 @@ task.spawn(function()
 end)
 ```
 
-#### 4.6.6 Métodos
+#### 4.6.5 Métodos
 
 | Método | Descrição |
 |--------|-----------|
-| `SetTitle(texto)` | Troca o título |
-| `SetDescription(texto)` | Troca a descrição |
-| `SetThumbnail(valor)` | Troca o avatar (UserId ou imagem). `nil` remove |
+| `SetTitle(texto)` / `GetTitle()` | Troca e lê o título |
+| `SetDescription(texto)` / `GetDescription()` | Troca e lê a descrição |
+| `SetTag(texto)` | Troca a etiqueta (vazio remove) |
+| `SetInfo(lista)` | Troca todas as linhas |
+| `AddInfo(linha, posicao)` | Adiciona uma linha (no fim, ou na posição dada). Retorna a posição |
+| `UpdateInfo(index, campos)` | Muda uma linha. `campos` pode ser uma tabela ou só o novo valor |
+| `RemoveInfo(index)` | Remove uma linha |
+| `ClearInfo()` | Remove todas as linhas |
+| `GetInfo()` | Retorna cópias das linhas |
+| `SetInfoColor(index, cor)` | Troca a cor de uma linha |
+| `SetColors(tabela, padrao)` | Troca as cores por posição (e a cor padrão, se dada) |
+| `SetDefaultColor(cor)` | Troca a cor padrão das linhas |
+| `SetAllColors(cor)` | Coloca a mesma cor em todas as linhas |
+| `SetAccent(cor)` | Troca a cor de destaque |
+| `SetTitleColor(cor)` / `SetDescriptionColor(cor)` | Troca a cor do título e da descrição |
+| `Update(campos)` | Muda vários campos de uma vez: `title`, `description`, `tag`, `disabled`, `visible`, `accent`, `colors`, `defaultColor`, `info` |
 | `SetDisabled(estado)` | Ativa ou desativa o card |
-| `GetTitle()` | Retorna o título |
-| `GetDescription()` | Retorna a descrição |
-| `SetHologram(config)` | Troca o holograma inteiro. `nil` remove |
-| `SetTarget(target, tipo)` | Troca só o alvo do holograma |
-| `SetBackground(id, transparencia, tile)` | Troca o fundo do holograma |
-| `SetCorners(tabela)` | Troca os 4 cantos |
-| `SetCorner(nome, texto)` | Troca um canto |
-| `SetStatus(lista)` | Troca a lista de status |
-| `SetStatusTitle(texto)` | Troca o título da página de status |
-| `SetStat(nome, valor, max)` | Atualiza uma linha (cria se não existir) |
-| `GetStat(nome)` | Retorna o valor de uma linha |
-| `RemoveStat(nome)` | Remove uma linha |
-| `SetPage(pagina)` | Vai para `"hologram"` ou `"status"` |
-| `GetPage()` | Retorna a página atual |
+| `SetVisible(estado)` | Mostra ou esconde |
+| `Refresh()` | Recarrega as imagens e refaz as linhas |
+| `RefreshTheme()` | Reaplica as cores do tema |
 | `Destroy()` | Remove o card |
 
-#### 4.6.7 Comportamento
+#### 4.6.6 Comportamento
 
-- Seta e bolinhas só aparecem quando o card tem holograma e status juntos. Só status ou só holograma fica sem botão, com o layout normal.
-- O botão de próximo e o de voltar não têm fundo, só o ícone.
-- `SetStatus` com os mesmos nomes na mesma ordem só atualiza os valores, sem piscar e sem resetar o scroll. Pode chamar em loop.
-- A lista de status só rola quando passa da altura do card.
-- Números grandes aparecem completos, como o PlaceId.
-- O holograma volta o personagem para a pose padrão e não mostra tool na mão.
-- A thumbnail por UserId atualiza a cada 30 segundos.
-- O `callback` só é chamado quando a página muda, pelo botão ou por `SetPage`.
+- `UpdateInfo` refaz só aquela linha. `SetInfo`, `RemoveInfo` e `AddInfo` com posição refazem todas, e as barras animam de novo. Para atualizar valores em loop, use `UpdateInfo` e só quando o valor mudar.
+- A barra mostra `valor/max  •  porcentagem` e anima ao aparecer. Sem `max` maior que 0, a linha vira texto.
+- Linhas sem texto e sem imagem ficam escondidas.
+- O card acompanha o tema sozinho. Cores dadas por nome mudam com o tema claro ou escuro.
 - Quando a section ou a janela é destruída, o Paragraph limpa as conexões sozinho.
 
 ---
 
-## 5. Exemplo completo: aba Status
+## 5. Themes
 
-Player Card com holograma e status, card do servidor e linha do jogador. Atualiza tudo a cada 1 segundo.
+O tema muda só a **interface do painel**: fundo da janela, cor das sections (onde ficam os elements), pesquisa, configurações, bordas e destaques. Os textos (nome da section, nome da tab, título, nomes dos elements que não usam a cor de destaque) continuam normais.
+
+Para trocar, abra as **configurações** (engrenagem) e escolha em **Themes > Theme**. A escolha fica salva. Ou pelo código:
+
+```lua
+-- // Trocar tema
+Window:SetTheme("Blue")
+Window:SetTheme("Default")
+
+print(Window.ThemeName)
+```
+
+`SetTheme` retorna `true` se o tema foi aplicado.
+
+### Onde ficam os temas
+
+Na pasta `Themes` do GitHub. O nome do tema é o nome do arquivo sem a extensão (`Blue.luau` vira `Blue`). Valem `.luau`, `.lua` e `.json`. O tema `Default` é o padrão da library e não precisa de arquivo. Os primeiros 24 temas são baixados em segundo plano, então trocar é rápido.
+
+```lua
+-- // Themes/Blue.luau
+return {
+    -- // Window
+    Background = Color3.fromRGB(10, 18, 28),
+    Divider = Color3.fromRGB(30, 50, 76),
+    Subtitle = Color3.fromRGB(150, 150, 150),
+
+    -- // Elements
+    GradientTop = Color3.fromRGB(20, 34, 52),
+    GradientBottom = Color3.fromRGB(12, 22, 34),
+    Palette = Color3.fromRGB(14, 24, 38),
+    Field = Color3.fromRGB(18, 30, 46),
+    Accent = Color3.fromRGB(28, 48, 74),
+    Border = Color3.fromRGB(36, 58, 88),
+    BorderHover = Color3.fromRGB(64, 100, 150),
+    Active = Color3.fromRGB(59, 130, 246),
+    Text = Color3.fromRGB(255, 255, 255),
+    Inactive = Color3.fromRGB(140, 165, 195),
+    Dim = Color3.fromRGB(90, 115, 145),
+    Placeholder = Color3.fromRGB(80, 104, 134),
+
+    -- // Tab
+    TabActive = Color3.fromRGB(255, 255, 255),
+    TabInactive = Color3.fromRGB(145, 145, 145),
+    TabHover = Color3.fromRGB(200, 200, 200)
+}
+```
+
+Nesse arquivo, `Subtitle`, `Text`, `Inactive`, `Dim`, `Placeholder` e `TabActive`, `TabInactive`, `TabHover` são ignoradas (veja abaixo). As outras cores são aplicadas.
+
+```json
+{
+  "Background": "#0A121C",
+  "Accent": [28, 48, 74],
+  "Active": "#3B82F6"
+}
+```
+
+Cada cor aceita `Color3`, hex (`"#RRGGBB"`) ou tabela `{ R, G, B }` de 0 a 255. O JSON pode vir direto ou dentro de `{ "Colors": { ... } }`. Cores que faltam ficam com o valor do `Default`.
+
+### O que cada cor muda
+
+| Chave | Muda |
+|-------|------|
+| `Background` | Fundo da janela |
+| `GradientTop`, `GradientBottom` | Gradiente das sections, da pesquisa e das configurações |
+| `Field` | Barra de pesquisa e campos dos elements |
+| `Accent` | Tab selecionada e áreas de destaque dos elements |
+| `Border`, `BorderHover` | Bordas |
+| `Divider` | Linhas divisórias |
+| `Palette` | Cor de paleta usada por alguns elements |
+| `Active` | Cor de destaque: toggle ligado, barra do slider, brilho da pesquisa e o texto dos elements que usam `Active` (como o Paragraph) |
+
+**Cores que o tema não muda.** `Inactive`, `Dim`, `Subtitle`, `Placeholder`, `Text`, `TabActive`, `TabInactive` e `TabHover` são ignoradas, mesmo que o arquivo tenha. Os nomes de section, o último item do caminho no topo e os resultados da pesquisa usam uma cor fixa própria (`Theme.Name`), que também não muda.
+
+Para o tema também mudar essas cores de texto, ligue `ThemeText = true` no `Config` dentro do `Library.luau`. Ele é lido quando a library carrega, então não adianta mudar pelo script depois.
+
+### Nos seus scripts
+
+`Window.Theme` é uma tabela com as cores atuais e é atualizada quando o tema muda. Os elements da library já acompanham sozinhos. Em features e elements próprios, leia as cores dali:
+
+```lua
+-- // Cor atual do tema
+local Theme = Window.Theme
+
+label.TextColor3 = Theme.Active
+frame.BackgroundColor3 = Theme.Background
+```
+
+Objetos criados com as cores padrão do painel também são trocados sozinhos ao mudar o tema.
+
+---
+
+## 6. Saves
+
+A library salva as escolhas no arquivo `Ecohub.json`, na pasta de trabalho do executor.
+
+```lua
+-- // Estrutura (resumo)
+-- Player: nome, display e UserId
+-- Games: um bloco por jogo, com AutoSave (valores dos elements) e Profiles
+-- Panel: AutoSave, Theme, ThemeColors, ToggleKey
+-- Translations: cache de traduções
+```
+
+| O que | Salvo |
+|-------|-------|
+| Valores dos elements (toggle, slider, dropdown, colorpicker) | Sim, por jogo, se o **Auto Save** estiver ligado |
+| Tema | Sim |
+| Tecla de minimizar | Sim |
+| Idioma de tradução (cache) | Sim |
+| Posição da janela e do quadrado flutuante | **Não** |
+
+- O **Auto Save** fica nas configurações (engrenagem) em **Saves** e vem ligado. Desligado, os valores dos elements não são salvos nem restaurados. Tema e tecla continuam salvos.
+- Cada element é salvo por `Tab/Section/Título`. Dois elements com o mesmo nome na mesma section ganham ` #2`, ` #3`...
+- Elements das configurações do painel não são salvos.
+- Grava 1 segundo depois de uma mudança, a cada 20 segundos e ao destruir a janela.
+- Se o arquivo estiver corrompido, a library guarda uma cópia em `Ecohub.json.bak` e começa um novo.
+- Se o executor não tiver funções de arquivo, aparece um aviso e nada é salvo.
+
+### Salvar valores seus
+
+`Window.Save` guarda qualquer valor seu no bloco do jogo atual. Aceita `boolean`, `number`, `string`, `Color3`, `EnumItem` e tabelas com esses valores.
+
+```lua
+-- // Window.Save
+Window.Save:Set("UltimaArma", "Espada")
+Window.Save:Set("Cor", Color3.fromRGB(255, 0, 0))
+
+local arma = Window.Save:Get("UltimaArma", "Nenhuma")
+
+Window.Save:Delete("UltimaArma")
+```
+
+### Perfis
+
+Os valores dos elements podem ser guardados em perfis, por jogo. Não há botão para isso, só código:
+
+```lua
+-- // Perfis
+local Saves = Window.Saves
+
+print(Saves:ListProfiles())
+Saves:CreateProfile("Farm")
+Saves:SetProfile("AutoSave")
+Saves:DeleteProfile("Farm")
+```
+
+`CreateProfile` copia os valores atuais e já ativa o perfil. `SetProfile` salva o atual e aplica o outro. O perfil `AutoSave` é o padrão e não pode ser apagado.
+
+---
+
+## 7. Settings do painel e Notificações
+
+### Settings
+
+A engrenagem do topo abre as configurações do painel (**Themes** e **Saves**). Dá para criar sections suas ali:
+
+```lua
+-- // Settings
+local MinhaSection = Window:CreateSettingsSection("Meu Hub")
+
+MinhaSection:CreateToggle({
+    title = "Mostrar FPS",
+    default = false,
+    callback = function(state)
+        print("FPS:", state)
+    end,
+})
+
+MinhaSection:CreateButton({
+    title = "Resetar tudo",
+    callback = function()
+    end,
+})
+```
+
+Os elements das configurações funcionam como os normais, mas **não entram no auto save**.
+
+### Notificações
+
+```lua
+-- // Notify
+Window:Notify({
+    Title = "Hub",
+    Description = "Script carregado",
+    Duration = 5,
+})
+
+Window:Notify("Só um texto")
+```
+
+| Opção | Descrição |
+|-------|-----------|
+| `Title` | Título |
+| `Description` | Texto |
+| `Type` | Tipo. A library usa `"Error"` e `"Warning"` |
+| `Duration` | Segundos na tela |
+| `RichText` | Liga o RichText no texto |
+
+O módulo de notificação é baixado na primeira vez que alguém usa. Até lá as notificações esperam em fila (máximo 20). Se o download falhar, elas são descartadas e o motivo aparece no console.
+
+A library mostra notificações sozinha quando algo falha: `Element failed`, `Element missing`, `Feature failed`, `Callback`, `Theme failed`, `Save failed` e outras.
+
+---
+
+## 8. Features
+
+Uma feature é um script que fica na pasta `Features` do GitHub e é carregado pela janela. Ele recebe a janela e a library:
+
+```lua
+-- // Features/Status.luau
+local Window, Library = ...
+
+local Tab = Window:CreateTab({ tab = "Status", icon = "activity" })
+local Section = Tab:CreateSection("Info")
+
+Section:CreateButton({
+    title = "Oi",
+    callback = function()
+        print("oi")
+    end,
+})
+
+-- // Unload
+getgenv().StatusUnload = function()
+    print("descarregado")
+end
+```
+
+`Window` e `Librarys` também ficam como variáveis globais enquanto a feature roda.
+
+### Carregar
+
+```lua
+-- // Carregar
+Window:LoadFeature("Status")
+Window:LoadFeature("Farm/Auto")
+Window:LoadFeature("Farm/")
+Window:LoadFeature("https://github.com/usuario/repo/blob/main/Teste.lua")
+Window:LoadFeature("Status", { Reload = true })
+
+Window:LoadFeatures({ "Status", "Farm/Auto" })
+Window:LoadAllFeatures()
+Window:PreloadFeatures({ "Status", "Farm/Auto" })
+```
+
+| Nome | Carrega |
+|------|---------|
+| `"Status"` | O arquivo `Status.lua` ou `Status.luau` (acha pelo nome em qualquer pasta) |
+| `"Farm/Auto"` | O arquivo dentro da pasta `Farm` |
+| `"Farm/"` | Todos os arquivos da pasta `Farm` |
+| URL | O link. Links `github.com/.../blob/...` viram o link raw sozinhos |
+
+- `LoadFeature` retorna `true` se deu certo. `LoadFeatures` retorna `{ [nome] = boolean }` e `LoadAllFeatures` retorna `{ [caminho] = boolean }`.
+- Carregar uma feature que já está carregada não faz nada. Com `{ Reload = true }` ela é descarregada e carregada de novo.
+- `PreloadFeatures` só baixa antes, para carregar mais rápido depois.
+- Pastas carregadas e `LoadAllFeatures` ficam **vigiadas**: a cada 20 segundos a library confere o GitHub e carrega arquivos novos sozinha.
+- O download tenta vários espelhos ao mesmo tempo, valida o arquivo (menor que 8 MB, que compile e que não seja uma página web) e repete se falhar.
+- Se a feature demorar mais de 8 segundos para terminar, a janela segue em frente e ela continua rodando. Erros que acontecerem depois aparecem como `Feature failed`.
+
+### Descarregar e listar
+
+```lua
+-- // Descarregar
+Window:UnloadFeature("Status")
+Window:UnloadAllFeatures()
+
+-- // Listar
+print(Window:GetLoadedFeatures())
+print(Window:IsFeatureLoaded("Status"))
+print(Window:ListFeatures())
+Window:RefreshFeatures()
+```
+
+| Método | Descrição |
+|--------|-----------|
+| `UnloadFeature(nome)` | Chama `getgenv().<Nome>Unload` (se existir) e remove os elements da feature |
+| `UnloadAllFeatures()` | Faz isso com todas, da última para a primeira |
+| `GetLoadedFeatures()` | Lista os caminhos carregados |
+| `IsFeatureLoaded(nome)` | Retorna se está carregada |
+| `ListFeatures()` | Lista as features do GitHub |
+| `RefreshFeatures()` | Baixa a lista de novo. Retorna se mudou |
+| `SetFeaturesSource(url)` | Troca a pasta de onde as features vêm (link de pasta do GitHub) |
+| `SetElementsSource(url)` | Troca a pasta de onde os elements vêm |
+
+- O nome da função de unload é o nome do arquivo + `Unload`: `Status.luau` chama `StatusUnload`. Use para desconectar loops e conexões.
+- Só são removidos sozinhos os elements criados **direto** pelo script da feature. Elements criados dentro de `task.spawn`, callbacks ou loops não são, então remova esses no `Unload`.
+- Com `{ Reload = true }`, o `Unload` antigo é chamado antes de a feature rodar de novo.
+- `Window:Destroy()` descarrega todas as features.
+
+### Ajustes
+
+`Window.FeatureConfig` (e `Librarys.FeatureConfig`) guarda os tempos do carregador:
+
+| Campo | Padrão | Descrição |
+|-------|--------|-----------|
+| `Retries` | `3` | Tentativas de download |
+| `MaxParallel` | `6` | Downloads ao mesmo tempo |
+| `Timeout` | `45` | Segundos esperando uma feature |
+| `AttemptTimeout` | `20` | Segundos por tentativa de download |
+| `RunTimeout` | `8` | Segundos esperando a feature terminar de rodar |
+| `ElementsWait` | `12` | Segundos esperando os elements carregarem antes de rodar a feature |
+| `AutoWatch` | `true` | Vigiar pastas por arquivos novos |
+| `WatchInterval` | `20` | Segundos entre conferências |
+| `ReloadGuard` | `60` | Segundos em que executar a library de novo é ignorado se uma feature estiver carregando |
+
+---
+
+## 9. Idiomas
+
+O painel traduz os próprios textos sozinho, pelo idioma do Roblox do jogador.
+
+```lua
+-- // Idioma
+Window:SetLanguage("pt")
+Window:SetLanguage("en")
+Window:SetLanguage("auto")
+
+print(Window:GetLanguage())
+```
+
+| Método | Descrição |
+|--------|-----------|
+| `SetLanguage(codigo)` | Define o idioma (`"pt"`, `"es"`, `"en"`...). `"auto"` volta para o idioma do Roblox |
+| `GetLanguage()` | Retorna o idioma atual |
+| `AddTranslations(tabela)` | Adiciona traduções suas |
+| `Translate(texto)` | Traduz um texto |
+| `TranslateGame(estado)` | Também traduz as GUIs do jogo (menos as do Ecohub) |
+
+```lua
+-- // Traduções suas
+Window:AddTranslations({
+    pt = {
+        ["Search..."] = "Pesquisar...",
+        ["Auto Farm"] = "Farm automático",
+    },
+})
+
+print(Window:Translate("Auto Farm"))
+Window:TranslateGame(true)
+```
+
+A tradução segue esta ordem: suas traduções, o tradutor do Roblox e, por último, uma tradução automática online. Os textos traduzidos pela tradução online são enviados para um serviço externo, e o resultado fica guardado em cache no `Ecohub.json`. Em inglês nada é traduzido.
+
+---
+
+## 10. Criar um element próprio
+
+Elements ficam em `Library/Elements` no GitHub (um arquivo por element) e se registram na library. Também dá para registrar um dentro de uma feature, usando `Window.Elements`.
+
+```lua
+-- // Registrar
+Window.Elements.Register("Label", function(section, options)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.BackgroundTransparency = 1
+    label.Text = options.title or ""
+    label.TextColor3 = section.Panel.Theme.Active
+    label.Parent = section.frame
+
+    local data = {}
+
+    function data:SetTitle(texto)
+        label.Text = texto
+    end
+
+    function data:Destroy()
+        label:Destroy()
+    end
+
+    return data
+end, { Frameless = true })
+
+-- // Usar
+Section:CreateLabel({ title = "Olá" })
+```
+
+`Register(nome, builder, meta)`:
+
+| Parte | Descrição |
+|-------|-----------|
+| `nome` | Nome do element. `Section:CreateNome(...)` e `Section:CreateElement("Nome", ...)` passam a funcionar |
+| `builder(section, options)` | Constrói o element e retorna uma tabela com os métodos |
+| `meta.Frameless` | `true` tira a margem interna (usado pelo Button, que desenha o próprio fundo) |
+
+O que o `builder` recebe em `section`:
+
+| Campo | Descrição |
+|-------|-----------|
+| `section.frame` | O Frame onde o element deve ser criado |
+| `section.Panel` | A janela (`section.Panel.Theme` tem as cores) |
+| `section.Tab` / `section.Section` | A tab e a section onde ele está |
+| `section.Element` | O objeto interno do element |
+| `section.Elements` | O registro de elements |
+| `section.CreateIcon(parent, nome, tamanho, cor)` | Cria um ícone lucide |
+
+A tabela retornada pode ter:
+
+| Método | Para que serve |
+|--------|----------------|
+| `Get()` e `Set(valor)` (ou `GetValue` e `SetValue`) | Ligam o element ao auto save |
+| `Destroy()` | Chamado quando o element é removido |
+| qualquer outro | Fica disponível no handle: `handle:SetTitle(...)` |
+
+- A `frame` já vem com margem interna e a altura se ajusta ao conteúdo (`AutomaticSize`). Elements com frame têm altura mínima de 38.
+- Cores criadas com as cores padrão do painel são trocadas sozinhas ao mudar o tema. Para acompanhar ao vivo, leia `section.Panel.Theme`.
+- Se o `builder` der erro, a library tenta de novo algumas vezes antes de desistir e mostra `Element failed`.
+- O handle aceita chamadas antes do element existir: elas ficam na fila e rodam depois.
+
+Outras funções do registro:
+
+```lua
+-- // Registro
+print(Window.Elements.List())
+print(Window.Elements.Get("Slider"))
+Window:LoadElements(true)
+```
+
+`List()` retorna os nomes registrados. `Get(nome)` retorna o registro. `LoadElements(true)` baixa e registra os elements de novo.
+
+Nos arquivos de `Library/Elements`, as variáveis `Elements` e `Panel` já existem (`local Elements, Panel = ...`).
+
+---
+
+## 11. Exemplo completo: aba Status
+
+Player Card e card do servidor, lado a lado (duas sections = duas colunas). Atualiza a cada 1 segundo, trocando só as linhas que mudaram.
 
 ```lua
 -- // Services
@@ -909,7 +1575,8 @@ local ParaTab = Window:CreateTab({
     icon = "activity",
 })
 
-local ParaSection = ParaTab:CreateSection("Paragraph")
+local PlayerSection = ParaTab:CreateSection("Jogador")
+local ServerSection = ParaTab:CreateSection("Servidor")
 
 -- // Estado
 local fps = 60
@@ -984,101 +1651,100 @@ local getDevice = function()
     return "PC"
 end
 
+-- // Troca só o que mudou (UpdateInfo refaz a linha)
+local last = {}
+
+local setRow = function(card, index, value, max)
+    local stamp = tostring(value) .. "/" .. tostring(max)
+
+    last[card] = last[card] or {}
+
+    if last[card][index] == stamp then
+        return
+    end
+
+    last[card][index] = stamp
+
+    if max then
+        card:UpdateInfo(index, { value = value, max = max })
+    else
+        card:UpdateInfo(index, value)
+    end
+end
+
 -- // Player Card
-local getPlayerStatus = function()
-    local humanoid = getHumanoid()
-    local root = getRoot()
-    local position = root and root.Position or Vector3.zero
-    local level = getLeaderstat(player, "Level", "Lv", "Nivel") or 0
-    local rank = getLeaderstat(player, "Rank") or "Player"
-
-    return {
-        { name = "Health", value = humanoid and math.floor(humanoid.Health) or 0, max = humanoid and math.floor(humanoid.MaxHealth) or 100 },
-        { name = "Level", value = level },
-        { name = "Rank", value = tostring(rank) },
-        { name = "Nome", value = player.Name },
-        { name = "Display", value = player.DisplayName },
-        { name = "UserId", value = player.UserId },
-        { name = "Conta", value = player.AccountAge .. " dias" },
-        { name = "Time", value = player.Team and player.Team.Name or "Nenhum" },
-        { name = "Velocidade", value = humanoid and math.floor(humanoid.WalkSpeed) or 0 },
-        { name = "Pulo", value = humanoid and math.floor(humanoid.JumpPower) or 0 },
-        { name = "Posição", value = string.format("%d, %d, %d", position.X, position.Y, position.Z) },
-        { name = "Dispositivo", value = getDevice() },
-        { name = "FPS", value = fps },
-        { name = "Ping", value = getPing() },
-    }
-end
-
-local getPlayerCorners = function()
-    local level = getLeaderstat(player, "Level", "Lv", "Nivel") or 0
-
-    return {
-        topLeft = player.DisplayName,
-        topRight = "Lv. " .. tostring(level),
-        bottomLeft = player.Character and "Online" or "Carregando",
-        bottomRight = player.MembershipType == Enum.MembershipType.Premium and "Premium" or "Free",
-    }
-end
-
-local playerCard = ParaSection:CreateParagraph({
-    title = "Player Card",
-    description = "Live preview",
-    hologram = {
-        target = player.UserId,
-        type = "character",
-        rotate = true,
-        speed = 40,
-        corners = getPlayerCorners(),
+local playerCard = PlayerSection:CreateParagraph({
+    title = player.DisplayName .. " (@" .. player.Name .. ")",
+    tag = "PLAYER",
+    description = "Live status",
+    rule = true,
+    info = {
+        { type = "header", text = "Personagem" },                       -- 1
+        { label = "Health", value = 0, max = 100, color = "green" },    -- 2
+        { label = "Level", value = 0, inline = true },                  -- 3
+        { label = "Rank", value = "Player", inline = true },            -- 4
+        { label = "Velocidade", value = 0, inline = true },             -- 5
+        { label = "Pulo", value = 0, inline = true },                   -- 6
+        { label = "Posição", value = "0, 0, 0", inline = true },        -- 7
+        { type = "divider" },                                           -- 8
+        { type = "header", text = "Conta" },                            -- 9
+        { label = "UserId", value = player.UserId, inline = true },     -- 10
+        { label = "Conta", value = player.AccountAge .. " dias", inline = true }, -- 11
+        { label = "Dispositivo", value = getDevice(), inline = true },  -- 12
+        { label = "FPS", value = 0, inline = true },                    -- 13
+        { label = "Ping", value = 0, inline = true },                   -- 14
+        {
+            type = "badges",                                            -- 15
+            items = {
+                {
+                    text = player.MembershipType == Enum.MembershipType.Premium and "Premium" or "Free",
+                    color = player.MembershipType == Enum.MembershipType.Premium and "yellow" or "gray",
+                },
+            },
+        },
     },
-    status = getPlayerStatus(),
-    callback = function(page)
-        print("Player Card:", page)
-    end,
 })
 
 -- // Servidor
-local getServerStatus = function()
-    local jobId = game.JobId ~= "" and game.JobId:sub(1, 18) or "Studio"
-    local serverType = "Público"
-
-    if game.PrivateServerId ~= "" then
-        serverType = game.PrivateServerOwnerId ~= 0 and "VIP" or "Reservado"
-    end
-
-    return {
-        { name = "Jogo", value = gameName },
-        { name = "Jogadores", value = #Players:GetPlayers(), max = Players.MaxPlayers },
-        { name = "Tipo", value = serverType },
-        { name = "Tempo ativo", value = formatTime(workspace.DistributedGameTime) },
-        { name = "Hora", value = os.date("%H:%M:%S") },
-        { name = "Ping", value = getPing() },
-        { name = "FPS", value = fps },
-        { name = "PlaceId", value = game.PlaceId },
-        { name = "JobId", value = jobId },
-        { name = "Versão", value = game.PlaceVersion },
-    }
-end
-
-local serverCard = ParaSection:CreateParagraph({
+local serverCard = ServerSection:CreateParagraph({
     title = "Servidor",
+    tag = "INFO",
     description = "Informações do servidor",
-    status = getServerStatus(),
-})
-
--- // Jogador
-local playerRow = ParaSection:CreateParagraph({
-    title = player.DisplayName .. " (@" .. player.Name .. ")",
-    description = "Carregando...",
-    thumbnail = player.UserId,
+    rule = true,
+    info = {
+        { label = "Jogo", value = gameName, inline = true },                           -- 1
+        { label = "Jogadores", value = 1, max = Players.MaxPlayers, color = "blue" },  -- 2
+        { label = "Tempo ativo", value = "00:00:00", inline = true },                  -- 3
+        { label = "Hora", value = os.date("%H:%M:%S"), inline = true },                -- 4
+        { label = "Ping", value = 0, inline = true },                                  -- 5
+        { label = "FPS", value = 0, inline = true },                                   -- 6
+        { label = "PlaceId", value = game.PlaceId, inline = true },                    -- 7
+        { label = "Versão", value = game.PlaceVersion, inline = true },                -- 8
+    },
 })
 
 -- // Atualização
 local refresh = function()
-    playerCard:SetStatus(getPlayerStatus())
-    playerCard:SetCorners(getPlayerCorners())
-    serverCard:SetStatus(getServerStatus())
-    playerRow:SetDescription(player.Character and "Online" or "Sem personagem")
+    local humanoid = getHumanoid()
+    local root = getRoot()
+    local position = root and root.Position or Vector3.zero
+
+    playerCard:SetTag(player.Character and "ONLINE" or "CARREGANDO")
+
+    setRow(playerCard, 2, humanoid and math.floor(humanoid.Health) or 0, humanoid and math.floor(humanoid.MaxHealth) or 100)
+    setRow(playerCard, 3, getLeaderstat(player, "Level", "Lv", "Nivel") or 0)
+    setRow(playerCard, 4, tostring(getLeaderstat(player, "Rank") or "Player"))
+    setRow(playerCard, 5, humanoid and math.floor(humanoid.WalkSpeed) or 0)
+    setRow(playerCard, 6, humanoid and math.floor(humanoid.JumpPower) or 0)
+    setRow(playerCard, 7, string.format("%d, %d, %d", position.X, position.Y, position.Z))
+    setRow(playerCard, 13, fps)
+    setRow(playerCard, 14, getPing())
+
+    setRow(serverCard, 2, #Players:GetPlayers(), Players.MaxPlayers)
+    setRow(serverCard, 3, formatTime(workspace.DistributedGameTime))
+    setRow(serverCard, 4, os.date("%H:%M:%S"))
+    setRow(serverCard, 5, getPing())
+    setRow(serverCard, 6, fps)
 end
 
 -- // Loop
@@ -1111,20 +1777,20 @@ getgenv().StatusUnload = function()
 end
 ```
 
-> O `StatusUnload` é chamado automaticamente quando a feature é descarregada (veja a Features API). Isso desconecta o loop e evita lag depois de fechar o hub.
+> O `StatusUnload` é chamado automaticamente quando a feature `Status` é descarregada (veja a seção 8). Isso desconecta o loop e evita lag depois de fechar o hub.
 
-> Como `SetStatus` mantém os mesmos nomes na mesma ordem, o loop só troca os valores. O scroll da lista não volta pro topo.
+> As duas sections da tab aparecem lado a lado. Se fosse só uma, ela ocuparia a largura toda.
 
 ---
 
-## 6. Referência rápida
+## 12. Referência rápida
 
 ```lua
 -- // Window
 local Window = Librarys:CreateWindow({
     Title = "Hub",
     SubTitle = "by x",
-    Size = UDim2.fromOffset(580, 350),
+    Size = UDim2.fromOffset(620, 350),
     MinimizeKey = Enum.KeyCode.RightShift,
 })
 
@@ -1133,6 +1799,7 @@ local Tab = Window:CreateTab({
     tab = "Nome",
     section = "Grupo",
     icon = "icone",
+    layout = "Default",
 })
 
 local Section = Tab:CreateSection("Titulo")
@@ -1143,12 +1810,14 @@ local Section = Tab:CreateSection("Titulo")
 Section:CreateToggle({
     title = "X",
     default = false,
+    keybind = Enum.KeyCode.G,
     callback = function(state)
     end,
 })
 
 Section:CreateButton({
     title = "X",
+    size = "default",
     callback = function()
     end,
 })
@@ -1170,6 +1839,15 @@ Section:CreateDropdown({
     end,
 })
 
+Section:CreateDropdown({
+    title = "X",
+    values = { "A", "B", "C" },
+    default = { "A" },
+    multi = true,
+    callback = function(lista)
+    end,
+})
+
 Section:CreateColorPicker({
     title = "X",
     default = Color3.new(1, 1, 1),
@@ -1177,43 +1855,44 @@ Section:CreateColorPicker({
     end,
 })
 
-Section:CreateParagraph({
-    title = "X",
-    description = "Texto",
-})
-
-Section:CreateParagraph({
-    title = "X",
-    thumbnail = player.UserId,
-})
-
 local card = Section:CreateParagraph({
     title = "X",
-    hologram = {
-        target = player.UserId,
-        type = "character",
-        corners = {
-            topLeft = "A",
-            topRight = "B",
-            bottomLeft = "C",
-            bottomRight = "D",
-        },
+    tag = "TAG",
+    description = "Texto",
+    info = {
+        { label = "Level", value = 1, inline = true },
+        { label = "Health", value = 80, max = 100 },
+        { type = "header", text = "Grupo" },
+        { type = "divider" },
+        { type = "badges", items = { "A", "B" } },
     },
-    status = {
-        { name = "Level", value = 1 },
-        { name = "Health", value = 80, max = 100 },
-    },
-    callback = function(page)
-    end,
 })
 
-card:SetStat("Level", 2)
-card:SetStatus({ { name = "Level", value = 2 } })
-card:SetCorner("topRight", "Z")
-card:SetTarget(player.UserId, "character")
-card:SetPage("status")
+card:UpdateInfo(1, 2)
+card:SetDescription("Novo")
+card:SetTag("OK")
+```
 
-Section:CreateElement("NomeRegistrado", {
-    text = "X",
-})
+```lua
+-- // Métodos mais usados dos elements
+toggle:Set(true)           toggle:Get()
+slider:Set(50)             slider:Get()
+dropdown:Set("A")          dropdown:Get()
+picker:Set(Color3.new())   picker:Get()
+button:Fire()              button:SetLoading(true)
+```
+
+```lua
+-- // Tema, saves, idioma e features
+Window:SetTheme("Blue")
+Window.Save:Set("chave", valor)
+Window:SetLanguage("pt")
+Window:LoadFeature("Status")
+Window:Notify({ Title = "Hub", Description = "Pronto", Duration = 5 })
+
+-- // Element próprio
+Window.Elements.Register("Nome", function(section, options)
+    return {}
+end)
+Section:CreateElement("Nome", { title = "X" })
 ```
