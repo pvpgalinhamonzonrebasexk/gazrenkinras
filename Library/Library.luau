@@ -111,6 +111,7 @@ local Config = {
     RestoreFires = true,
     ThemePrefetch = true,
     ThemePrefetchLimit = 24,
+    ThemeText = false,
     SectionLayout = "Default",
     ColumnGap = 8,
     ColumnMinWidth = 170,
@@ -2018,10 +2019,12 @@ local Theme = {
     TabInactive = Color3.fromRGB(145, 145, 145),
     TabHover = Color3.fromRGB(200, 200, 200),
     GradientTop = Color3.fromRGB(38, 38, 38),
-    GradientBottom = Color3.fromRGB(25, 25, 25)
+    GradientBottom = Color3.fromRGB(25, 25, 25),
+    Name = Color3.fromRGB(241, 241, 241)
 }
 
-local ThemeFrameKeys = {
+local ThemeAllowed = {
+    Active = true,
     Accent = true,
     Field = true,
     Border = true,
@@ -2033,13 +2036,19 @@ local ThemeFrameKeys = {
     GradientBottom = true
 }
 
+if Config.ThemeText then
+    for _, Key in ipairs({ "Inactive", "Dim", "Subtitle", "Placeholder", "Text", "TabActive", "TabInactive", "TabHover" }) do
+        ThemeAllowed[Key] = true
+    end
+end
+
 local DefaultTheme = {}
 local ThemeKeys = {}
 
 for Key, Color in pairs(Theme) do
     DefaultTheme[Key] = Color
 
-    if ThemeFrameKeys[Key] then
+    if ThemeAllowed[Key] then
         table.insert(ThemeKeys, Key)
     end
 end
@@ -2100,7 +2109,7 @@ local function BuildPalette(Colors)
     local Used = { [Pack(Color3.fromRGB(0, 0, 0))] = true }
 
     for Key, Color in pairs(DefaultTheme) do
-        if not ThemeFrameKeys[Key] then
+        if not ThemeAllowed[Key] then
             Used[Pack(Color)] = true
         end
     end
@@ -4834,7 +4843,7 @@ function Windows:_CreatePalette(Name, IconName, Side)
     end))
 
     table.insert(self.Connections, Palette.Close.MouseEnter:Connect(function()
-        Util.Tween(Palette.CloseIcon, Config.TweenInfo, { ImageColor3 = Theme.Active })
+        Util.Tween(Palette.CloseIcon, Config.TweenInfo, { ImageColor3 = Theme.Name })
     end))
 
     table.insert(self.Connections, Palette.Close.MouseLeave:Connect(function()
@@ -5184,7 +5193,7 @@ function Windows:_CreateSearchRow(Order, Data)
         Position = UDim2.new(0, 32, 0, 0),
         BackgroundTransparency = 1,
         Text = Data.Name,
-        TextColor3 = Theme.Active,
+        TextColor3 = Theme.Name,
         TextSize = 13,
         Font = Windows.Font,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -5375,7 +5384,7 @@ function Windows:_BindSettings()
     end))
 
     table.insert(self.Connections, self.SettingsButton.MouseEnter:Connect(function()
-        Util.Tween(self.SettingsButton, Config.TweenInfo, { ImageColor3 = Theme.Active })
+        Util.Tween(self.SettingsButton, Config.TweenInfo, { ImageColor3 = Theme.Name })
     end))
 
     table.insert(self.Connections, self.SettingsButton.MouseLeave:Connect(function()
@@ -6086,7 +6095,7 @@ function Windows:_CreateTabSection(Tab, Name)
         Size = UDim2.new(0, 0, 1, 0),
         BackgroundTransparency = 1,
         Text = Name,
-        TextColor3 = Theme.Active,
+        TextColor3 = Theme.Name,
         TextSize = 12,
         Font = Enum.Font.SourceSansBold,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -6127,7 +6136,7 @@ function Windows:_SetBreadcrumb(Items)
             Text = Locale.Translate(tostring(Text)),
             TextSize = 14,
             Font = IsLast and Enum.Font.SourceSansBold or Enum.Font.SourceSans,
-            TextColor3 = IsLast and Theme.Active or Theme.Inactive,
+            TextColor3 = IsLast and Theme.Name or Theme.Inactive,
             LayoutOrder = Index * 2 - 1
         }, self.Breadcrumb)
 
