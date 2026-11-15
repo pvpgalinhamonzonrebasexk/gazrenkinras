@@ -1132,11 +1132,11 @@ end)
 
 ### 4.7 Hologram
 
-Preview de ESP em forma de holograma: um feixe de luz reto para cima, uma base projetora e um boneco **R6 inteiro** flutuando em cima dela. Sobre o boneco aparece o ESP (box, barra de vida, nome, distância, tool, items, flags, skeleton, tracer e chams).
+Preview em 3D dentro do painel. Mostra o **personagem de um jogador** (o seu ou o de outro), um **modelo**, uma **tool**, um **mapa** ou um **material**. Também mostra **imagens**: id de item, link, thumbnail, textura e a foto do avatar.
 
-Não é só visual: o holograma tem **API de atualização em tempo real**. Ele pode seguir um jogador de verdade ou receber os dados por código, e cada parte do ESP liga e desliga na hora. Não tem auto save.
+O boneco gira sozinho e acompanha em tempo real as poses e animações do original. Dá para arrastar para girar e usar a rodinha para dar zoom. O título e a descrição ficam logo abaixo da imagem, e a descrição quebra de linha quando é grande. Não tem auto save.
 
-É um preview desenhado dentro do painel. Ele mostra como o ESP ficaria, mas não desenha nada no mundo do jogo.
+O holograma é uma **cópia** desenhada dentro do painel. Ele não mexe em nada do jogo.
 
 Funciona em PC e celular.
 
@@ -1152,270 +1152,568 @@ local HoloTab = Window:CreateTab({
 
 local HoloSection = HoloTab:CreateSection("Hologram")
 
--- // Simples (já segue o seu player)
+-- // Vazio (carrega depois com Load)
 local holo = HoloSection:CreateHologram({
-    title = "ESP Preview",
-})
-
--- // Altura e tamanho do boneco
-local holoGrande = HoloSection:CreateHologram({
-    title = "ESP Grande",
-    height = 360,
-    scale = 30,
-})
-
--- // Só preview, sem seguir ninguém
-local holoPreview = HoloSection:CreateHologram({
     title = "Preview",
-    bind = false,
-    data = {
-        Name = "Enemy",
-        Health = 65,
-        MaxHealth = 100,
-        Tool = "AK-47",
-        Items = { "AK-47", "Medkit" },
-        Flags = { "Visible", "Moving" },
-        Distance = 120,
-    },
+    placeholder = "Nenhum item",
 })
 
--- // Com settings, cores e callback
-local holoCompleto = HoloSection:CreateHologram({
-    title = "ESP Completo",
-    animated = true,
-    settings = {
-        Box = true,
-        BoxStyle = "Corner",
-        Skeleton = true,
-        Tracer = true,
-        TracerOrigin = "Bottom",
-    },
-    colors = {
-        Box = Color3.fromRGB(255, 80, 80),
-        Hologram = Color3.fromRGB(255, 120, 120),
-    },
-    callback = function(settings, key, value)
-        print("Mudou:", key, value)
+-- // Seu personagem
+local holoMeu = HoloSection:CreateHologram({
+    player = game.Players.LocalPlayer,
+})
+
+-- // Outro jogador pelo nome
+local holoOutro = HoloSection:CreateHologram({
+    player = "Fulano",
+    height = 220,
+})
+
+-- // Com título e descrição
+local holoInfo = HoloSection:CreateHologram({
+    title = "Meu personagem",
+    description = "Atualiza quando eu renascer",
+    player = game.Players.LocalPlayer,
+})
+
+-- // Modelo, imagem e material
+local holoCarro = HoloSection:CreateHologram({ target = workspace.Car })
+local holoItem = HoloSection:CreateHologram({ target = 123456789 })
+local holoMaterial = HoloSection:CreateHologram({ target = Enum.Material.Neon })
+```
+
+Cada exemplo acima é independente. Criar outro Hologram com o mesmo título na mesma section substitui o anterior (veja 4.0), então use títulos diferentes quando quiser vários na mesma section.
+
+O alvo pode vir em qualquer uma destas opções: `target`, `item`, `map`, `player`, `source`, `icon`, `image` ou `id` (também com a primeira letra maiúscula). Sem alvo, o card mostra o `placeholder`.
+
+#### 4.7.2 Opções
+
+| Opção | Tipo | Padrão | Descrição |
+|-------|------|--------|-----------|
+| `target` | qualquer | nenhum | O que mostrar (veja 4.7.3) |
+| `list` | table | nenhum | Lista de alvos (veja 4.7.8). Também `List`, `items`, `Items` |
+| `start` | number | `1` | Posição inicial da lista (também `Start`) |
+| `title` | string | automático | Título (também `Title`) |
+| `description` | string | automático | Descrição (também `desc`, `Description`) |
+| `placeholder` | string | `"No item loaded"` | Texto quando não há nada carregado (também `Placeholder`) |
+| `height` | number | `180` | Altura da área da imagem, de `90` a `500` (também `Height`). O título e a descrição ficam embaixo e o card cresce |
+| `view` | string | `"Auto"` | `"Auto"`, `"Hologram"` ou `"Image"` (veja 4.7.3) |
+| `style` | string | automático | Tipo da imagem: `"Asset"`, `"Avatar"`, `"bust"`... (veja 4.7.6) |
+| `follow` | boolean | `true` | Recarrega o personagem quando o jogador renasce (veja 4.7.4) |
+| `spin` | boolean | `true` | Gira sozinho |
+| `spinSpeed` | number | `30` | Graus por segundo |
+| `draggable` | boolean | `true` | Arrastar gira e a rodinha dá zoom |
+| `zoom` | number | `1` | Zoom inicial, de `0.25` a `3` |
+| `yaw` | number | `0` | Giro inicial, em graus |
+| `pitch` | number | `20` | Inclinação inicial, de `-85` a `85` |
+| `tint` | boolean | `false` | Pinta o modelo com efeito de holograma (veja 4.7.10) |
+| `color` | Color3 | `RGB(110, 190, 255)` | Cor do holograma quando `tint` está ligado |
+| `live` | boolean | `true` | Acompanha o original em tempo real |
+| `liveRate` | number | automático | Atualizações por segundo (veja 4.7.10) |
+| `maxParts` | number | `2500` | Limite de parts copiadas |
+| `skipInvisible` | boolean | `true` | Ignora parts totalmente transparentes |
+| `excludePlayers` | boolean | `true` | Em mapas, ignora os personagens dos jogadores |
+| `channel` | string | `"ColorMap"` | Textura lida de um `SurfaceAppearance` (veja 4.7.6) |
+| `fetchInfo` | boolean | `true` | Busca o nome e a descrição de itens (veja 4.7.6) |
+| `visible` | boolean | `true` | Mostra ou esconde o card (também `Visible`) |
+| `callback` | function | nenhum | Chamado quando algo termina de carregar (veja 4.7.11). Também `Callback`, `onLoaded`, `OnLoaded` |
+| `onFail` | function(mensagem) | nenhum | Chamado quando falha. Também `OnFail`, `onError`, `OnError` |
+| `onClear` | function() | nenhum | Chamado quando o holograma é limpo (também `OnClear`) |
+
+#### 4.7.3 O que o holograma aceita
+
+O método `Load(alvo)` escolhe sozinho como mostrar, pelo tipo do alvo:
+
+| Você passa | O que aparece |
+|------------|---------------|
+| `Player`, como `game.Players.LocalPlayer` | Holograma do personagem do jogador |
+| Personagem de um jogador ou o `Humanoid` dele | Holograma do jogador dono do personagem |
+| Texto com nome, display name ou `"@usuario"` | Holograma do jogador que está no servidor. Se ele não estiver, a foto do avatar pelo nome |
+| `Model`, `BasePart`, `Tool`, `MeshPart` | Holograma do modelo |
+| `Folder`, `Workspace`, `Terrain` | Holograma do mapa |
+| Caminho em texto, como `"Workspace.Map.Car"` | Procura a partir de `game` e mostra pelo tipo do que achou |
+| `Enum.Material.Neon` e outros | Esfera com o material |
+| Id numérico, `"rbxassetid://id"`, link, `rbxthumb://` ou `"estilo:id"` | Imagem (veja 4.7.6) |
+| `Decal`, `Texture`, `ImageLabel`, `ImageButton`, `SurfaceAppearance`, `Shirt`, `Pants`, `ShirtGraphic` | Imagem da textura |
+| `ObjectValue` | O que estiver em `Value` |
+| `IntValue`, `NumberValue`, `StringValue` | O valor, lido como acima. Vazio ou `0` mostra erro |
+| function | É chamada na hora e o retorno é lido como acima |
+
+Um item de **lista** também pode ser uma tabela com `target`, `title`, `description`, `view` e `style` (veja 4.7.8).
+
+**`view`** muda o jeito de mostrar:
+
+| `view` | Efeito |
+|--------|--------|
+| `"Auto"` | Escolhe pelo tipo do alvo (padrão) |
+| `"Hologram"` (`"holo"`, `"model"`) | Só aceita alvos em 3D. Uma imagem mostra o erro `target cannot be shown as hologram.` |
+| `"Image"` (`"icon"`, `"thumbnail"`, `"thumb"`, `"texture"`) | Força a imagem. Jogador vira foto do avatar. Instância vira textura ou ícone |
+
+```lua
+-- // Trocar o modo
+holo:SetView("Image")
+holo:SetView("Hologram")
+holo:SetView(nil)
+```
+
+#### 4.7.4 Mostrar jogadores (o seu e outros)
+
+```lua
+-- // Meu personagem
+holo:Load(game.Players.LocalPlayer)
+
+-- // Meu personagem direto
+holo:Load(game.Players.LocalPlayer.Character)
+
+-- // Outro jogador pelo objeto
+holo:Load(game.Players:FindFirstChild("Fulano"))
+
+-- // Outro jogador pelo nome, display name ou @usuario
+holo:Load("Fulano")
+holo:Load("@fulano")
+
+-- // Foto do avatar em vez do boneco
+holo:SetView("Image")
+holo:SetStyle("Avatar")
+holo:Load(game.Players.LocalPlayer)
+```
+
+- O título automático é o **display name** e a descrição é o **@usuario**.
+- O holograma espera o personagem carregar (até 10 segundos) e a aparência dele (até 5 segundos).
+- O nome em texto aceita parte do começo do nome, com pelo menos 3 letras.
+- Com `follow = true` (padrão), o holograma recarrega sozinho quando o jogador renasce. `holo:StopFollow()` para de recarregar e `holo:GetPlayer()` retorna o jogador seguido.
+- Acessórios e roupas aparecem. Scripts, sons, GUIs, joints e o `Humanoid` não vão para a cópia.
+- Se o nome não for de ninguém no servidor, o holograma tenta a foto do avatar pelo nome do usuário. Se o usuário também não existir, aparece `target not found.`
+- Se o jogador não tiver personagem depois da espera, aparece `character not found.`
+- Para ver outro jogador **e** o seu ao mesmo tempo, crie dois hologramas.
+
+#### 4.7.5 Mostrar modelos, tools e mapas
+
+```lua
+-- // Modelo pelo objeto
+holo:Load(workspace.Car)
+
+-- // Caminho em texto
+holo:Load("Workspace.Map.Car")
+
+-- // Tool da mochila
+holo:Load(game.Players.LocalPlayer.Backpack:FindFirstChildOfClass("Tool"))
+
+-- // Mapa
+holo:Load(workspace.Map)
+```
+
+- Todas as `BasePart` viram cópias fixas dentro do holograma. Uma `Tool` usa a `Handle` como centro.
+- O holograma acompanha o original em tempo real: posição, tamanho, transparência, cor e material. Parts que entram ou saem do original entram e saem da cópia.
+- Em **mapas** (`Folder`, `Workspace`), os personagens dos jogadores ficam de fora (`excludePlayers`). O `Terrain` não é desenhado, só as parts.
+- Se passar de `maxParts`, o holograma mostra o limite e avisa `has too many parts`. Modelo sem nenhuma part mostra `nothing to display.`
+
+#### 4.7.6 Mostrar imagens
+
+```lua
+-- // Id de item
+holo:Load(123456789)
+holo:Load("123456789")
+holo:Load("rbxassetid://123456789")
+
+-- // Estilo na hora de carregar
+holo:SetStyle("bust")
+holo:Load(1)
+
+-- // Estilo dentro do texto
+holo:Load("bust:1")
+holo:Load("badge:2124475411")
+
+-- // Tabela
+holo:Load({ id = 1, style = "headshot" })
+holo:Load({ userId = 1 })
+
+-- // Link do site
+holo:Load("https://www.roblox.com/catalog/123456789/Item")
+
+-- // Textura de uma instância
+holo:Load(workspace.Part.Decal)
+```
+
+**Estilos** (`style` ou o texto antes dos dois-pontos):
+
+| Estilo | Tipo de imagem | Observação |
+|--------|----------------|------------|
+| `"Asset"`, `"item"` | Item | Padrão para ids soltos |
+| `"Avatar"`, `"full"` | Avatar de corpo inteiro | |
+| `"user"`, `"headshot"`, `"AvatarHeadShot"` | Foto do rosto | Padrão para jogadores e `userId` |
+| `"bust"`, `"AvatarBust"` | Busto | |
+| `"pass"`, `"gamepass"` | Game pass | |
+| `"badge"`, `"BadgeIcon"` | Ícone de badge | |
+| `"bundle"`, `"BundleThumbnail"` | Bundle | |
+| `"group"`, `"GroupIcon"` | Ícone de grupo | |
+| `"outfit"` | Outfit | |
+
+**Links reconhecidos:** `/catalog/id` e `/library/id` (item), `/bundles/id`, `/game-pass/id`, `/users/id` (foto do rosto), `/badges/id`, `/groups/id`, `/communities/id` e `?id=` (item). Outro link mostra `unsupported link.`
+
+- A imagem mantém a proporção original e preenche a altura da área, com uma margem pequena em cima e embaixo.
+- Se a thumbnail de um item não carregar em 4 segundos, o holograma tenta `rbxassetid://`. Passados 8 segundos sem carregar, mostra `Nothing to display`.
+- Com `fetchInfo = true`, o título e a descrição de itens, game passes e bundles vêm do próprio item. Título e descrição que você definir têm prioridade.
+- `channel` escolhe a textura de um `SurfaceAppearance`: `"ColorMap"`, `"NormalMap"`, `"MetalnessMap"` ou `"RoughnessMap"`.
+- Texturas de instâncias acompanham a propriedade: se o `Image` ou a `Texture` mudar no jogo, a imagem muda junto.
+- Com `view = "Image"`, uma instância usa o attribute `AssetId`, `ImageId`, `Image`, `Icon`, `Thumbnail`, `TextureId` ou `Id`, ou a primeira textura que achar dentro dela.
+
+#### 4.7.7 Mostrar materiais
+
+```lua
+-- // Material
+holo:Load(Enum.Material.Neon)
+holo:Load(Enum.Material.Glass)
+```
+
+Mostra uma esfera cinza com o material. O título automático é o nome do material, e `tint` pinta a esfera com a cor do holograma.
+
+#### 4.7.8 Lista de alvos
+
+Uma lista deixa o mesmo card trocar entre vários alvos.
+
+```lua
+-- // Lista simples
+holo:LoadList({
+    game.Players.LocalPlayer,
+    "Fulano",
+    "Ciclano",
+})
+
+-- // Lista com título, descrição, modo e estilo por item
+holo:LoadList({
+    { target = workspace.Car, title = "Carro", description = "Modelo do carro" },
+    { target = 123456789, title = "Espada", view = "Image" },
+    { target = 1, title = "Busto", style = "bust" },
+}, 2)
+
+-- // Navegar
+holo:Next()
+holo:Prev()
+holo:Select(1)
+
+print(holo:GetIndex(), holo:GetCount())
+```
+
+- `Next` e `Prev` voltam ao começo ou ao fim quando passam da lista.
+- `Load` e `Clear` esvaziam a lista.
+- O segundo valor de `LoadList` é a posição inicial. Sem ele começa no `1`.
+
+```lua
+-- // Botões de navegação
+HoloSection:CreateButton({
+    title = "Anterior",
+    callback = function()
+        holo:Prev()
+    end,
+})
+
+HoloSection:CreateButton({
+    title = "Próximo",
+    callback = function()
+        holo:Next()
     end,
 })
 ```
 
-| Opção | Tipo | Padrão | Descrição |
-|-------|------|--------|-----------|
-| `title` | string | `"Hologram"` | Título no topo do card (também `Name`) |
-| `height` | number | `290` | Altura do card, de `230` a `420` |
-| `scale` | number | automático | Tamanho do boneco, de `10` a `40`. Sem valor, é calculado pela altura |
-| `animated` | boolean | `true` | Boneco flutuando e linha de scan descendo |
-| `bind` | Player, function, boolean | seu player | O que o holograma segue. `false` deixa só como preview. Veja 4.7.3 |
-| `settings` | table | veja 4.7.2 | Partes do ESP ligadas ou desligadas |
-| `colors` | table | veja 4.7.2 | Cores do ESP e do holograma |
-| `data` | table | demo | Dados iniciais (veja 4.7.4) |
-| `callback` | function(settings, key, value) | nenhum | Chamado quando um setting muda (também `Callback`) |
+#### 4.7.9 Título e descrição
 
-O `callback` recebe uma **cópia** de todos os settings, a chave que mudou e o novo valor. Ele não é chamado ao criar.
+O título e a descrição ficam **logo abaixo da imagem**. O título ocupa uma linha e corta com `...` se passar da largura. A descrição quebra de linha e o card cresce para baixo. Sem título e sem descrição, o rodapé some.
 
-O card mostra no topo direito **LIVE** (verde) quando está seguindo alguém e **PREVIEW** quando não está.
+O texto mostrado vem de três fontes, nesta ordem de prioridade:
 
-#### 4.7.2 Settings e cores
-
-**Settings** (`holo:Set(chave, valor)`)
-
-| Chave | Tipo | Padrão | O que mostra |
-|-------|------|--------|--------------|
-| `Box` | boolean | `true` | Caixa em volta do boneco |
-| `BoxStyle` | string | `"Full"` | `"Full"` (caixa inteira) ou `"Corner"` (só os cantos) |
-| `BoxFill` | boolean | `false` | Preenchimento da caixa |
-| `Name` | boolean | `true` | Nome em cima da caixa |
-| `Health` | boolean | `true` | Barra de vida à esquerda |
-| `HealthText` | boolean | `true` | Número da vida ao lado da barra |
-| `Armor` | boolean | `false` | Barra de armor à direita (só aparece se o `MaxArmor` for maior que 0) |
-| `Distance` | boolean | `true` | Distância embaixo da caixa |
-| `Tool` | boolean | `true` | Tool na mão do boneco e o nome dela embaixo da caixa |
-| `Items` | boolean | `true` | Lista de items à esquerda (até 5). A tool equipada fica destacada |
-| `Flags` | boolean | `true` | Lista de flags à direita (até 6) |
-| `Skeleton` | boolean | `false` | Linhas do esqueleto |
-| `HeadDot` | boolean | `false` | Ponto na cabeça |
-| `Tracer` | boolean | `false` | Linha até os pés do boneco |
-| `TracerOrigin` | string | `"Bottom"` | De onde a linha sai: `"Bottom"`, `"Center"` ou `"Top"` |
-| `Chams` | boolean | `false` | Boneco preenchido com a cor de chams |
-
-Chave ou valor inválido mostra uma notificação e nada muda.
-
-**Cores** (`holo:SetColor(chave, cor)`)
-
-| Chave | Padrão | Muda |
-|-------|--------|------|
-| `Hologram` | `RGB(110, 190, 255)` | Feixe, base, scan e corpo do holograma |
-| `Box` | branco | Caixa |
-| `BoxFill` | branco | Preenchimento da caixa |
-| `Name` | branco | Nome |
-| `Distance` | `RGB(200, 200, 200)` | Distância |
-| `Tool` | `RGB(255, 210, 90)` | Tool na mão, nome da tool e tool equipada na lista |
-| `Items` | `RGB(190, 190, 190)` | Lista de items |
-| `Flags` | branco | Flags |
-| `Skeleton` | branco | Esqueleto |
-| `HeadDot` | `RGB(255, 80, 80)` | Ponto na cabeça |
-| `Tracer` | branco | Linha do tracer |
-| `Chams` | `RGB(170, 90, 255)` | Preenchimento dos chams |
-| `ChamsOutline` | branco | Contorno dos chams |
-| `HealthHigh` | `RGB(80, 255, 120)` | Barra de vida cheia |
-| `HealthLow` | `RGB(255, 70, 70)` | Barra de vida quase vazia (a cor passa de uma para a outra) |
-| `Armor` | `RGB(80, 160, 255)` | Barra de armor |
-
-O card (fundo, borda e título) acompanha o tema do painel. As cores do ESP são só dessas chaves.
-
-#### 4.7.3 Seguir um jogador ou uma função (Bind)
-
-Com `bind` livre (padrão), o holograma segue o **seu player** e atualiza a cada 0,1 segundo.
+| Ordem | Fonte | Exemplo |
+|-------|-------|---------|
+| 1 | Item da lista ou `Load(alvo, titulo, descricao)` | `{ target = x, title = "Carro" }` |
+| 2 | Opção ou método manual | `title = "Preview"` ou `SetTitle` |
+| 3 | Automático | Jogador: display name e `@usuario`. Modelo: nome. Item: nome e descrição do item |
 
 ```lua
--- // Seguir um jogador
-holo:Bind(game.Players.LocalPlayer)
-holo:Bind(game.Players:FindFirstChild("Fulano"))
+-- // Junto com o Load
+holo:Load(workspace.Car, "Carro", "Modelo do carro")
+holo:Load(workspace.Car, { title = "Carro", description = "Modelo do carro" })
 
--- // Seguir uma função (retorna uma tabela igual a Update)
-holo:Bind(function()
-    local humanoid = boss:FindFirstChildOfClass("Humanoid")
+-- // Manual
+holo:SetTitle("Novo título")
+holo:SetDescription("Texto grande que quebra de linha sozinho e empurra o card para baixo")
+holo:SetInfo("Título", "Descrição")
 
-    return {
-        Name = "Boss",
-        Health = humanoid.Health,
-        MaxHealth = humanoid.MaxHealth,
-        Flags = { "Boss" },
-    }
-end)
-
--- // Parar de seguir
-holo:Unbind()
+-- // Voltar ao automático
+holo:SetTitle(nil)
+holo:SetDescription(nil)
 ```
 
-O que é lido de um **jogador**:
-
-| Dado | De onde vem |
-|------|-------------|
-| `Name` | `DisplayName` (ou o nome, se estiver vazio) |
-| `Health` e `MaxHealth` | Humanoid do personagem |
-| `Tool` | Tool equipada no personagem |
-| `Items` | Tool equipada e as tools da mochila |
-| `Flags` | `Dead`, `Sitting`, `Air` (no ar) ou `Moving` |
-| `Armor` e `MaxArmor` | Attributes `Armor` e `MaxArmor` do personagem. Sem o attribute, a barra de armor fica escondida |
-| `Distance` | Distância até o seu personagem, para jogadores que não são você |
-
-- Seguindo o **seu próprio player**, a distância seria sempre 0. Por isso `Distance` fica no valor manual (padrão `25`). Troque com `holo:SetDistance(valor)`.
-- Se o jogador seguido sair do jogo, o holograma para de seguir e mostra uma notificação.
-- Se a função der erro, aparece uma notificação (uma vez) e um `warn` com o erro. O holograma continua tentando.
-- `Bind` retorna `true` se deu certo e `false` se o valor não for um Player nem uma função.
-
-#### 4.7.4 Dados
-
-`holo:Update(tabela)` muda vários dados de uma vez. Só o que mudou é redesenhado, e as barras animam.
+#### 4.7.10 Visualização, cor e tempo real
 
 ```lua
-holo:Update({
-    Name = "Enemy",
-    Health = 70,
-    MaxHealth = 100,
-    Armor = 40,
-    MaxArmor = 100,
-    Distance = 80,
-    Tool = "AK-47",
-    Items = { "AK-47", "Medkit", "Grenade" },
-    Flags = { "Visible", "Moving" },
+-- // Girar e zoom
+holo:SetSpin(true)
+holo:SetSpinSpeed(60)
+holo:SetZoom(1.5)
+holo:SetRotation(45, 20)
+
+-- // Efeito de holograma
+holo:SetTint(true)
+holo:SetColor(Color3.fromRGB(255, 120, 120))
+
+-- // Tempo real
+holo:SetLive(true)
+holo:SetLiveRate(15)
+holo:Sync()
+```
+
+- **Girar:** `spin` gira sozinho e pausa enquanto você arrasta.
+- **Arrastar e zoom:** com `draggable`, arrastar gira (esquerda e direita, cima e baixo) e a rodinha muda o zoom de `0.25` a `3`. O zoom também funciona em imagens.
+- **Tint:** pinta todas as parts com material `ForceField` na cor definida. Vale também para parts que entrarem depois.
+- **Tempo real:** o holograma só atualiza com o card visível e em modo 3D. A taxa padrão é `30` por segundo para jogadores, `20` para modelos, `4` para mapas e `10` para o resto. `SetLive(false)` congela a cópia.
+- **Sync:** força uma atualização na hora.
+
+```lua
+-- // Controles por elements
+local ControlSection = HoloTab:CreateSection("Controles")
+
+ControlSection:CreateToggle({
+    title = "Girar",
+    default = true,
+    callback = function(state)
+        holo:SetSpin(state)
+    end,
+})
+
+ControlSection:CreateToggle({
+    title = "Efeito holograma",
+    default = false,
+    callback = function(state)
+        holo:SetTint(state)
+    end,
+})
+
+ControlSection:CreateSlider({
+    title = "Zoom",
+    min = 0.25,
+    max = 3,
+    default = 1,
+    rounding = 2,
+    callback = function(value)
+        holo:SetZoom(value)
+    end,
+})
+
+ControlSection:CreateColorPicker({
+    title = "Cor",
+    default = Color3.fromRGB(110, 190, 255),
+    callback = function(color)
+        holo:SetColor(color)
+    end,
 })
 ```
 
-| Chave | Tipo | Descrição |
-|-------|------|-----------|
-| `Name` | string | Nome mostrado |
-| `Health`, `MaxHealth` | number | Vida atual e máxima |
-| `Armor`, `MaxArmor` | number | Armor atual e máxima. Com `MaxArmor` em 0 a barra some |
-| `Distance` | number | Distância em metros (aparece como `80m`) |
-| `Tool` | string | Tool equipada. Vazio esconde a tool e o nome dela |
-| `Items` | table | Lista de nomes, até 5 |
-| `Flags` | table | Lista de textos, até 6 |
+#### 4.7.11 Callbacks
 
-Chaves que não existem, ou com tipo errado, são ignoradas.
+```lua
+-- // Ao carregar
+local holo = HoloSection:CreateHologram({
+    player = game.Players.LocalPlayer,
+    callback = function(alvo, objeto, holograma, tipo, spec)
+        print("Carregou:", tipo, alvo)
+    end,
+    onFail = function(mensagem)
+        print("Falhou:", mensagem)
+    end,
+    onClear = function()
+        print("Limpou")
+    end,
+})
+```
 
-#### 4.7.5 Exemplo: ESP controlado por elements
+| Callback | Recebe | Quando |
+|----------|--------|--------|
+| `callback` | `alvo, objeto, holograma, tipo, spec` | Cada vez que termina de carregar |
+| `onFail` | `mensagem` | Quando o alvo não pode ser mostrado |
+| `onClear` | nada | Quando o holograma é limpo |
+
+O que o `callback` recebe:
+
+| Valor | Descrição |
+|-------|-----------|
+| `alvo` | O que foi carregado: personagem, modelo, material ou o valor da imagem |
+| `objeto` | A cópia (`Model`) em 3D, ou o `ImageLabel` em imagens |
+| `holograma` | O próprio holograma, para chamar métodos |
+| `tipo` | `"Player"`, `"Model"`, `"Map"`, `"Material"` ou `"Image"` |
+| `spec` | Só em imagens: tabela com `Image`, `Name`, `Description`, `Kind` e `Id` |
+
+Erros dentro de um callback viram notificação e não derrubam o script. Falhas aparecem como notificação `Hologram 'Título': mensagem` (uma vez por mensagem) e também em `warn`. Mensagens comuns:
+
+| Mensagem | Significado |
+|----------|-------------|
+| `target not found.` | O alvo não existe |
+| `player not found.` | Jogador não encontrado |
+| `character not found.` | O jogador não tem personagem |
+| `'Nome' has no image.` | A instância não tem imagem |
+| `'Nome' is empty.` | O `ObjectValue` ou o valor está vazio |
+| `unsupported link.` | Link que o holograma não reconhece |
+| `target cannot be shown as hologram.` | Imagem com `view = "Hologram"` |
+| `nothing to display.` | Modelo sem nenhuma part |
+| `invalid view`, `invalid style`, `invalid channel`, `invalid color` | Valor inválido em um `Set` |
+
+#### 4.7.12 Métodos
+
+**Carregar**
+
+| Método | Descrição |
+|--------|-----------|
+| `Load(alvo, titulo, descricao)` | Carrega o alvo. `Load(nil)` limpa. A descrição e o título são opcionais (também aceita uma tabela `{ title, description }` no lugar do título). Retorna `true` se começou a carregar |
+| `Update(tabela)` | Muda várias opções de uma vez e carrega o alvo ou a lista se vierem. Aceita `title`, `description`, `placeholder`, `channel`, `fetchInfo`, `color`, `tint`, `spin`, `spinSpeed`, `zoom`, `height`, `visible`, `style`, `view` e o alvo (`target`, `player`...) ou `list` |
+| `LoadList(lista, inicio)` | Carrega uma lista de alvos (4.7.8) |
+| `Select(posicao)` | Vai para o item da lista |
+| `Next()` / `Prev()` | Próximo e anterior |
+| `Reload()` | Carrega de novo o alvo atual |
+| `Clear()` | Limpa o holograma e mostra o `placeholder` |
+| `Sync()` | Atualiza a cópia agora |
+| `StopFollow()` | Para de recarregar o personagem quando o jogador renasce |
+
+**Consultar**
+
+| Método | Descrição |
+|--------|-----------|
+| `GetTarget()` | Último alvo pedido |
+| `GetLoaded()` | Instância carregada (personagem, modelo ou textura) |
+| `GetSpec()` | Dados da imagem atual |
+| `GetName()` | Nome automático |
+| `GetKind()` | Tipo carregado (`nil` se vazio) |
+| `GetPlayer()` | Jogador que está sendo seguido |
+| `GetIndex()` / `GetCount()` | Posição atual e tamanho da lista |
+| `IsLoading()` | Retorna se está carregando |
+| `IsDestroyed()` | Retorna se foi destruído |
+
+**Modo e imagem**
+
+| Método | Descrição |
+|--------|-----------|
+| `SetView(valor)` / `GetView()` | Troca e lê o modo. `nil` volta para `"Auto"` |
+| `SetStyle(valor)` / `GetStyle()` | Troca e lê o estilo da imagem. `nil` remove |
+| `SetChannel(valor)` | Troca a textura do `SurfaceAppearance` |
+| `SetFetchInfo(estado)` | Liga ou desliga a busca de nome e descrição |
+
+**Visualização**
+
+| Método | Descrição |
+|--------|-----------|
+| `SetSpin(estado)` / `GetSpin()` | Liga ou desliga o giro |
+| `SetSpinSpeed(valor)` | Graus por segundo |
+| `SetZoom(valor)` / `GetZoom()` | Troca e lê o zoom (`0.25` a `3`) |
+| `SetRotation(yaw, pitch)` | Define o giro e a inclinação |
+| `SetTint(estado)` / `GetTint()` | Liga ou desliga o efeito de holograma |
+| `SetColor(cor)` / `GetColor()` | Troca e lê a cor do holograma |
+| `SetLive(estado)` / `GetLive()` | Liga ou desliga o tempo real |
+| `SetLiveRate(valor)` | Atualizações por segundo |
+| `SetMaxParts(valor)` | Limite de parts |
+| `SetPlaceholder(texto)` | Troca o texto de vazio |
+
+**Texto e card**
+
+| Método | Descrição |
+|--------|-----------|
+| `SetTitle(texto)` / `GetTitle()` | Troca e lê o título. `nil` volta ao automático |
+| `SetDescription(texto)` / `GetDescription()` | Troca e lê a descrição. `nil` volta ao automático |
+| `SetInfo(titulo, descricao)` | Troca os dois de uma vez |
+| `SetHeight(valor)` | Altura da área da imagem (`90` a `500`) |
+| `SetVisible(estado)` | Mostra ou esconde o card |
+| `SetCallback(funcao)` | Troca o `callback` |
+| `SetOnFail(funcao)` / `SetOnClear(funcao)` | Troca o `onFail` e o `onClear` |
+| `Destroy()` | Remove o card e desconecta tudo |
+
+#### 4.7.13 Propriedades
+
+Estas propriedades podem ser lidas e escritas direto no holograma:
+
+```lua
+-- // Propriedades
+holo.Zoom = 2
+holo.Spin = false
+holo.Tint = true
+holo.Title = "Novo título"
+holo.Description = "Nova descrição"
+holo.View = "Image"
+holo.Style = "bust"
+holo.Height = 220
+holo.Visible = true
+holo.Target = game.Players.LocalPlayer
+
+print(holo.Zoom, holo.Target)
+```
+
+| Propriedade | Equivale a |
+|-------------|------------|
+| `Title`, `Description` | `SetTitle` e `SetDescription` |
+| `Target` | `Load` (escrever) e `GetTarget` (ler) |
+| `View`, `Style` | `SetView` e `SetStyle` |
+| `Spin`, `Zoom`, `Tint` | `SetSpin`, `SetZoom` e `SetTint` |
+| `Height`, `Visible` | `SetHeight` e `SetVisible` |
+
+`holo.Frame` e `holo.Instance` devolvem o `Frame` do card.
+
+#### 4.7.14 Exemplo: meu personagem e outros jogadores
 
 ```lua
 -- // Hologram
 local holo = HoloSection:CreateHologram({
-    title = "ESP Preview",
-    height = 300,
+    height = 200,
+    player = game.Players.LocalPlayer,
 })
 
--- // Controles
-local EspSection = HoloTab:CreateSection("ESP")
+-- // Jogadores
+local PlayersSection = HoloTab:CreateSection("Jogadores")
 
-EspSection:CreateToggle({
-    title = "Box",
-    default = true,
-    callback = function(state)
-        holo:Set("Box", state)
+local function nomes()
+    local lista = {}
+
+    for _, player in ipairs(game.Players:GetPlayers()) do
+        lista[#lista + 1] = player.Name
+    end
+
+    return lista
+end
+
+local dropdown = PlayersSection:CreateDropdown({
+    title = "Jogador",
+    values = nomes(),
+    default = game.Players.LocalPlayer.Name,
+    callback = function(nome)
+        holo:Load(nome)
     end,
 })
 
-EspSection:CreateDropdown({
-    title = "Box Style",
-    values = { "Full", "Corner" },
-    default = "Full",
-    callback = function(value)
-        holo:Set("BoxStyle", value)
+PlayersSection:CreateButton({
+    title = "Meu personagem",
+    callback = function()
+        dropdown:Set(game.Players.LocalPlayer.Name)
     end,
 })
 
-EspSection:CreateToggle({
-    title = "Skeleton",
+PlayersSection:CreateButton({
+    title = "Atualizar lista",
+    callback = function()
+        dropdown:SetValues(nomes())
+    end,
+})
+
+-- // Foto do avatar
+PlayersSection:CreateToggle({
+    title = "Mostrar foto",
     default = false,
     callback = function(state)
-        holo:Set("Skeleton", state)
-    end,
-})
-
-EspSection:CreateColorPicker({
-    title = "Box Color",
-    default = Color3.fromRGB(255, 255, 255),
-    callback = function(color)
-        holo:SetColor("Box", color)
+        holo:SetView(state and "Image" or "Auto")
     end,
 })
 ```
 
-#### 4.7.6 Métodos
+#### 4.7.15 Comportamento
 
-| Método | Descrição |
-|--------|-----------|
-| `Bind(fonte)` | Segue um Player ou uma função. `Bind(nil)` ou `Bind(false)` para de seguir. Retorna `true` ou `false` |
-| `Unbind()` | Para de seguir |
-| `GetBound()` | Retorna o que está sendo seguido (`nil` se nada) |
-| `Update(tabela)` | Muda vários dados de uma vez (4.7.4) |
-| `SetName(texto)` | Muda o nome |
-| `SetHealth(valor, max)` | Muda a vida. `max` é opcional |
-| `SetArmor(valor, max)` | Muda a armor. `max` é opcional |
-| `SetDistance(valor)` | Muda a distância |
-| `SetTool(texto)` | Muda a tool |
-| `SetItems(lista)` | Muda a lista de items |
-| `SetFlags(lista)` | Muda a lista de flags |
-| `GetData()` | Retorna uma cópia dos dados mostrados |
-| `Set(chave, valor)` | Muda um setting (4.7.2). Chama o `callback` se mudou |
-| `SetSettings(tabela)` | Muda vários settings de uma vez. Chama o `callback` para cada um que mudou |
-| `Get(chave)` | Retorna o valor de um setting |
-| `GetSettings()` | Retorna uma cópia de todos os settings |
-| `SetColor(chave, cor)` | Muda uma cor |
-| `SetColors(tabela)` | Muda várias cores de uma vez |
-| `GetColor(chave)` | Retorna uma cor |
-| `SetAnimated(estado)` | Liga ou desliga a flutuação e o scan |
-| `SetTitle(texto)` | Troca o título do card |
-| `Destroy()` | Remove o element e desconecta tudo |
-
-#### 4.7.7 Comportamento
-
-- O boneco segue as proporções do R6: cabeça, torso, dois braços e duas pernas.
-- O holograma só gasta processamento quando precisa: o loop dele fica ligado enquanto `animated` for `true` ou enquanto estiver seguindo alguém. Com `animated = false` e sem `Bind`, ele não roda loop nenhum.
-- Trocar a tool ou o nome ao vivo (pelo `Bind` ou por `Update`) atualiza o card sozinho. A lista de items destaca a tool equipada.
-- O `Tracer` sai do ponto de `TracerOrigin` e termina nos pés do boneco.
-- O tamanho do boneco é fixo na criação (`height` e `scale`). Para mudar, destrua e crie de novo.
+- O holograma só gasta processamento com o card visível e com um modelo carregado. Imagens não rodam loop.
+- Carregar um alvo novo cancela o anterior, mesmo que ele ainda esteja carregando.
+- Scripts, sons, GUIs, joints, constraints e `Humanoid` não vão para a cópia.
+- `Update` e os métodos `Set...` podem ser chamados antes do element terminar de carregar: ficam na fila (veja 4.0).
 - Quando a section ou a janela é destruída, o holograma desconecta tudo sozinho.
 
 ---
@@ -2166,15 +2464,18 @@ card:SetTag("OK")
 
 local holo = Section:CreateHologram({
     title = "X",
-    height = 290,
-    bind = false,
-    callback = function(settings, key, value)
+    height = 180,
+    player = game.Players.LocalPlayer,
+    callback = function(alvo, objeto, holograma, tipo)
     end,
 })
 
-holo:Update({ Name = "X", Health = 80, MaxHealth = 100, Tool = "Sword" })
-holo:Set("Box", true)
-holo:Bind(game.Players.LocalPlayer)
+holo:Load("Fulano")
+holo:Load(workspace.Car)
+holo:Load(123456789)
+holo:Load(Enum.Material.Neon)
+holo:LoadList({ "Fulano", workspace.Car }, 1)
+holo:Next()
 ```
 
 ```lua
@@ -2184,9 +2485,12 @@ slider:Set(50)             slider:Get()
 dropdown:Set("A")          dropdown:Get()
 picker:Set(Color3.new())   picker:Get()
 button:Fire()              button:SetLoading(true)
-holo:Set("Box", true)      holo:Get("Box")
-holo:SetColor("Box", color)  holo:Update({ Health = 50 })
-holo:Bind(player)          holo:Unbind()
+holo:Load(alvo)           holo:Clear()
+holo:Next()                holo:Prev()
+holo:SetTitle("X")         holo:SetDescription("Texto")
+holo:SetSpin(true)         holo:SetZoom(1)
+holo:SetTint(true)         holo:SetColor(color)
+holo:SetView("Image")      holo:SetStyle("bust")
 ```
 
 ```lua

@@ -1,8 +1,10 @@
+-- // Services
 local runService = game:GetService("RunService")
 local userInputService = game:GetService("UserInputService")
 local players = game:GetService("Players")
 local marketplaceService = game:GetService("MarketplaceService")
 
+-- // Themes
 local Default = {
     Active = Color3.fromRGB(240, 240, 240),
     Dim = Color3.fromRGB(115, 115, 115),
@@ -72,17 +74,19 @@ local function createColors(panel)
     return colors, watch
 end
 
+-- // Constants
 local NOTIFY_TITLE = "System"
-local HEIGHT_DEFAULT = 190
+local HEIGHT_DEFAULT = 180
 local HEIGHT_MIN = 90
 local HEIGHT_MAX = 500
 local TITLE_H = 16
 local DESC_H = 14
+local STAGE_TOP = 8
+local STAGE_BOTTOM = 4
 local FOOTER_TOP = 2
-local FOOTER_BOTTOM = 8
+local FOOTER_BOTTOM = 6
 local FOOTER_GAP = 2
 local SIDE_PAD = 10
-local IMAGE_FILL = 1
 local VIEW_FOV = 40
 local FIT_MARGIN = 1.02
 local ZOOM_MIN = 0.25
@@ -195,6 +199,7 @@ local STRIP_CLASSES = {
 }
 local infoCache = {}
 
+-- // Utilities
 local function getFonts()
     return FONT_BOLD or Enum.Font.SourceSansSemibold, FONT or Enum.Font.SourceSans
 end
@@ -264,6 +269,7 @@ local function unpackEntry(value)
         pick(value, "view", "View"),
         pick(value, "style", "Style")
 end
+-- // Textures
 local function extractId(value)
     if type(value) == "number" then
         local id = math.floor(value)
@@ -333,6 +339,7 @@ local function findTexture(root, channel)
     end
     return nil
 end
+-- // Players
 local function resolvePath(target)
     if typeof(target) == "Instance" then
         return target
@@ -382,6 +389,7 @@ local function ownerOf(instance)
     end
     return nil
 end
+-- // Parts
 local function isDisplayPart(instance)
     return instance:IsA("BasePart") and not instance:IsA("Terrain")
 end
@@ -462,6 +470,7 @@ local function yawFrame(part, fallback)
     end
     return CFrame.lookAt(cf.Position, cf.Position + flat)
 end
+-- // Resolver
 local function thumbSpec(kind, id, pixels, name, description)
     local spec = {
         Image = thumbUrl(kind, id, pixels),
@@ -690,6 +699,7 @@ local function classify(target, view, depth)
     end
     return "Model", instance
 end
+-- // Info
 local function requestInfo(kind, id)
     local key = kind .. ":" .. tostring(id)
     local cached = infoCache[key]
@@ -707,6 +717,7 @@ local function requestInfo(kind, id)
     return infoCache[key] or nil
 end
 
+-- // Hologram
 local function buildHologram(section, options)
     options = type(options) == "table" and options or {}
     local Colors, watchTheme = createColors(section.Panel or Panel)
@@ -915,18 +926,56 @@ local function buildHologram(section, options)
     local camera = create("Camera", { FieldOfView = VIEW_FOV }, viewer)
     viewer.CurrentCamera = camera
     local worldModel = create("WorldModel", {}, viewer)
+    local imageHolder = create("Frame", {
+        Name = "ImageHolder",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 1,
+        Visible = false,
+    }, stage)
+    create("UIPadding", {
+        PaddingTop = UDim.new(0, STAGE_TOP),
+        PaddingBottom = UDim.new(0, STAGE_BOTTOM),
+        PaddingLeft = UDim.new(0, SIDE_PAD),
+        PaddingRight = UDim.new(0, SIDE_PAD),
+    }, imageHolder)
     local textureView = create("ImageLabel", {
         Name = "Texture",
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromScale(IMAGE_FILL, IMAGE_FILL),
+        Size = UDim2.fromScale(1, 1),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Image = "",
         ScaleType = Enum.ScaleType.Fit,
         ZIndex = 1,
-        Visible = false,
-    }, stage)
+    }, imageHolder)
+    local textureRatio = create("UIAspectRatioConstraint", {
+        AspectRatio = 1,
+        AspectType = Enum.AspectType.FitWithinMaxSize,
+        DominantAxis = Enum.DominantAxis.Width,
+    }, textureView)
+    local function readContentSize()
+        local ok, size = pcall(function()
+            return textureView.ContentImageSize
+        end)
+        if ok and typeof(size) == "Vector2" then
+            return size
+        end
+        return Vector2.zero
+    end
+    local function refreshRatio()
+        local size = readContentSize()
+        if size.X > 0 and size.Y > 0 then
+            textureRatio.AspectRatio = size.X / size.Y
+        else
+            textureRatio.AspectRatio = 1
+        end
+    end
+    local function isImageReady()
+        return textureView.IsLoaded or readContentSize().X > 0
+    end
     local statusLabel = create("TextLabel", {
         Name = "Status",
         Size = UDim2.new(1, 0, 1, 0),
@@ -945,7 +994,7 @@ local function buildHologram(section, options)
     local function showMode(mode)
         displayMode = mode
         viewer.Visible = mode == "Model"
-        textureView.Visible = mode == "Image"
+        imageHolder.Visible = mode == "Image"
     end
 
     local function updateCamera()
@@ -953,7 +1002,7 @@ local function buildHologram(section, options)
             return
         end
         if displayMode == "Image" then
-            textureView.Size = UDim2.fromScale(IMAGE_FILL * zoom, IMAGE_FILL * zoom)
+            textureView.Size = UDim2.fromScale(zoom, zoom)
             return
         end
         local size = viewer.AbsoluteSize
@@ -1091,6 +1140,7 @@ local function buildHologram(section, options)
         disconnectStructure()
         disconnectImage()
         textureView.Image = ""
+        textureRatio.AspectRatio = 1
         links = {}
         reverse = {}
         originals = {}
@@ -1340,11 +1390,13 @@ local function buildHologram(section, options)
         end
         if textureView.Image == "" then
             loading = false
+            refreshRatio()
             setStatus(EMPTY_TEXT)
             return
         end
-        if textureView.IsLoaded then
+        if isImageReady() then
             loading = false
+            refreshRatio()
             setStatus(nil)
             return
         end
@@ -1354,8 +1406,9 @@ local function buildHologram(section, options)
             if destroyed or token ~= loadId then
                 return
             end
-            if textureView.IsLoaded then
+            if isImageReady() then
                 loading = false
+                refreshRatio()
                 setStatus(nil)
                 if imageConnection then
                     imageConnection:Disconnect()
@@ -1364,7 +1417,7 @@ local function buildHologram(section, options)
             end
         end)
         task.delay(fallback and IMAGE_TIMEOUT or FALLBACK_TIMEOUT, function()
-            if destroyed or token ~= loadId or textureView.IsLoaded then
+            if destroyed or token ~= loadId or isImageReady() then
                 return
             end
             if fallback then
@@ -2025,6 +2078,22 @@ local function buildHologram(section, options)
     end)
     connections[#connections + 1] = viewer:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateCamera)
 
+    pcall(function()
+        connections[#connections + 1] = textureView:GetPropertyChangedSignal("ContentImageSize"):Connect(function()
+            if destroyed then
+                return
+            end
+            refreshRatio()
+            if loading and displayMode == "Image" and isImageReady() then
+                loading = false
+                setStatus(nil)
+                if imageConnection then
+                    imageConnection:Disconnect()
+                    imageConnection = nil
+                end
+            end
+        end)
+    end)
     setStatus(placeholder)
     updateCamera()
     task.defer(updateCamera)
@@ -2042,4 +2111,5 @@ local function buildHologram(section, options)
     return api
 end
 
+-- // Register
 Elements.Register("Hologram", buildHologram)
