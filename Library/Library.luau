@@ -132,12 +132,13 @@ local ElementIcons = {
     slider = "sliders-horizontal",
     dropdown = "chevrons-up-down",
     colorpicker = "palette",
-    paragraph = "align-left"
+    paragraph = "align-left",
+    Hologram = "palette"
 }
 
 local ElementAliases = { toggle = "checkbox", colorpick = "colorpicker" }
 
-local ElementDefaults = { "Button", "Checkbox", "Toggle", "Slider", "Paragraph", "Dropdown", "ColorPicker" }
+local ElementDefaults = { "Button", "Checkbox", "Toggle", "Slider", "Paragraph", "Dropdown", "ColorPicker", "Hologram" }
 
 -- // Util
 local Util = {}
