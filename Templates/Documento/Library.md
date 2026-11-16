@@ -1134,7 +1134,7 @@ end)
 
 Preview em 3D dentro do painel. Mostra o **personagem de um jogador** (o seu ou o de outro), um **modelo**, uma **tool**, um **mapa** ou um **material**. Também mostra **imagens**: id de item, link, thumbnail, textura e a foto do avatar.
 
-O boneco gira sozinho e acompanha em tempo real as poses e animações do original. Dá para arrastar para girar. O título e a descrição ficam logo abaixo da imagem, e a descrição quebra de linha quando é grande. Não tem auto save.
+O boneco gira sozinho e acompanha em tempo real as poses e animações do original. Roupas, acessórios, cores do corpo, rosto e texturas aparecem no holograma, tanto no seu personagem quanto no de outros jogadores. Dá para arrastar para girar. O título e a descrição ficam logo abaixo da imagem, e a descrição quebra de linha quando é grande. Não tem auto save.
 
 O holograma é uma **cópia** desenhada dentro do painel. Ele não mexe em nada do jogo.
 
@@ -1193,8 +1193,9 @@ O alvo pode vir em qualquer uma destas opções: `target`, `item`, `map`, `playe
 | `target` | qualquer | nenhum | O que mostrar (veja 4.7.3) |
 | `list` | table | nenhum | Lista de alvos (veja 4.7.8). Também `List`, `items`, `Items` |
 | `start` | number | `1` | Posição inicial da lista (também `Start`) |
-| `title` | string | automático | Título (também `Title`) |
-| `description` | string | automático | Descrição (também `desc`, `Description`) |
+| `title` | string ou function | automático | Título (também `Title`). Uma função retorna o texto e atualiza sozinha (veja 4.7.9) |
+| `description` | string ou function | automático | Descrição (também `desc`, `Description`). Também aceita função |
+| `interval` | number | `1` | De quantos em quantos segundos as funções de título e descrição são chamadas de novo. Mínimo `0.1` |
 | `placeholder` | string | `"No item loaded"` | Texto quando não há nada carregado (também `Placeholder`) |
 | `height` | number | `180` | Altura da área da imagem, de `90` a `500` (também `Height`). O título e a descrição ficam embaixo e o card cresce |
 | `view` | string | `"Auto"` | `"Auto"`, `"Hologram"` ou `"Image"` (veja 4.7.3) |
@@ -1216,8 +1217,10 @@ O alvo pode vir em qualquer uma destas opções: `target`, `item`, `map`, `playe
 | `fetchInfo` | boolean | `true` | Busca o nome e a descrição de itens (veja 4.7.6) |
 | `visible` | boolean | `true` | Mostra ou esconde o card (também `Visible`) |
 | `callback` | function | nenhum | Chamado quando algo termina de carregar (veja 4.7.11). Também `Callback`, `onLoaded`, `OnLoaded` |
-| `onFail` | function(mensagem) | nenhum | Chamado quando falha. Também `OnFail`, `onError`, `OnError` |
-| `onClear` | function() | nenhum | Chamado quando o holograma é limpo (também `OnClear`) |
+| `onStart` | function | nenhum | Chamado quando um alvo começa a carregar (também `OnStart`) |
+| `onFail` | function | nenhum | Chamado quando falha. Também `OnFail`, `onError`, `OnError` |
+| `onClear` | function | nenhum | Chamado quando o holograma é limpo (também `OnClear`) |
+| `onSelect` | function | nenhum | Chamado quando a lista troca de item (também `OnSelect`, `onChange`, `OnChange`) |
 
 #### 4.7.3 O que o holograma aceita
 
@@ -1271,6 +1274,14 @@ holo:Load(game.Players:FindFirstChild("Fulano"))
 holo:Load("Fulano")
 holo:Load("@fulano")
 
+-- // Todos os jogadores do servidor (o seu primeiro)
+holo:LoadPlayers()
+holo:Next()
+holo:Prev()
+
+-- // Só os outros jogadores
+holo:LoadPlayers(1, false)
+
 -- // Foto do avatar em vez do boneco
 holo:SetView("Image")
 holo:SetStyle("Avatar")
@@ -1281,7 +1292,12 @@ holo:Load(game.Players.LocalPlayer)
 - O holograma espera o personagem carregar (até 10 segundos) e a aparência dele (até 5 segundos).
 - O nome em texto aceita parte do começo do nome, com pelo menos 3 letras.
 - Com `follow = true` (padrão), o holograma recarrega sozinho quando o jogador renasce. `holo:StopFollow()` para de recarregar e `holo:GetPlayer()` retorna o jogador seguido.
-- Acessórios e roupas aparecem. Scripts, sons, GUIs, joints e o `Humanoid` não vão para a cópia.
+- **Roupas e texturas:** o holograma copia o personagem inteiro, com camisa, calça, estampa (`ShirtGraphic`), cores do corpo (`BodyColors`), rosto, acessórios, `CharacterMesh` e as texturas das parts. Funciona igual no seu personagem e no de outros jogadores, em R6 e R15.
+- O holograma pré-carrega as texturas da cópia, para não aparecer boneco liso enquanto elas baixam.
+- Se uma roupa ou acessório chegar depois (aparência ainda carregando, troca de roupa), o holograma se refaz sozinho em segundo plano, sem mostrar `Loading...` e sem disparar o `callback` de novo.
+- Só os scripts, sons, GUIs, joints, efeitos (`ForceField`, `Highlight`) e animações não vão para a cópia. O `Humanoid` fica, porque o Roblox precisa dele para desenhar a roupa.
+- Com `StreamingEnabled` ligado, jogadores muito longe podem estar incompletos no seu jogo, e o holograma mostra só o que o seu cliente tem.
+- `holo:LoadPlayers()` carrega a lista de todos os jogadores do servidor (veja 4.7.8 para navegar com `Next` e `Prev`).
 - Se o nome não for de ninguém no servidor, o holograma tenta a foto do avatar pelo nome do usuário. Se o usuário também não existir, aparece `target not found.`
 - Se o jogador não tiver personagem depois da espera, aparece `character not found.`
 - Para ver outro jogador **e** o seu ao mesmo tempo, crie dois hologramas.
@@ -1421,13 +1437,14 @@ HoloSection:CreateButton({
 
 O título e a descrição ficam **logo abaixo da imagem**. O título ocupa uma linha e corta com `...` se passar da largura. A descrição quebra de linha e o card cresce para baixo. Sem título e sem descrição, o rodapé some.
 
-O texto mostrado vem de três fontes, nesta ordem de prioridade:
+O texto mostrado vem de quatro fontes, nesta ordem de prioridade:
 
 | Ordem | Fonte | Exemplo |
 |-------|-------|---------|
-| 1 | Item da lista ou `Load(alvo, titulo, descricao)` | `{ target = x, title = "Carro" }` |
-| 2 | Opção ou método manual | `title = "Preview"` ou `SetTitle` |
-| 3 | Automático | Jogador: display name e `@usuario`. Modelo: nome. Item: nome e descrição do item |
+| 1 | O que um callback retornou (veja 4.7.11) | `return "Carregou!"` |
+| 2 | Item da lista ou `Load(alvo, titulo, descricao)` | `{ target = x, title = "Carro" }` |
+| 3 | Opção ou método manual | `title = "Preview"` ou `SetTitle` |
+| 4 | Automático | Jogador: display name e `@usuario`. Modelo: nome. Item: nome e descrição do item |
 
 ```lua
 -- // Junto com o Load
@@ -1443,6 +1460,39 @@ holo:SetInfo("Título", "Descrição")
 holo:SetTitle(nil)
 holo:SetDescription(nil)
 ```
+
+**Título e descrição por função.** Onde vai um texto, também vale uma função. Ela retorna o texto que aparece no holograma e é chamada de novo a cada `interval` segundos (padrão `1`), então o texto se atualiza sozinho. A função recebe o próprio holograma. Se retornar `nil`, o holograma usa a próxima fonte da tabela.
+
+```lua
+-- // Descrição que atualiza sozinha
+local holo = HoloSection:CreateHologram({
+    player = game.Players.LocalPlayer,
+    title = function(h)
+        return h:GetName()
+    end,
+    description = function()
+        local humanoid = game.Players.LocalPlayer.Character
+            and game.Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+
+        if not humanoid then
+            return "Sem personagem"
+        end
+
+        return "Vida: " .. math.floor(humanoid.Health) .. "/" .. humanoid.MaxHealth
+    end,
+    interval = 0.5,
+})
+
+-- // Trocar depois
+holo:SetDescription(function()
+    return "Jogadores: " .. #game.Players:GetPlayers()
+end)
+holo:SetInterval(2)
+```
+
+- A função roda dentro de `pcall`. Se der erro, aparece uma notificação (uma vez por mensagem) e o holograma usa a próxima fonte.
+- Funções em `title` e `description` também valem dentro de um item de lista e no `Load(alvo, titulo, descricao)`.
+- Sem nenhuma função de texto, o holograma não gasta processamento com isso.
 
 #### 4.7.10 Visualização, cor e tempo real
 
@@ -1497,31 +1547,43 @@ ControlSection:CreateColorPicker({
 })
 ```
 
-#### 4.7.11 Callbacks
+#### 4.7.11 Callbacks e eventos
+
+O holograma tem cinco eventos. Cada um pode ser definido nas opções, trocado por método (`SetCallback`, `SetOnFail`...) ou ouvido com `Connect` e `Once` (mais de um ouvinte por evento).
+
+| Evento | Opção | Recebe | Quando |
+|--------|-------|--------|--------|
+| `Started` | `onStart` | `alvo, tipo, holograma` | Um alvo válido começa a carregar |
+| `Loaded` | `callback` (ou `onLoaded`) | `alvo, objeto, holograma, tipo, spec, contexto` | Terminou de carregar. Em imagens, só depois que a imagem carregou de verdade |
+| `Failed` | `onFail` (ou `onError`) | `mensagem, alvo, holograma` | O alvo não pôde ser mostrado |
+| `Cleared` | `onClear` | `holograma` | O holograma foi limpo |
+| `Selected` | `onSelect` (ou `onChange`) | `posicao, item, holograma, resultado` | A lista trocou de item (`Next`, `Prev`, `Select`, `LoadList`) |
+
+Ordem em um carregamento normal: `Started`, depois `Loaded` (ou `Failed`). Em listas, o `Selected` vem por último.
 
 ```lua
--- // Ao carregar
+-- // Todos os callbacks nas opções
 local holo = HoloSection:CreateHologram({
     player = game.Players.LocalPlayer,
-    callback = function(alvo, objeto, holograma, tipo, spec)
-        print("Carregou:", tipo, alvo)
+    onStart = function(alvo, tipo)
+        print("Começou:", tipo)
     end,
-    onFail = function(mensagem)
+    callback = function(alvo, objeto, holograma, tipo, spec, contexto)
+        print("Carregou:", tipo, contexto.Title)
+    end,
+    onFail = function(mensagem, alvo)
         print("Falhou:", mensagem)
     end,
     onClear = function()
         print("Limpou")
     end,
+    onSelect = function(posicao, item)
+        print("Item da lista:", posicao)
+    end,
 })
 ```
 
-| Callback | Recebe | Quando |
-|----------|--------|--------|
-| `callback` | `alvo, objeto, holograma, tipo, spec` | Cada vez que termina de carregar |
-| `onFail` | `mensagem` | Quando o alvo não pode ser mostrado |
-| `onClear` | nada | Quando o holograma é limpo |
-
-O que o `callback` recebe:
+O que o `callback` (evento `Loaded`) recebe:
 
 | Valor | Descrição |
 |-------|-----------|
@@ -1530,8 +1592,61 @@ O que o `callback` recebe:
 | `holograma` | O próprio holograma, para chamar métodos |
 | `tipo` | `"Player"`, `"Model"`, `"Map"`, `"Material"` ou `"Image"` |
 | `spec` | Só em imagens: tabela com `Image`, `Name`, `Description`, `Kind` e `Id` |
+| `contexto` | Tabela com `Kind`, `Target`, `Player`, `Title`, `Description`, `Index` e `Count` (a mesma de `holo:GetContext()`) |
 
-Erros dentro de um callback viram notificação e não derrubam o script. Falhas aparecem como notificação `Hologram 'Título': mensagem` (uma vez por mensagem) e também em `warn`. Mensagens comuns:
+**O que a função retorna aparece no holograma.** Qualquer callback (`onStart`, `callback`, `onFail`, `onClear`, `onSelect` e os ouvintes) pode retornar um valor, e ele vira o texto do card:
+
+| Retorno | Efeito |
+|---------|--------|
+| `string` ou `number` | Vira a **descrição** |
+| `{ title = "...", description = "..." }` | Troca o título e/ou a descrição (também aceita `{ text = "..." }` para a descrição) |
+| `nil` ou outro tipo | Não muda nada |
+
+```lua
+-- // O retorno do callback vira texto do holograma
+local holo = HoloSection:CreateHologram({
+    player = game.Players.LocalPlayer,
+    callback = function(alvo, objeto, holograma, tipo)
+        return {
+            title = "Meu personagem",
+            description = "Tipo: " .. tipo,
+        }
+    end,
+    onFail = function(mensagem)
+        return "Erro: " .. mensagem
+    end,
+    onClear = function()
+        return "Nada carregado"
+    end,
+})
+```
+
+- O texto retornado tem prioridade sobre todas as outras fontes (veja 4.7.9).
+- Ele some quando você carrega outro alvo ou chama `Clear`.
+- O retorno é só texto. Ele nunca carrega um alvo novo, então não existe laço infinito entre o callback e o `Load`.
+
+**Ouvir com `Connect` e `Once`.**
+
+```lua
+-- // Vários ouvintes
+local conexao = holo:Connect("Loaded", function(alvo, objeto, h, tipo)
+    print("Carregou", tipo)
+end)
+
+holo:Once("Failed", function(mensagem)
+    print("Primeira falha:", mensagem)
+end)
+
+holo:Connect("Selected", function(posicao)
+    print("Posição:", posicao)
+end)
+
+conexao:Disconnect()
+```
+
+Os nomes de evento aceitos (sem diferenciar maiúsculas): `"Loaded"` (`"load"`, `"callback"`), `"Failed"` (`"fail"`, `"error"`), `"Cleared"` (`"clear"`), `"Started"` (`"start"`) e `"Selected"` (`"select"`, `"change"`). Um nome inválido mostra uma notificação e devolve `nil`. `Connect` e `Once` devolvem uma conexão com `Disconnect()` e o campo `Connected`.
+
+**Erros e mensagens.** Erros dentro de um callback viram notificação e não derrubam o script. Falhas aparecem como notificação `Hologram 'Título': mensagem` (uma vez por mensagem) e também em `warn`. Mensagens comuns:
 
 | Mensagem | Significado |
 |----------|-------------|
@@ -1543,8 +1658,9 @@ Erros dentro de um callback viram notificação e não derrubam o script. Falhas
 | `unsupported link.` | Link que o holograma não reconhece |
 | `target cannot be shown as hologram.` | Imagem com `view = "Hologram"` |
 | `nothing to display.` | Modelo sem nenhuma part |
+| `image failed to load.` | A imagem não carregou (só no evento `Failed`, sem notificação) |
 | `failed to load: erro` | Erro inesperado ao copiar o modelo |
-| `invalid view`, `invalid style`, `invalid channel`, `invalid color` | Valor inválido em um `Set` |
+| `invalid view`, `invalid style`, `invalid channel`, `invalid color`, `invalid event` | Valor inválido em um `Set` ou no `Connect` |
 
 #### 4.7.12 Métodos
 
@@ -1555,6 +1671,7 @@ Erros dentro de um callback viram notificação e não derrubam o script. Falhas
 | `Load(alvo, titulo, descricao)` | Carrega o alvo. `Load(nil)` limpa. A descrição e o título são opcionais (também aceita uma tabela `{ title, description }` no lugar do título). Retorna `true` se começou a carregar |
 | `Update(tabela)` | Muda várias opções de uma vez e carrega o alvo ou a lista se vierem. Aceita `title`, `description`, `placeholder`, `channel`, `fetchInfo`, `color`, `tint`, `spin`, `spinSpeed`, `height`, `visible`, `style`, `view` e o alvo (`target`, `player`...) ou `list` |
 | `LoadList(lista, inicio)` | Carrega uma lista de alvos (4.7.8) |
+| `LoadPlayers(inicio, incluirVoce)` | Carrega a lista com todos os jogadores do servidor. O seu vem primeiro; `incluirVoce = false` tira você da lista |
 | `Select(posicao)` | Vai para o item da lista |
 | `Next()` / `Prev()` | Próximo e anterior |
 | `Reload()` | Carrega de novo o alvo atual |
@@ -1573,6 +1690,7 @@ Erros dentro de um callback viram notificação e não derrubam o script. Falhas
 | `GetKind()` | Tipo carregado (`nil` se vazio) |
 | `GetPlayer()` | Jogador que está sendo seguido |
 | `GetIndex()` / `GetCount()` | Posição atual e tamanho da lista |
+| `GetContext()` | Tabela com `Kind`, `Target`, `Player`, `Title`, `Description`, `Index` e `Count` |
 | `IsLoading()` | Retorna se está carregando |
 | `IsDestroyed()` | Retorna se foi destruído |
 
@@ -1603,13 +1721,17 @@ Erros dentro de um callback viram notificação e não derrubam o script. Falhas
 
 | Método | Descrição |
 |--------|-----------|
-| `SetTitle(texto)` / `GetTitle()` | Troca e lê o título. `nil` volta ao automático |
-| `SetDescription(texto)` / `GetDescription()` | Troca e lê a descrição. `nil` volta ao automático |
+| `SetTitle(texto)` / `GetTitle()` | Troca e lê o título. Aceita texto ou função. `nil` volta ao automático |
+| `SetDescription(texto)` / `GetDescription()` | Troca e lê a descrição. Aceita texto ou função. `nil` volta ao automático |
+| `SetInterval(segundos)` | Intervalo das funções de título e descrição (mínimo `0.1`) |
 | `SetInfo(titulo, descricao)` | Troca os dois de uma vez |
 | `SetHeight(valor)` | Altura da área da imagem (`90` a `500`) |
 | `SetVisible(estado)` | Mostra ou esconde o card |
-| `SetCallback(funcao)` | Troca o `callback` |
+| `SetCallback(funcao)` | Troca o `callback` (evento `Loaded`) |
+| `SetOnStart(funcao)` / `SetOnSelect(funcao)` | Troca o `onStart` e o `onSelect` |
 | `SetOnFail(funcao)` / `SetOnClear(funcao)` | Troca o `onFail` e o `onClear` |
+| `Connect(evento, funcao)` | Ouve um evento (4.7.11). Devolve uma conexão com `Disconnect()` |
+| `Once(evento, funcao)` | Igual ao `Connect`, mas dispara só uma vez |
 | `Destroy()` | Remove o card e desconecta tudo |
 
 #### 4.7.13 Propriedades
@@ -1700,7 +1822,8 @@ PlayersSection:CreateToggle({
 
 - O holograma só gasta processamento com o card visível e com um modelo carregado. Imagens não rodam loop.
 - Carregar um alvo novo cancela o anterior, mesmo que ele ainda esteja carregando.
-- Scripts, sons, GUIs, joints, constraints e `Humanoid` não vão para a cópia.
+- Personagens (jogadores e modelos com `Humanoid`) são copiados inteiros, com roupas e texturas (veja 4.7.4). Scripts, sons, GUIs, joints, constraints, efeitos e animações não vão para a cópia.
+- Callbacks e ouvintes rodam dentro de `pcall`: um erro vira notificação e não impede os outros.
 - `Update` e os métodos `Set...` podem ser chamados antes do element terminar de carregar: ficam na fila (veja 4.0).
 - Quando a section ou a janela é destruída, o holograma desconecta tudo sozinho.
 
@@ -2479,6 +2602,8 @@ holo:SetTitle("X")         holo:SetDescription("Texto")
 holo:SetSpin(true)         holo:SetRotation(0, 20)
 holo:SetTint(true)         holo:SetColor(color)
 holo:SetView("Image")      holo:SetStyle("bust")
+holo:LoadPlayers()         holo:Connect("Loaded", fn)
+holo:SetDescription(function() return "texto" end)
 ```
 
 ```lua

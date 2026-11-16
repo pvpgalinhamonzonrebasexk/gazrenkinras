@@ -12,11 +12,9 @@ local Default = {
     Border = Color3.fromRGB(55, 55, 55),
     Palette = Color3.fromRGB(28, 28, 28),
 }
-
 local THEME_KEYS = { "Active", "Dim", "Border", "Palette" }
 local themeWatchers = {}
 local themeConnection
-
 local function startThemeWatcher()
     if themeConnection then
         return
@@ -33,14 +31,12 @@ local function startThemeWatcher()
         end
     end)
 end
-
 local function stopThemeWatcher()
     if themeConnection and next(themeWatchers) == nil then
         themeConnection:Disconnect()
         themeConnection = nil
     end
 end
-
 local function createColors(panel)
     local colors = setmetatable({}, {
         __index = function(_, key)
@@ -52,7 +48,6 @@ local function createColors(panel)
             return Default[key]
         end,
     })
-
     local function signature()
         local parts = {}
         for index, key in ipairs(THEME_KEYS) do
@@ -60,9 +55,7 @@ local function createColors(panel)
         end
         return table.concat(parts, "|")
     end
-
     local lastSignature = signature()
-
     local function watch(apply)
         local function check()
             local current = signature()
@@ -202,6 +195,44 @@ local STRIP_CLASSES = {
     "Constraint",
     "Humanoid",
 }
+local EVENT_ALIASES = {
+    loaded = "Loaded",
+    load = "Loaded",
+    callback = "Loaded",
+    failed = "Failed",
+    fail = "Failed",
+    error = "Failed",
+    cleared = "Cleared",
+    clear = "Cleared",
+    started = "Started",
+    start = "Started",
+    selected = "Selected",
+    select = "Selected",
+    change = "Selected",
+}
+local RIG_STRIP = {
+    "LuaSourceContainer",
+    "Sound",
+    "SurfaceGui",
+    "BillboardGui",
+    "JointInstance",
+    "WeldConstraint",
+    "Constraint",
+    "ForceField",
+    "Highlight",
+    "Animator",
+    "AnimationController",
+}
+local CLOTHING_CLASSES = {
+    Shirt = true,
+    Pants = true,
+    ShirtGraphic = true,
+    BodyColors = true,
+    CharacterMesh = true,
+    Accessory = true,
+    Accoutrement = true,
+    Hat = true,
+}
 local infoCache = {}
 
 -- // Utilities
@@ -238,6 +269,15 @@ local function pickFunction(source, lower, upper)
         return value
     end
     return nil
+end
+local function normalizeText(value)
+    if value == nil or value == false then
+        return nil
+    end
+    if type(value) == "function" then
+        return value
+    end
+    return tostring(value)
 end
 local function findTarget(data)
     for _, key in ipairs(TARGET_KEYS) do
@@ -475,6 +515,96 @@ local function yawFrame(part, fallback)
     end
     return CFrame.lookAt(cf.Position, cf.Position + flat)
 end
+-- // Rig
+local function isRig(instance)
+    return instance:IsA("Model") and instance:FindFirstChildOfClass("Humanoid") ~= nil
+end
+local function pairParts(source, copy, map)
+    if source:IsA("BasePart") and copy:IsA("BasePart") then
+        map[copy] = source
+    end
+    local candidates = copy:GetChildren()
+    local used = {}
+    for _, child in ipairs(source:GetChildren()) do
+        for position, candidate in ipairs(candidates) do
+            if not used[position] and candidate.Name == child.Name and candidate.ClassName == child.ClassName then
+                used[position] = true
+                pairParts(child, candidate, map)
+                break
+            end
+        end
+    end
+end
+local function buildRig(instance, skipInvisible, maxParts, linkMap, reverseMap, originalMap)
+    local ok, copy = pcall(function()
+        local archivable = instance.Archivable
+        if not archivable then
+            instance.Archivable = true
+        end
+        local result = instance:Clone()
+        if not archivable then
+            instance.Archivable = false
+        end
+        return result
+    end)
+    if not ok or not copy then
+        return nil
+    end
+    local map = {}
+    pairParts(instance, copy, map)
+    for _, descendant in ipairs(copy:GetDescendants()) do
+        local remove = false
+        for _, class in ipairs(RIG_STRIP) do
+            if descendant:IsA(class) then
+                remove = true
+                break
+            end
+        end
+        if remove then
+            descendant:Destroy()
+        end
+    end
+    local humanoid = copy:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        pcall(function()
+            humanoid.EvaluateStateMachine = false
+        end)
+        pcall(function()
+            humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+        end)
+        pcall(function()
+            humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+        end)
+    end
+    local count = 0
+    local truncated = false
+    for _, descendant in ipairs(copy:GetDescendants()) do
+        if descendant:IsA("BasePart") and descendant:IsDescendantOf(copy) then
+            if count >= maxParts then
+                truncated = true
+                descendant:Destroy()
+            elseif skipInvisible and descendant.Transparency >= 1 then
+                descendant:Destroy()
+            else
+                descendant.Anchored = true
+                descendant.CanCollide = false
+                descendant.CanQuery = false
+                descendant.CanTouch = false
+                descendant.CastShadow = false
+                count = count + 1
+                local source = map[descendant]
+                if source then
+                    linkMap[descendant] = source
+                    reverseMap[source] = descendant
+                end
+                originalMap[descendant] = { Color = descendant.Color, Material = descendant.Material }
+            end
+        end
+    end
+    copy.Name = "Hologram"
+    return copy, count, truncated
+end
+
 -- // Resolver
 local function thumbSpec(kind, id, pixels, name, description)
     local spec = {
@@ -747,6 +877,8 @@ local function buildHologram(section, options)
     local callback = pickFunction(options, "callback", "Callback") or pickFunction(options, "onLoaded", "OnLoaded")
     local onFail = pickFunction(options, "onFail", "OnFail") or pickFunction(options, "onError", "OnError")
     local onClear = pickFunction(options, "onClear", "OnClear")
+    local onStart = pickFunction(options, "onStart", "OnStart")
+    local onSelect = pickFunction(options, "onSelect", "OnSelect") or pickFunction(options, "onChange", "OnChange")
     local maxParts = math.max(math.floor(tonumber(options.maxParts) or MAX_PARTS_DEFAULT), 1)
     local skipInvisible = options.skipInvisible ~= false
     local excludePlayers = options.excludePlayers ~= false
@@ -787,9 +919,31 @@ local function buildHologram(section, options)
     local playerToken = 0
     local unwatchTheme
     local settleImage
+    local layoutFooter
+    local reloadLoaded
+    local imageAnnounce
+    local loadedInfo
+    local returnTitle
+    local returnDescription
+    local dynamicText = false
+    local textElapsed = 0
+    local textInterval = math.max(tonumber(options.interval) or 1, 0.1)
+    local refreshToken = 0
+    local listeners = { Loaded = {}, Failed = {}, Cleared = {}, Started = {}, Selected = {} }
 
+    local function baseName()
+        local value = manualTitle
+        if type(value) == "function" or value == nil or value == false or value == "" then
+            return "Hologram"
+        end
+        return tostring(value)
+    end
     local function report(message, duration)
-        local text = ("Hologram '%s': %s"):format(tostring(manualTitle or autoTitle or "Hologram"), message)
+        local label = baseName()
+        if label == "Hologram" and autoTitle then
+            label = tostring(autoTitle)
+        end
+        local text = ("Hologram '%s': %s"):format(label, message)
         if reported[text] then
             return
         end
@@ -797,18 +951,105 @@ local function buildHologram(section, options)
         warn(text)
         notify(text, duration or 5)
     end
-    local function fire(handler, ...)
-        if type(handler) ~= "function" then
+    local function pickText(...)
+        for position = 1, select("#", ...) do
+            local value = select(position, ...)
+            if value ~= nil then
+                if type(value) == "function" then
+                    dynamicText = true
+                    local ok, result = pcall(value, api)
+                    if ok then
+                        value = result
+                    else
+                        report(("text function: %s"):format(tostring(result)))
+                        value = nil
+                    end
+                end
+                if value ~= nil and value ~= false then
+                    return tostring(value)
+                end
+            end
+        end
+        return ""
+    end
+    local function applyReturn(value)
+        if value == nil then
             return
         end
-        local ok, err = pcall(handler, ...)
+        local newTitle
+        local newDescription
+        if type(value) == "table" then
+            newTitle = pick(value, "title", "Title")
+            newDescription = pick(value, "description", "Description")
+            if newTitle == nil and newDescription == nil then
+                newDescription = pick(value, "text", "Text")
+            end
+        elseif type(value) == "string" or type(value) == "number" then
+            newDescription = tostring(value)
+        else
+            return
+        end
+        if newTitle == nil and newDescription == nil then
+            return
+        end
+        if newTitle ~= nil then
+            returnTitle = newTitle
+        end
+        if newDescription ~= nil then
+            returnDescription = newDescription
+        end
+        layoutFooter()
+    end
+    local function run(handler, ...)
+        local ok, result = pcall(handler, ...)
         if not ok then
-            report(("callback: %s"):format(tostring(err)))
+            report(("callback: %s"):format(tostring(result)))
+            return
+        end
+        applyReturn(result)
+    end
+    local function removeListener(name, entry)
+        entry.Active = false
+        local bucket = listeners[name]
+        for position, candidate in ipairs(bucket) do
+            if candidate == entry then
+                table.remove(bucket, position)
+                break
+            end
+        end
+    end
+    local function emit(name, ...)
+        local primary
+        if name == "Loaded" then
+            primary = callback
+        elseif name == "Failed" then
+            primary = onFail
+        elseif name == "Cleared" then
+            primary = onClear
+        elseif name == "Started" then
+            primary = onStart
+        elseif name == "Selected" then
+            primary = onSelect
+        end
+        if primary then
+            run(primary, ...)
+        end
+        local snapshot = {}
+        for position, entry in ipairs(listeners[name]) do
+            snapshot[position] = entry
+        end
+        for _, entry in ipairs(snapshot) do
+            if entry.Active then
+                if entry.Once then
+                    removeListener(name, entry)
+                end
+                run(entry.Handler, ...)
+            end
         end
     end
 
     local root = create("Frame", {
-        Name = tostring(manualTitle or "Hologram") .. "_Hologram",
+        Name = baseName() .. "_Hologram",
         Size = UDim2.new(1, 0, 0, height),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundColor3 = Colors.Palette,
@@ -881,23 +1122,21 @@ local function buildHologram(section, options)
         TextYAlignment = Enum.TextYAlignment.Top,
         TextTruncate = Enum.TextTruncate.None,
     }, footer)
-    local function layoutFooter()
-        local titleText = entryTitle
-        if titleText == nil then
-            titleText = manualTitle
-        end
-        if titleText == nil then
-            titleText = autoTitle
-        end
-        titleText = titleText ~= nil and tostring(titleText) or ""
-        local descText = entryDescription
-        if descText == nil then
-            descText = manualDescription
-        end
-        if descText == nil then
-            descText = autoDescription
-        end
-        descText = descText ~= nil and tostring(descText) or ""
+    local function buildContext(kind)
+        return {
+            Kind = kind,
+            Target = lastTarget,
+            Player = followedPlayer,
+            Title = titleLabel.Text,
+            Description = descLabel.Text,
+            Index = index,
+            Count = #list,
+        }
+    end
+    layoutFooter = function()
+        dynamicText = false
+        local titleText = pickText(returnTitle, entryTitle, manualTitle, autoTitle)
+        local descText = pickText(returnDescription, entryDescription, manualDescription, autoDescription)
         local hasTitle = titleText ~= ""
         local hasDesc = descText ~= ""
         titleLabel.Visible = hasTitle
@@ -914,7 +1153,7 @@ local function buildHologram(section, options)
         end
         stage.Size = UDim2.new(1, 0, 0, height)
         footer.Position = UDim2.new(0, 0, 0, height)
-        root.Name = tostring(manualTitle or "Hologram") .. "_Hologram"
+        root.Name = baseName() .. "_Hologram"
     end
     layoutFooter()
 
@@ -1104,7 +1343,21 @@ local function buildHologram(section, options)
     end
     local function watchStructure(instance, kind)
         disconnectStructure()
+        local rig = (kind == "Player" or kind == "Model") and isRig(instance)
         structureConnections[1] = instance.DescendantAdded:Connect(function(descendant)
+            if rig and CLOTHING_CLASSES[descendant.ClassName] then
+                refreshToken = refreshToken + 1
+                local token = refreshToken
+                task.delay(0.5, function()
+                    if destroyed or token ~= refreshToken or loadedInstance ~= instance then
+                        return
+                    end
+                    if reloadLoaded then
+                        reloadLoaded(instance, kind)
+                    end
+                end)
+                return
+            end
             if not isDisplayPart(descendant) then
                 return
             end
@@ -1156,59 +1409,78 @@ local function buildHologram(section, options)
         autoTitle = nil
         autoDescription = nil
         activeKind = nil
+        loadedInfo = nil
+        imageAnnounce = nil
+        refreshToken = refreshToken + 1
     end
     local function fail(message)
         loadId = loadId + 1
         loading = false
+        returnTitle = nil
+        returnDescription = nil
         clearLoaded()
         showMode("Model")
         setStatus(EMPTY_TEXT)
         layoutFooter()
         if message then
             report(message)
-            fire(onFail, message)
+            emit("Failed", message, lastTarget, api)
         end
         return false
     end
-    local function loadInstance(instance, kind, info)
+    local function loadInstance(instance, kind, info, silent)
         loadId = loadId + 1
         local id = loadId
-        clearLoaded()
-        showMode("Model")
-        loading = true
-        setStatus(LOADING_TEXT)
+        if not silent then
+            clearLoaded()
+            showMode("Model")
+            loading = true
+            setStatus(LOADING_TEXT)
+        end
+        loadedInfo = info
         autoTitle = info and info.Name or instance.Name
         autoDescription = info and info.Description
         layoutFooter()
         task.spawn(function()
             local ok, err = pcall(function()
-                local parts = collectParts(instance, kind == "Map" and excludePlayers)
-                local model = create("Model", { Name = "Hologram" })
                 local newLinks = {}
                 local newReverse = {}
                 local newOriginals = {}
+                local model
                 local count = 0
                 local truncated = false
-                local sliceStart = os.clock()
-                for _, part in ipairs(parts) do
-                    if destroyed or id ~= loadId then
-                        model:Destroy()
-                        return
-                    end
-                    if count >= maxParts then
-                        truncated = true
-                        break
-                    end
-                    if not (skipInvisible and part.Transparency >= 1) then
-                        local clone = addLink(part, newLinks, newReverse, newOriginals)
-                        if clone then
-                            count = count + 1
-                            clone.Parent = model
+                if (kind == "Player" or kind == "Model") and isRig(instance) then
+                    model, count, truncated = buildRig(instance, skipInvisible, maxParts, newLinks, newReverse, newOriginals)
+                end
+                if model == nil then
+                    model = create("Model", { Name = "Hologram" })
+                    count = 0
+                    truncated = false
+                    newLinks = {}
+                    newReverse = {}
+                    newOriginals = {}
+                    local parts = collectParts(instance, kind == "Map" and excludePlayers)
+                    local sliceStart = os.clock()
+                    for _, part in ipairs(parts) do
+                        if destroyed or id ~= loadId then
+                            model:Destroy()
+                            return
                         end
-                    end
-                    if os.clock() - sliceStart >= CLONE_BUDGET then
-                        task.wait()
-                        sliceStart = os.clock()
+                        if count >= maxParts then
+                            truncated = true
+                            break
+                        end
+                        if not (skipInvisible and part.Transparency >= 1) then
+                            local clone = addLink(part, newLinks, newReverse, newOriginals)
+                            if clone then
+                                count = count + 1
+                                clone.Parent = model
+                            end
+                        end
+                        if os.clock() - sliceStart >= CLONE_BUDGET then
+                            task.wait()
+                            sliceStart = os.clock()
+                        end
                     end
                 end
                 if destroyed or id ~= loadId then
@@ -1218,8 +1490,10 @@ local function buildHologram(section, options)
                 loading = false
                 if count == 0 then
                     model:Destroy()
-                    setStatus(EMPTY_TEXT)
-                    fire(onFail, "nothing to display.")
+                    if not silent then
+                        setStatus(EMPTY_TEXT)
+                    end
+                    emit("Failed", "nothing to display.", instance, api)
                     return
                 end
                 local boxCFrame, boxSize = model:GetBoundingBox()
@@ -1255,10 +1529,18 @@ local function buildHologram(section, options)
                         end
                     end
                 end
+                if silent then
+                    if holder then
+                        holder:Destroy()
+                        holder = nil
+                    end
+                    disconnectStructure()
+                end
                 radius = math.max(boxSize.Magnitude / 2, 0.5)
                 links = newLinks
                 reverse = newReverse
                 originals = newOriginals
+                pending = {}
                 partCount = count
                 holder = model
                 getOrigin = resolver
@@ -1273,13 +1555,23 @@ local function buildHologram(section, options)
                 if truncated then
                     report(("'%s' has too many parts, showing %d."):format(instance.Name, count))
                 end
-                fire(callback, instance, model, api, kind)
+                task.spawn(function()
+                    pcall(function()
+                        contentProvider:PreloadAsync({ model })
+                    end)
+                end)
+                if not silent then
+                    emit("Loaded", instance, model, api, kind, nil, buildContext(kind))
+                end
             end)
             if not ok and not destroyed and id == loadId then
                 fail(("failed to load: %s"):format(tostring(err)))
             end
         end)
         return true
+    end
+    reloadLoaded = function(instance, kind)
+        loadInstance(instance, kind, loadedInfo, true)
     end
     local function loadMaterial(material)
         loadId = loadId + 1
@@ -1310,7 +1602,7 @@ local function buildHologram(section, options)
         setStatus(nil)
         layoutFooter()
         updateCamera()
-        fire(callback, material, model, api, "Material")
+        emit("Loaded", material, model, api, "Material", nil, buildContext("Material"))
         return true
     end
 
@@ -1392,6 +1684,13 @@ local function buildHologram(section, options)
         return true
     end
 
+    local function finishImage(ok)
+        local announce = imageAnnounce
+        if announce then
+            imageAnnounce = nil
+            announce(ok)
+        end
+    end
     local function trackImage(token, fallback)
         if imageConnection then
             imageConnection:Disconnect()
@@ -1403,12 +1702,14 @@ local function buildHologram(section, options)
             loading = false
             refreshRatio()
             setStatus(EMPTY_TEXT)
+            finishImage(false)
             return
         end
         if isImageReady() then
             loading = false
             refreshRatio()
             setStatus(nil)
+            finishImage(true)
             return
         end
         loading = true
@@ -1434,6 +1735,7 @@ local function buildHologram(section, options)
             else
                 setStatus(EMPTY_TEXT)
             end
+            finishImage(ok)
         end
         local function retry()
             if stale() then
@@ -1499,6 +1801,16 @@ local function buildHologram(section, options)
                 trackImage(token, nil)
             end)
         end
+        imageAnnounce = function(ok)
+            if destroyed or token ~= loadId then
+                return
+            end
+            if ok then
+                emit("Loaded", target, textureView, api, "Image", spec, buildContext("Image"))
+            else
+                emit("Failed", "image failed to load.", target, api, "Image")
+            end
+        end
         trackImage(token, spec.Fallback)
         layoutFooter()
         updateCamera()
@@ -1517,7 +1829,6 @@ local function buildHologram(section, options)
                 layoutFooter()
             end)
         end
-        fire(callback, target, textureView, api, "Image", spec)
         return true
     end
     local function resolveName(name, token)
@@ -1558,6 +1869,8 @@ local function buildHologram(section, options)
         local inner, newTitle, newDescription, newView, newStyle = unpackEntry(target)
         entryTitle = newTitle
         entryDescription = newDescription
+        returnTitle = nil
+        returnDescription = nil
         local view = normalizeView(newView) or viewOption
         local style = lookupStyle(newStyle) or styleKind
         lastTarget = inner
@@ -1568,6 +1881,7 @@ local function buildHologram(section, options)
         if kind == "Image" and view == "Hologram" then
             return fail("target cannot be shown as hologram.")
         end
+        emit("Started", inner, kind, api)
         if kind == "Player" then
             return loadPlayer(payload, followOption)
         end
@@ -1586,7 +1900,9 @@ local function buildHologram(section, options)
             return false
         end
         index = ((position - 1) % #list) + 1
-        return loadAuto(list[index])
+        local result = loadAuto(list[index])
+        emit("Selected", index, list[index], api, result)
+        return result
     end
     local function reloadCurrent()
         if index > 0 and list[index] ~= nil then
@@ -1747,12 +2063,14 @@ local function buildHologram(section, options)
         lastTarget = nil
         entryTitle = nil
         entryDescription = nil
+        returnTitle = nil
+        returnDescription = nil
         unbindPlayer()
         clearLoaded()
         showMode("Model")
         setStatus(placeholder)
         layoutFooter()
-        fire(onClear)
+        emit("Cleared", api)
     end
     function api:Sync()
         if destroyed then
@@ -1898,16 +2216,18 @@ local function buildHologram(section, options)
         if destroyed then
             return
         end
-        manualTitle = value ~= nil and value ~= false and tostring(value) or nil
+        manualTitle = normalizeText(value)
         entryTitle = nil
+        returnTitle = nil
         layoutFooter()
     end
     function api:SetDescription(value)
         if destroyed then
             return
         end
-        manualDescription = value ~= nil and value ~= false and tostring(value) or nil
+        manualDescription = normalizeText(value)
         entryDescription = nil
+        returnDescription = nil
         layoutFooter()
     end
     function api:SetInfo(newTitle, newDescription)
@@ -1961,6 +2281,9 @@ local function buildHologram(section, options)
         end
         table.clear(connections)
         table.clear(list)
+        for name in pairs(listeners) do
+            listeners[name] = {}
+        end
         links = {}
         reverse = {}
         originals = {}
@@ -1976,6 +2299,63 @@ local function buildHologram(section, options)
     end
     function api:SetOnClear(handler)
         onClear = type(handler) == "function" and handler or nil
+    end
+    function api:SetOnStart(handler)
+        onStart = type(handler) == "function" and handler or nil
+    end
+    function api:SetOnSelect(handler)
+        onSelect = type(handler) == "function" and handler or nil
+    end
+    function api:SetInterval(value)
+        textInterval = math.max(tonumber(value) or textInterval, 0.1)
+    end
+    local function connectEvent(name, handler, once)
+        local event = EVENT_ALIASES[tostring(name):lower()]
+        if not event or type(handler) ~= "function" then
+            report(("invalid event '%s'."):format(tostring(name)))
+            return nil
+        end
+        local entry = { Handler = handler, Once = once, Active = true }
+        local bucket = listeners[event]
+        bucket[#bucket + 1] = entry
+        return {
+            Connected = true,
+            Disconnect = function(self)
+                self.Connected = false
+                removeListener(event, entry)
+            end,
+        }
+    end
+    function api:Connect(name, handler)
+        if destroyed then
+            return nil
+        end
+        return connectEvent(name, handler, false)
+    end
+    function api:Once(name, handler)
+        if destroyed then
+            return nil
+        end
+        return connectEvent(name, handler, true)
+    end
+    function api:LoadPlayers(start, includeSelf)
+        if destroyed then
+            return false
+        end
+        local items = {}
+        local localPlayer = players.LocalPlayer
+        if localPlayer and includeSelf ~= false then
+            items[1] = localPlayer
+        end
+        for _, player in ipairs(players:GetPlayers()) do
+            if player ~= localPlayer then
+                items[#items + 1] = player
+            end
+        end
+        return api:LoadList(items, start)
+    end
+    function api:GetContext()
+        return buildContext(activeKind)
     end
     api.Frame = root
     api.Instance = root
@@ -2085,6 +2465,13 @@ local function buildHologram(section, options)
 
     local liveElapsed = 0
     connections[#connections + 1] = runService.Heartbeat:Connect(function(dt)
+        if dynamicText and root.Visible then
+            textElapsed = textElapsed + dt
+            if textElapsed >= textInterval then
+                textElapsed = 0
+                layoutFooter()
+            end
+        end
         if not root.Visible or not holder or displayMode ~= "Model" then
             return
         end
