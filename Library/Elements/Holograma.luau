@@ -3,6 +3,7 @@ local runService = game:GetService("RunService")
 local userInputService = game:GetService("UserInputService")
 local players = game:GetService("Players")
 local marketplaceService = game:GetService("MarketplaceService")
+local contentProvider = game:GetService("ContentProvider")
 
 -- // Themes
 local Default = {
@@ -11,9 +12,11 @@ local Default = {
     Border = Color3.fromRGB(55, 55, 55),
     Palette = Color3.fromRGB(28, 28, 28),
 }
+
 local THEME_KEYS = { "Active", "Dim", "Border", "Palette" }
 local themeWatchers = {}
 local themeConnection
+
 local function startThemeWatcher()
     if themeConnection then
         return
@@ -30,12 +33,14 @@ local function startThemeWatcher()
         end
     end)
 end
+
 local function stopThemeWatcher()
     if themeConnection and next(themeWatchers) == nil then
         themeConnection:Disconnect()
         themeConnection = nil
     end
 end
+
 local function createColors(panel)
     local colors = setmetatable({}, {
         __index = function(_, key)
@@ -47,6 +52,7 @@ local function createColors(panel)
             return Default[key]
         end,
     })
+
     local function signature()
         local parts = {}
         for index, key in ipairs(THEME_KEYS) do
@@ -54,7 +60,9 @@ local function createColors(panel)
         end
         return table.concat(parts, "|")
     end
+
     local lastSignature = signature()
+
     local function watch(apply)
         local function check()
             local current = signature()
@@ -89,9 +97,6 @@ local FOOTER_GAP = 2
 local SIDE_PAD = 10
 local VIEW_FOV = 40
 local FIT_MARGIN = 1.02
-local ZOOM_MIN = 0.25
-local ZOOM_MAX = 3
-local ZOOM_STEP = 0.1
 local PITCH_LIMIT = 85
 local PITCH_DEFAULT = 20
 local YAW_DEFAULT = 0
@@ -751,7 +756,6 @@ local function buildHologram(section, options)
     local spin = options.spin ~= false
     local spinSpeed = tonumber(options.spinSpeed) or SPIN_SPEED_DEFAULT
     local draggable = options.draggable ~= false
-    local zoom = math.clamp(tonumber(options.zoom) or 1, ZOOM_MIN, ZOOM_MAX)
     local yaw = tonumber(options.yaw) or YAW_DEFAULT
     local pitch = math.clamp(tonumber(options.pitch) or PITCH_DEFAULT, -PITCH_LIMIT, PITCH_LIMIT)
     local tint = options.tint == true
@@ -782,6 +786,7 @@ local function buildHologram(section, options)
     local followConnection
     local playerToken = 0
     local unwatchTheme
+    local settleImage
 
     local function report(message, duration)
         local text = ("Hologram '%s': %s"):format(tostring(manualTitle or autoTitle or "Hologram"), message)
@@ -1002,7 +1007,6 @@ local function buildHologram(section, options)
             return
         end
         if displayMode == "Image" then
-            textureView.Size = UDim2.fromScale(zoom, zoom)
             return
         end
         local size = viewer.AbsoluteSize
@@ -1012,7 +1016,7 @@ local function buildHologram(section, options)
         aspect = size.X / size.Y
         local halfVertical = math.rad(VIEW_FOV) / 2
         local halfHorizontal = math.atan(tanHalf * aspect)
-        local distance = radius / math.sin(math.min(halfVertical, halfHorizontal)) * FIT_MARGIN * zoom
+        local distance = radius / math.sin(math.min(halfVertical, halfHorizontal)) * FIT_MARGIN
         local orbit = CFrame.Angles(0, math.rad(yaw), 0) * CFrame.Angles(math.rad(pitch), 0, 0)
         camera.CFrame = CFrame.lookAt(orbit * Vector3.new(0, 0, -distance), Vector3.zero)
     end
@@ -1177,98 +1181,103 @@ local function buildHologram(section, options)
         autoDescription = info and info.Description
         layoutFooter()
         task.spawn(function()
-            local parts = collectParts(instance, kind == "Map" and excludePlayers)
-            local model = create("Model", { Name = "Hologram" })
-            local newLinks = {}
-            local newReverse = {}
-            local newOriginals = {}
-            local count = 0
-            local truncated = false
-            local sliceStart = os.clock()
-            for _, part in ipairs(parts) do
+            local ok, err = pcall(function()
+                local parts = collectParts(instance, kind == "Map" and excludePlayers)
+                local model = create("Model", { Name = "Hologram" })
+                local newLinks = {}
+                local newReverse = {}
+                local newOriginals = {}
+                local count = 0
+                local truncated = false
+                local sliceStart = os.clock()
+                for _, part in ipairs(parts) do
+                    if destroyed or id ~= loadId then
+                        model:Destroy()
+                        return
+                    end
+                    if count >= maxParts then
+                        truncated = true
+                        break
+                    end
+                    if not (skipInvisible and part.Transparency >= 1) then
+                        local clone = addLink(part, newLinks, newReverse, newOriginals)
+                        if clone then
+                            count = count + 1
+                            clone.Parent = model
+                        end
+                    end
+                    if os.clock() - sliceStart >= CLONE_BUDGET then
+                        task.wait()
+                        sliceStart = os.clock()
+                    end
+                end
                 if destroyed or id ~= loadId then
                     model:Destroy()
                     return
                 end
-                if count >= maxParts then
-                    truncated = true
-                    break
+                loading = false
+                if count == 0 then
+                    model:Destroy()
+                    setStatus(EMPTY_TEXT)
+                    fire(onFail, "nothing to display.")
+                    return
                 end
-                if not (skipInvisible and part.Transparency >= 1) then
-                    local clone = addLink(part, newLinks, newReverse, newOriginals)
-                    if clone then
-                        count = count + 1
-                        clone.Parent = model
+                local boxCFrame, boxSize = model:GetBoundingBox()
+                local center = boxCFrame.Position
+                local origin = CFrame.new(center)
+                local resolver = function()
+                    return origin
+                end
+                if kind == "Player" then
+                    local rootPart = instance:FindFirstChild("HumanoidRootPart")
+                    if rootPart and rootPart:IsA("BasePart") then
+                        local frame0 = yawFrame(rootPart, CFrame.new(rootPart.Position))
+                        origin = CFrame.new(center) * frame0.Rotation
+                        local offset = frame0:ToObjectSpace(origin)
+                        local last = frame0
+                        resolver = function()
+                            last = yawFrame(rootPart, last)
+                            return last * offset
+                        end
+                    end
+                elseif kind == "Model" then
+                    local pivotSource = instance
+                    if not instance:IsA("PVInstance") then
+                        local handle = instance:FindFirstChild("Handle")
+                        pivotSource = handle and handle:IsA("BasePart") and handle or nil
+                    end
+                    if pivotSource then
+                        local pivot0 = pivotSource:GetPivot()
+                        origin = CFrame.new(center) * pivot0.Rotation
+                        local offset = pivot0:ToObjectSpace(origin)
+                        resolver = function()
+                            return pivotSource:GetPivot() * offset
+                        end
                     end
                 end
-                if os.clock() - sliceStart >= CLONE_BUDGET then
-                    task.wait()
-                    sliceStart = os.clock()
+                radius = math.max(boxSize.Magnitude / 2, 0.5)
+                links = newLinks
+                reverse = newReverse
+                originals = newOriginals
+                partCount = count
+                holder = model
+                getOrigin = resolver
+                loadedInstance = instance
+                activeKind = kind
+                syncLinks()
+                model.Parent = worldModel
+                applyTint()
+                setStatus(nil)
+                updateCamera()
+                watchStructure(instance, kind)
+                if truncated then
+                    report(("'%s' has too many parts, showing %d."):format(instance.Name, count))
                 end
+                fire(callback, instance, model, api, kind)
+            end)
+            if not ok and not destroyed and id == loadId then
+                fail(("failed to load: %s"):format(tostring(err)))
             end
-            if destroyed or id ~= loadId then
-                model:Destroy()
-                return
-            end
-            loading = false
-            if count == 0 then
-                model:Destroy()
-                setStatus(EMPTY_TEXT)
-                fire(onFail, "nothing to display.")
-                return
-            end
-            local boxCFrame, boxSize = model:GetBoundingBox()
-            local center = boxCFrame.Position
-            local origin = CFrame.new(center)
-            local resolver = function()
-                return origin
-            end
-            if kind == "Player" then
-                local rootPart = instance:FindFirstChild("HumanoidRootPart")
-                if rootPart and rootPart:IsA("BasePart") then
-                    local frame0 = yawFrame(rootPart, CFrame.new(rootPart.Position))
-                    origin = CFrame.new(center) * frame0.Rotation
-                    local offset = frame0:ToObjectSpace(origin)
-                    local last = frame0
-                    resolver = function()
-                        last = yawFrame(rootPart, last)
-                        return last * offset
-                    end
-                end
-            elseif kind == "Model" then
-                local pivotSource = instance
-                if not instance:IsA("PVInstance") then
-                    local handle = instance:FindFirstChild("Handle")
-                    pivotSource = handle and handle:IsA("BasePart") and handle or nil
-                end
-                if pivotSource then
-                    local pivot0 = pivotSource:GetPivot()
-                    origin = CFrame.new(center) * pivot0.Rotation
-                    local offset = pivot0:ToObjectSpace(origin)
-                    resolver = function()
-                        return pivotSource:GetPivot() * offset
-                    end
-                end
-            end
-            radius = math.max(boxSize.Magnitude / 2, 0.5)
-            links = newLinks
-            reverse = newReverse
-            originals = newOriginals
-            partCount = count
-            holder = model
-            getOrigin = resolver
-            loadedInstance = instance
-            activeKind = kind
-            syncLinks()
-            model.Parent = worldModel
-            applyTint()
-            setStatus(nil)
-            updateCamera()
-            watchStructure(instance, kind)
-            if truncated then
-                report(("'%s' has too many parts, showing %d."):format(instance.Name, count))
-            end
-            fire(callback, instance, model, api, kind)
         end)
         return true
     end
@@ -1388,7 +1397,9 @@ local function buildHologram(section, options)
             imageConnection:Disconnect()
             imageConnection = nil
         end
-        if textureView.Image == "" then
+        settleImage = nil
+        local image = textureView.Image
+        if image == "" then
             loading = false
             refreshRatio()
             setStatus(EMPTY_TEXT)
@@ -1402,32 +1413,70 @@ local function buildHologram(section, options)
         end
         loading = true
         setStatus(LOADING_TEXT)
-        imageConnection = textureView:GetPropertyChangedSignal("IsLoaded"):Connect(function()
-            if destroyed or token ~= loadId then
+        local settled = false
+        local function stale()
+            return settled or destroyed or token ~= loadId or textureView.Image ~= image
+        end
+        local function settle(ok)
+            if stale() then
+                return
+            end
+            settled = true
+            settleImage = nil
+            if imageConnection then
+                imageConnection:Disconnect()
+                imageConnection = nil
+            end
+            loading = false
+            refreshRatio()
+            if ok then
+                setStatus(nil)
+            else
+                setStatus(EMPTY_TEXT)
+            end
+        end
+        local function retry()
+            if stale() then
                 return
             end
             if isImageReady() then
-                loading = false
-                refreshRatio()
-                setStatus(nil)
-                if imageConnection then
-                    imageConnection:Disconnect()
-                    imageConnection = nil
-                end
-            end
-        end)
-        task.delay(fallback and IMAGE_TIMEOUT or FALLBACK_TIMEOUT, function()
-            if destroyed or token ~= loadId or isImageReady() then
+                settle(true)
                 return
             end
             if fallback then
+                settled = true
+                settleImage = nil
                 textureView.Image = fallback
                 trackImage(token, nil)
                 return
             end
-            loading = false
-            setStatus(EMPTY_TEXT)
+            settle(false)
+        end
+        settleImage = settle
+        imageConnection = textureView:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+            if isImageReady() then
+                settle(true)
+            end
         end)
+        task.spawn(function()
+            local failed = false
+            pcall(function()
+                contentProvider:PreloadAsync({ textureView }, function(_, status)
+                    if status == Enum.AssetFetchStatus.Failure or status == Enum.AssetFetchStatus.TimedOut then
+                        failed = true
+                    end
+                end)
+            end)
+            if stale() then
+                return
+            end
+            if failed and not isImageReady() then
+                retry()
+            else
+                settle(true)
+            end
+        end)
+        task.delay(fallback and IMAGE_TIMEOUT or FALLBACK_TIMEOUT, retry)
     end
     local function showImageSpec(spec, target, token)
         clearLoaded()
@@ -1618,10 +1667,6 @@ local function buildHologram(section, options)
         value = pick(data, "spinSpeed", "SpinSpeed")
         if value ~= nil then
             api:SetSpinSpeed(value)
-        end
-        value = pick(data, "zoom", "Zoom")
-        if value ~= nil then
-            api:SetZoom(value)
         end
         value = pick(data, "height", "Height")
         if value ~= nil then
@@ -1815,13 +1860,6 @@ local function buildHologram(section, options)
     function api:SetSpinSpeed(value)
         spinSpeed = tonumber(value) or spinSpeed
     end
-    function api:SetZoom(value)
-        zoom = math.clamp(tonumber(value) or zoom, ZOOM_MIN, ZOOM_MAX)
-        updateCamera()
-    end
-    function api:GetZoom()
-        return zoom
-    end
     function api:SetRotation(newYaw, newPitch)
         yaw = tonumber(newYaw) or yaw
         pitch = math.clamp(tonumber(newPitch) or pitch, -PITCH_LIMIT, PITCH_LIMIT)
@@ -1961,9 +1999,6 @@ local function buildHologram(section, options)
         Spin = function()
             return spin
         end,
-        Zoom = function()
-            return zoom
-        end,
         Tint = function()
             return tint
         end,
@@ -1992,9 +2027,6 @@ local function buildHologram(section, options)
         end,
         Spin = function(value)
             api:SetSpin(value)
-        end,
-        Zoom = function(value)
-            api:SetZoom(value)
         end,
         Tint = function(value)
             api:SetTint(value)
@@ -2031,12 +2063,6 @@ local function buildHologram(section, options)
         local kind = input.UserInputType
         if kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch then
             dragging = true
-        end
-    end)
-    connections[#connections + 1] = stage.InputChanged:Connect(function(input)
-        if draggable and input.UserInputType == Enum.UserInputType.MouseWheel then
-            zoom = math.clamp(zoom - input.Position.Z * ZOOM_STEP, ZOOM_MIN, ZOOM_MAX)
-            updateCamera()
         end
     end)
     connections[#connections + 1] = userInputService.InputChanged:Connect(function(input)
@@ -2084,13 +2110,8 @@ local function buildHologram(section, options)
                 return
             end
             refreshRatio()
-            if loading and displayMode == "Image" and isImageReady() then
-                loading = false
-                setStatus(nil)
-                if imageConnection then
-                    imageConnection:Disconnect()
-                    imageConnection = nil
-                end
+            if settleImage and isImageReady() then
+                settleImage(true)
             end
         end)
     end)

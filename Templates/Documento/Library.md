@@ -1134,7 +1134,7 @@ end)
 
 Preview em 3D dentro do painel. Mostra o **personagem de um jogador** (o seu ou o de outro), um **modelo**, uma **tool**, um **mapa** ou um **material**. Também mostra **imagens**: id de item, link, thumbnail, textura e a foto do avatar.
 
-O boneco gira sozinho e acompanha em tempo real as poses e animações do original. Dá para arrastar para girar e usar a rodinha para dar zoom. O título e a descrição ficam logo abaixo da imagem, e a descrição quebra de linha quando é grande. Não tem auto save.
+O boneco gira sozinho e acompanha em tempo real as poses e animações do original. Dá para arrastar para girar. O título e a descrição ficam logo abaixo da imagem, e a descrição quebra de linha quando é grande. Não tem auto save.
 
 O holograma é uma **cópia** desenhada dentro do painel. Ele não mexe em nada do jogo.
 
@@ -1202,8 +1202,7 @@ O alvo pode vir em qualquer uma destas opções: `target`, `item`, `map`, `playe
 | `follow` | boolean | `true` | Recarrega o personagem quando o jogador renasce (veja 4.7.4) |
 | `spin` | boolean | `true` | Gira sozinho |
 | `spinSpeed` | number | `30` | Graus por segundo |
-| `draggable` | boolean | `true` | Arrastar gira e a rodinha dá zoom |
-| `zoom` | number | `1` | Zoom inicial, de `0.25` a `3` |
+| `draggable` | boolean | `true` | Arrastar com o mouse ou o dedo gira o boneco |
 | `yaw` | number | `0` | Giro inicial, em graus |
 | `pitch` | number | `20` | Inclinação inicial, de `-85` a `85` |
 | `tint` | boolean | `false` | Pinta o modelo com efeito de holograma (veja 4.7.10) |
@@ -1307,6 +1306,7 @@ holo:Load(workspace.Map)
 - O holograma acompanha o original em tempo real: posição, tamanho, transparência, cor e material. Parts que entram ou saem do original entram e saem da cópia.
 - Em **mapas** (`Folder`, `Workspace`), os personagens dos jogadores ficam de fora (`excludePlayers`). O `Terrain` não é desenhado, só as parts.
 - Se passar de `maxParts`, o holograma mostra o limite e avisa `has too many parts`. Modelo sem nenhuma part mostra `nothing to display.`
+- Se der erro no meio do carregamento, o `Loading...` não fica preso: aparece `Nothing to display` e a notificação `failed to load`.
 
 #### 4.7.6 Mostrar imagens
 
@@ -1352,7 +1352,8 @@ holo:Load(workspace.Part.Decal)
 **Links reconhecidos:** `/catalog/id` e `/library/id` (item), `/bundles/id`, `/game-pass/id`, `/users/id` (foto do rosto), `/badges/id`, `/groups/id`, `/communities/id` e `?id=` (item). Outro link mostra `unsupported link.`
 
 - A imagem mantém a proporção original e preenche a altura da área, com uma margem pequena em cima e embaixo.
-- Se a thumbnail de um item não carregar em 4 segundos, o holograma tenta `rbxassetid://`. Passados 8 segundos sem carregar, mostra `Nothing to display`.
+- O texto `Loading...` some assim que a imagem termina de carregar. O holograma confirma o carregamento pelo próprio download da imagem e pelo tamanho dela, então o texto não fica preso em cima de uma imagem que já apareceu.
+- Se a thumbnail de um item falhar ou não carregar em 4 segundos, o holograma tenta `rbxassetid://`. Se ainda assim não carregar em mais 8 segundos, mostra `Nothing to display`.
 - Com `fetchInfo = true`, o título e a descrição de itens, game passes e bundles vêm do próprio item. Título e descrição que você definir têm prioridade.
 - `channel` escolhe a textura de um `SurfaceAppearance`: `"ColorMap"`, `"NormalMap"`, `"MetalnessMap"` ou `"RoughnessMap"`.
 - Texturas de instâncias acompanham a propriedade: se o `Image` ou a `Texture` mudar no jogo, a imagem muda junto.
@@ -1446,10 +1447,9 @@ holo:SetDescription(nil)
 #### 4.7.10 Visualização, cor e tempo real
 
 ```lua
--- // Girar e zoom
+-- // Girar
 holo:SetSpin(true)
 holo:SetSpinSpeed(60)
-holo:SetZoom(1.5)
 holo:SetRotation(45, 20)
 
 -- // Efeito de holograma
@@ -1463,7 +1463,7 @@ holo:Sync()
 ```
 
 - **Girar:** `spin` gira sozinho e pausa enquanto você arrasta.
-- **Arrastar e zoom:** com `draggable`, arrastar gira (esquerda e direita, cima e baixo) e a rodinha muda o zoom de `0.25` a `3`. O zoom também funciona em imagens.
+- **Arrastar:** com `draggable`, arrastar gira o boneco (esquerda e direita, cima e baixo). Em imagens não faz nada.
 - **Tint:** pinta todas as parts com material `ForceField` na cor definida. Vale também para parts que entrarem depois.
 - **Tempo real:** o holograma só atualiza com o card visível e em modo 3D. A taxa padrão é `30` por segundo para jogadores, `20` para modelos, `4` para mapas e `10` para o resto. `SetLive(false)` congela a cópia.
 - **Sync:** força uma atualização na hora.
@@ -1485,17 +1485,6 @@ ControlSection:CreateToggle({
     default = false,
     callback = function(state)
         holo:SetTint(state)
-    end,
-})
-
-ControlSection:CreateSlider({
-    title = "Zoom",
-    min = 0.25,
-    max = 3,
-    default = 1,
-    rounding = 2,
-    callback = function(value)
-        holo:SetZoom(value)
     end,
 })
 
@@ -1554,6 +1543,7 @@ Erros dentro de um callback viram notificação e não derrubam o script. Falhas
 | `unsupported link.` | Link que o holograma não reconhece |
 | `target cannot be shown as hologram.` | Imagem com `view = "Hologram"` |
 | `nothing to display.` | Modelo sem nenhuma part |
+| `failed to load: erro` | Erro inesperado ao copiar o modelo |
 | `invalid view`, `invalid style`, `invalid channel`, `invalid color` | Valor inválido em um `Set` |
 
 #### 4.7.12 Métodos
@@ -1563,7 +1553,7 @@ Erros dentro de um callback viram notificação e não derrubam o script. Falhas
 | Método | Descrição |
 |--------|-----------|
 | `Load(alvo, titulo, descricao)` | Carrega o alvo. `Load(nil)` limpa. A descrição e o título são opcionais (também aceita uma tabela `{ title, description }` no lugar do título). Retorna `true` se começou a carregar |
-| `Update(tabela)` | Muda várias opções de uma vez e carrega o alvo ou a lista se vierem. Aceita `title`, `description`, `placeholder`, `channel`, `fetchInfo`, `color`, `tint`, `spin`, `spinSpeed`, `zoom`, `height`, `visible`, `style`, `view` e o alvo (`target`, `player`...) ou `list` |
+| `Update(tabela)` | Muda várias opções de uma vez e carrega o alvo ou a lista se vierem. Aceita `title`, `description`, `placeholder`, `channel`, `fetchInfo`, `color`, `tint`, `spin`, `spinSpeed`, `height`, `visible`, `style`, `view` e o alvo (`target`, `player`...) ou `list` |
 | `LoadList(lista, inicio)` | Carrega uma lista de alvos (4.7.8) |
 | `Select(posicao)` | Vai para o item da lista |
 | `Next()` / `Prev()` | Próximo e anterior |
@@ -1601,7 +1591,6 @@ Erros dentro de um callback viram notificação e não derrubam o script. Falhas
 |--------|-----------|
 | `SetSpin(estado)` / `GetSpin()` | Liga ou desliga o giro |
 | `SetSpinSpeed(valor)` | Graus por segundo |
-| `SetZoom(valor)` / `GetZoom()` | Troca e lê o zoom (`0.25` a `3`) |
 | `SetRotation(yaw, pitch)` | Define o giro e a inclinação |
 | `SetTint(estado)` / `GetTint()` | Liga ou desliga o efeito de holograma |
 | `SetColor(cor)` / `GetColor()` | Troca e lê a cor do holograma |
@@ -1629,7 +1618,6 @@ Estas propriedades podem ser lidas e escritas direto no holograma:
 
 ```lua
 -- // Propriedades
-holo.Zoom = 2
 holo.Spin = false
 holo.Tint = true
 holo.Title = "Novo título"
@@ -1640,7 +1628,7 @@ holo.Height = 220
 holo.Visible = true
 holo.Target = game.Players.LocalPlayer
 
-print(holo.Zoom, holo.Target)
+print(holo.Spin, holo.Target)
 ```
 
 | Propriedade | Equivale a |
@@ -1648,7 +1636,7 @@ print(holo.Zoom, holo.Target)
 | `Title`, `Description` | `SetTitle` e `SetDescription` |
 | `Target` | `Load` (escrever) e `GetTarget` (ler) |
 | `View`, `Style` | `SetView` e `SetStyle` |
-| `Spin`, `Zoom`, `Tint` | `SetSpin`, `SetZoom` e `SetTint` |
+| `Spin`, `Tint` | `SetSpin` e `SetTint` |
 | `Height`, `Visible` | `SetHeight` e `SetVisible` |
 
 `holo.Frame` e `holo.Instance` devolvem o `Frame` do card.
@@ -2488,7 +2476,7 @@ button:Fire()              button:SetLoading(true)
 holo:Load(alvo)           holo:Clear()
 holo:Next()                holo:Prev()
 holo:SetTitle("X")         holo:SetDescription("Texto")
-holo:SetSpin(true)         holo:SetZoom(1)
+holo:SetSpin(true)         holo:SetRotation(0, 20)
 holo:SetTint(true)         holo:SetColor(color)
 holo:SetView("Image")      holo:SetStyle("bust")
 ```
