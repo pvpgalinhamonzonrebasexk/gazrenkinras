@@ -15,7 +15,6 @@ local Windows = Librarys:CreateWindow({
 -- // API
 Windows:LoadFeatures({
     "Fish/Farm",
-    "Fish/Events",
     "Fish/Shop",
     "Fish/Teleport",
     "Fish/Misc",
