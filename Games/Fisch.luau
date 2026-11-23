@@ -17,5 +17,4 @@ Windows:LoadFeatures({
     "Fish/Farm",
     "Fish/Shop",
     "Fish/Teleport",
-    "Fish/Misc",
 })
